@@ -1,0 +1,289 @@
+#!/usr/bin/perl
+#
+# ftpuploader - FTP upload to multiple destinations.
+#
+# This script is a FTP client to multiple FTP servers.
+# The script monitor directories and uploads any file put there to the designated FTP server.
+# It get it's configuration from ftpupload table in MySQL.
+#
+# Main loop listens in 'ftpuploader' message queue. When a message is received, any new/enabled FTPclient is
+# forked and any deleted/disabled FTPclient is killed.
+# Each FTPclient monitors a specific path and when a new file is created, FTPclient uploads the file to
+# a specified URL and moves it to 'saved' subdir. Failed uploads is moved to 'failed' subdir.
+#
+#       v1.1 - 28/2-08  - sjm@snex.dk - Initial release.
+#       v1.2 - 14/7-12  - sjm@snex.dk - Rewritten to use MySQL as config store
+#       v2.0 - 17/10-12 - sjm@snex.dk - Rewritten to use threads, Inotify2 and Curl.
+#	v3.0 - 11/11-12 - sjm@snex.dk - Rewritten to use fork instead of threads.
+#	v3.1 - 24/11-12 - sjm@snex.dk - Enable remote commanding via IPC messages and support reloading.
+#	v3.2 - 03/11-17 - soren@moellers.dk - Changed from message queues to socket IPC
+#
+
+use strict;
+use warnings;
+use WWW::Curl::Easy;
+use Getopt::Std;
+use IO::Socket::UNIX;
+use Linux::Inotify2;
+use lib '/home/gpsuser';
+use BaseConfig;
+use Utils;
+use Logger;
+use GPSDB;
+use GPSIPC;
+
+
+sub ren2dir($$) {
+  my ($src, $dstdir) = @_;
+
+  if (! -d $dstdir) {
+    mkdir($dstdir, 0777);
+    chown(1022, 1022, $dstdir);
+  }
+  my $dst = $dstdir.'/'.basename($src);
+  unlink($dst);
+  rename($src, $dst);
+}
+
+########################################################################################
+# Sub process
+#
+
+sub FTPclient($) {
+  my $conf = shift;
+  my ($name, $host, $user, $pass, $localdir, $remotedir) =
+     map { $conf->{$_} } qw(name host user pass localdir remotedir);
+  undef $conf;
+
+  chdir($localdir) || errdie("$0: chdir: $!\n");
+  select(STDERR); $| = 1;                # Unbuffered output
+  select(STDOUT); $| = 1;                # Unbuffered output
+
+  # Setup signal handling
+  my $sig_received = 0;
+  local $SIG{TERM} = sub { $sig_received = 1; };
+  local $SIG{INT} = sub { $sig_received = 1; };
+  local $SIG{HUP} = 'IGNORE';
+
+  my $inotify = new Linux::Inotify2;
+  my $watch = $inotify->watch($localdir, IN_CLOSE_WRITE | IN_MOVED_TO);
+
+  my $PASSIVE_MODE = 1;
+
+  my $ftp;
+  my @todo = ();
+  my $dynamicdirs = (index($remotedir, '%') >= 0 ? 1 : 0);
+  my $failcount = 0;
+
+  my $had_error = 0;
+  $had_error = 1 if dirlist("$localdir/failed") > 0;
+
+  loginfo("$name uploader started");
+
+  Inbound:
+  while (!$sig_received) {
+    my @in_events = ();
+    @todo = ();
+    eval {
+      local $SIG{ALRM} = sub { die("alarm\n") };
+      alarm 301;
+      @in_events = $inotify->read;
+      alarm 0;
+    };
+    if ($@) {
+      last unless $@ eq "alarm\n";        # Alarm?
+      # Alarm occured. Scan and load @todo.
+      @todo = sort { substr($a,4,4) cmp substr($b,4,4) } dirlist($localdir);
+    }
+    foreach my $e (@in_events) {
+      my $fn = $e->name;
+      push(@todo, $fn);
+    }
+
+    if (scalar(@todo) == 0) {
+      undef $ftp if defined $ftp;
+      next;
+    }
+
+    while (my $fn = shift(@todo)) {
+      last if $sig_received;
+      next unless -f $fn;
+
+      # Crete a new FTP session if not already connected
+      if (!defined $ftp) {
+	$ftp = new WWW::Curl::Easy;
+	$ftp->setopt(CURLOPT_UPLOAD, 1);
+	$ftp->setopt(CURLOPT_TIMEOUT, 15);
+	$ftp->setopt(CURLOPT_FTP_RESPONSE_TIMEOUT, 8);
+	$ftp->setopt(CURLOPT_FTP_CREATE_MISSING_DIRS, 1) if $dynamicdirs;
+	$ftp->setopt(CURLOPT_USERPWD, $user.':'.$pass);
+	if ($PASSIVE_MODE) {
+	  # Passive mode is default for Curl. Disable use of EPSV command in passive mode
+	  $ftp->setopt(CURLOPT_FTP_USE_EPSV, 0);
+	} else {
+	  # Disable passive mode and use of EPRT and LPRT command in active mode
+	  $ftp->setopt(CURLOPT_FTPPORT, "-");
+	  $ftp->setopt(CURLOPT_FTP_USE_EPRT, 0);
+	}
+      }
+
+      # Expand dynamic dir
+      my $rdir = "";
+      if ($dynamicdirs) {
+	if ($fn =~ /^[a-z0-9]{4}?(\d\d\d)[a-x0]\.(\d\d)[dng]/i) {
+	  my ($doy, $yyyy) = ($1, sy2year($2));
+	  my $p = $remotedir;
+	  $p =~ s/%year/$yyyy/ig;
+	  $p =~ s/%doy/$doy/ig;
+	  $rdir = $p;
+	} else {
+	  logerror("$fn must be SiteDDDh.YY[dng] for dynamicdirs. Moved to $localdir/failed.");
+	  ren2dir("$localdir/$fn", "$localdir/failed");
+	  next;
+	}
+      } else {
+	$rdir = $remotedir;
+      }
+
+      # Build URL
+      my $url = "ftp://$host";
+      $url .= '/' unless $rdir =~ /^\//;
+      $url .= $rdir;
+      $url .= '/' unless $rdir =~ /\/$/;
+      $url .= $fn;
+      # logdebug("Try upload to $url");
+      $ftp->setopt(CURLOPT_URL, $url);
+
+      # Perform upload
+      $ftp->setopt(CURLOPT_INFILESIZE, -s "$localdir/$fn");
+      next if !open(my $fd, '<', "$localdir/$fn");
+      $ftp->setopt(CURLOPT_READDATA, $fd);
+      my $rc = $ftp->perform();
+      close($fd);
+
+      if ($rc) {
+	$failcount++;
+	if (fileage($fn) > 8*3600) {
+	  logerror("Giving up on uploading $fn to $name. Moved to $localdir/failed.");
+	  ren2dir("$localdir/$fn", "$localdir/failed");
+	}
+	$had_error = 1;
+	undef $ftp;        # Force a reconnect when an error occurred.
+      } else {
+	loginfo("$fn -> $url");
+	ren2dir("$localdir/$fn", "$localdir/saved");
+	$failcount = 0;
+	if ($had_error) {
+	  # Was in error mode, but ok now. Restore all failed files.
+	  my @files = dirlist("$localdir/failed");
+	  if (scalar(@files) > 0) {
+	    ren2dir("$localdir/failed/$_", $localdir) foreach @files;
+	    loginfo("Connection restored. Moved ".scalar(@files)." files to upload queue.");
+	  }
+	  $had_error = 0;
+	}
+      }
+      if ($failcount >= 30) {
+	my $count = dirlist($localdir);
+	logwarn("Trouble uploading to $name. $count files remain in upload queue.");
+	$failcount = 0;
+	next Inbound;
+      }
+    }
+  }
+
+  $watch->cancel;
+  loginfo("$name uploader stopped");
+}
+
+########################################################################################
+# Main process
+#
+
+my %PIDS = ();
+
+###################################################
+# Spawn new/created clients not already started
+# and kill deleted/deactived running clients
+#
+sub reload() {
+  my $DB = new GPSDB;
+  my $confs = $DB->DBH->selectall_arrayref(q{
+	select	f.name, f.host, f.user, f.pass, p.path localdir, f.remotedir
+	from	ftpupload f, paths p
+	where	f.localdir = p.name
+	  and	f.active = 1
+  }, { Slice => {} });
+  undef $DB;
+
+  # Stop all not in config
+  foreach my $name (keys %PIDS) {
+    my $found = 0;
+    foreach my $conf (@$confs) {
+      $found = 1 if $name eq $conf->{'name'};
+    }
+    next if $found;
+    my $pid = $PIDS{$name};
+    if (defined $pid) {
+      delete $PIDS{$name};
+      kill(15, $pid);
+    }
+  }
+
+  # Start all in config not already running
+  foreach my $conf (@$confs) {
+    next if exists $PIDS{$conf->{'name'}};
+    my $pid = fork();
+    die("$0: cannot fork\n") unless defined $pid;
+    if ($pid == 0) {
+      # Child
+      $0 = "/usr/bin/perl $0 [$conf->{name}]";
+      FTPclient($conf);
+      exit(0);
+    }
+    # Parent
+    $PIDS{$conf->{'name'}} = $pid;
+  }
+}
+
+#
+# Main program
+#
+my %opts = ();
+getopts('dl:p:', \%opts);
+
+my $errlog = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
+daemonize($errlog) if defined $opts{'d'};
+setprogram("ftpuploader");
+my $pidfile = (defined $opts{'p'} ? $opts{'p'} : $FTPUPLOAD_PID);
+create_pid_file($pidfile);
+
+# Setup signal handling
+my $sig_received = 0;
+local $SIG{TERM} = sub { $sig_received = 1; };
+local $SIG{INT} = sub { $sig_received = 1; };
+local $SIG{HUP} = sub { reload(); };
+local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
+
+reload();
+
+my $cmdsock = new GPSIPC(name => 'ftpuploader', server => 1);
+
+loginfo("$0 [master] started (".(scalar(keys %PIDS))." instances)");
+
+while (!$sig_received && -f $pidfile) {
+  if (my $cmd = $cmdsock->getline()) {
+    chomp($cmd);
+    last if ($cmd eq "quit" || $cmd eq "exit");
+    reload();
+  } else {
+    print("$0: socket read error");
+  }
+}
+
+kill(15, $_) foreach values %PIDS;	# Kill all childs
+wait;
+unlink($pidfile);
+
+loginfo("$0 [master] stopped");
+exit(0);
