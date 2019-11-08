@@ -16,7 +16,7 @@
 #       v2.0 - 17/10-12 - sjm@snex.dk - Rewritten to use threads, Inotify2 and Curl.
 #	v3.0 - 11/11-12 - sjm@snex.dk - Rewritten to use fork instead of threads.
 #	v3.1 - 24/11-12 - sjm@snex.dk - Enable remote commanding via IPC messages and support reloading.
-#	v3.2 - 03/11-17 - soren@moellers.dk - Changed from message queues to socket IPC
+#	v3.2 - 03/11-17 - sjm@sjmit.dk - Changed from message queues to socket IPC
 #
 
 use strict;

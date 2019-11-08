@@ -1,4 +1,9 @@
 #!/usr/bin/perl
+#
+# Creates a UNIX socket using a predefined name.
+# Use getline() and print() for communication.
+# 
+# Soren Juul Moller, Jun 2017
 
 package GPSIPC;
 
