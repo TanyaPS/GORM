@@ -1,0 +1,56 @@
+
+Overall Dataflow
+  gpspickup detect new file in /data/ftp (FTP server inbound)
+    unpack zip/gz into workdir
+    create job in /data/queue
+  jobengine detect now job in /data/queue
+    read job and spawn a process (Job.pm)
+    Job.pm workdir
+      rewrite RINEX headers
+      create required intervals
+      QC
+      copy to /data/upload
+      if hourly file and day is complete
+        create day files
+        create day job in /data/queue
+      if daily file
+        remove workdir
+  ftpupload detect new file(s) in /data/upload
+    upload file to destination(s)
+
+main
+   fileset = Inbound->pickup
+   job = JobEngine->submit(fileset)
+   Outbound->submit(job) if job->is_finised
+
+
+Components
+
+vsftpd
+  FTP server receiving files from GNSS stations.
+  Data arrives in /data/ftp
+
+gpspickup
+  Monitors /data/ftp for new files.
+  When a new file arrives, gpspickup unpacks zip or gz into workdir
+  and creates a jobfile in /data/queue. The files are renamed
+  to conform to RINEXv3 name standard.
+
+jobengine
+  Monitors /data/queue
+  A simple process manager ensuring not too many jobs are running in parallel. Max currently 4.
+  jobengine creates a Job object (Job.pm) for the job.
+
+Job.pm
+  This is the main program containing all the conversions to be done
+  on RINEX files.
+
+RinexSet.pm
+  Each hour and day consists of multiple files, observations and navigation data.
+  Files belonging to same hour/day is represented by a RinexSet object.
+  RinexSet handles the naming of files as well.
+
+ftpuploader
+  Monitors /data/upload
+  Upload files to final destinations. That can be other FTP servers, SFTP servers
+  or local directories (NFS mounts).
