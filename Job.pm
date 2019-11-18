@@ -221,7 +221,7 @@ sub createWantedIntervals($) {
   my ($site, $srcinterval) = ($self->{'site'}, $self->{'interval'});
 
   my $aref = $self->{'DB'}->{'DBH'}->selectall_arrayref(q{
-	select distinct obsint from rinexdist where site = ?
+	select distinct obsint from rinexdist where site = ? and active = 1
   }, { Slice => {} }, $self->{'site'});
   my %intervals = map { $_->{'obsint'} => 1 } @$aref;
   $intervals{'30'} = 1;  # always need 30s files
@@ -237,17 +237,6 @@ sub createWantedIntervals($) {
     _decimate($rs->{'MO.'.$srcinterval}, $obs, $srcinterval, $interval, "dec.$rs->{hour}.$interval.log");
     $rs->{'MO.'.$interval} = $obs;
   }
-}
-
-sub is_complete() {
-  my $self = shift;
-  return 1 if -f "force-complete";
-  foreach my $h ('a'..'x') {
-    return 0 unless -f "rs.$h.json";
-    my $rs = new RinexSet(rsfile => "rs.$h.json");
-    return 0 unless defined $rs->{processed};
-  }
-  return 1;
 }
 
 ###################################################################################

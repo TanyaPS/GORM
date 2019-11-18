@@ -1,0 +1,188 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Getopt::Std;
+use Linux::Inotify2;
+use BaseConfig;
+use Utils;
+use Logger;
+use RinexSet;
+use Job;
+use GPSDB;
+
+my %Inbound = ();
+my $DB;
+
+chdir('/data/ftp');
+
+#
+# scan_incoming will add all plain files in /data/ftp to %Inbound
+#
+sub scan_incoming() {
+  my $fd;
+  open($fd, '-|', qq(/bin/find $INCOMING -type f -print));
+  while (<$fd>) {
+    chomp;
+    next if fileage($_) < 2;
+    my $fn = basename($_);
+    next if exists $Inbound{$fn};
+    $Inbound{$fn} = $_;
+  }
+  close($fd);
+}
+
+sub check_existing($$$$$) {
+  my ($sql, $site, $year, $doy, $hour) = @_;
+
+  my $aref = $DB->{DBH}->selectall_arrayref($sql, {Slice=>{}}, $site, $year, $doy, $hour);
+  return (defined $aref && $$aref[0]->{cnt} == 1);
+}
+
+#
+# Process all files in %Inbound
+# Move complete filesets to workdir as is and create a job for processing the files
+# Unknown sites and unknown filetypes for site are moved to £SAVEDIR/stale.
+#
+sub process() {
+  my @flist = keys %Inbound;
+  return unless scalar(@flist) > 0;
+
+  # Get the complete list of defined sites from DB
+  # We only use the short version of sitename here.
+  my $sql = $DB->{'DBH'}->prepare(q{
+	select	site, naming, freq, obsint, navlist
+	from	siteconfig
+  });
+  my $aref = $DB->{'DBH'}->selectall_arrayref($sql, { Slice => {} });
+  die("No sites") if !defined $aref || scalar(@$aref) == 0;
+  my %scs = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
+
+  # First each of the files found in /data/ftp, move them to it's workdir.
+  # if its not already process
+ 
+  $sql = $DB->{DBH}->prepare(q{
+	select count(site) cnt
+	from gpssums
+	where site = ? and year = ? and doy = ? and hour = ?
+  });
+
+  foreach my $fn (@flist) {
+    my $ifn = $Inbound{$fn};
+    # assume sitename is the 4 first letters in filename
+    my $siteshort = uc(substr($fn, 0, 4));
+    my $job = undef;
+
+    # Make sure we know the site
+    my $sc = $scs{$siteshort};
+    if (!defined $sc) {
+      sysmv($ifn, $SAVEDIR.'/stale', { log => 1 });
+      logwarn("No such site: $siteshort");
+      next;
+    }
+
+    # Now that we know this is a known site, copy the file(s) to it's workdir and move to $SAVEDIR.
+    # Derive the date & time from filename if possible.
+
+    # Trinzic
+    # ssssyyyymmddhhmiB.zip
+    elsif ($fn =~ /^[A-Z0-9]{4}?(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
+      my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
+      my $doy = Day_of_Year($year, $mm, $dd);
+      my $hour = chr(ord('a')+$hh);
+      sysmv($ifn, $SAVEDIR.'/'.$sc->{site}, { log => 1, mkdir => 1 });
+      $ifn = $SAVEDIR.'/'.$sc->{site}.'/'.$fn;
+      if (check_existing($sql, $sc->{site}, $year, $doy, $hour)) {
+        print "$fn processed already. Forget it before reprocessing.\n";
+        next;
+      }
+      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      $job->mkWorkdir();
+      my $rs = new RinexSet(site => $sc->{site}, year => $year, doy => $doy, hour => $hour);
+      $rs->unzip($ifn, $sc->{obsint});
+      $rs->store();
+      $job->{'rsfile'} = $rs->getRsFile;
+    }
+
+    # Leica
+    # ssssdddh.yyo.zip
+    elsif ($fn =~ /^[A-Z0-9]{4}(\d\d\d)([a-x])\.(\d\d)o\.zip$/) {
+      my ($doy, $hour, $year) = ($1, $2, sy2year($3));
+      sysmv($ifn, $SAVEDIR.'/'.$sc->{site}, { log => 1, mkdir => 1 });
+      $ifn = $SAVEDIR.'/'.$sc->{site}.'/'.$fn;
+      if (check_existing($sql, $sc->{site}, $year, $doy, $hour)) {
+        print "$fn processed already. Forget it before reprocessing.\n";
+        next;
+      }
+      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      $job->mkWorkdir();
+      my $rs = new RinexSet(site => $sc->{site}, year => $year, doy => $doy, hour => $hour);
+      $rs->unzip($ifn, $sc->{obsint});
+      $rs->store();
+      $job->{'rsfile'} = $rs->getRsFile;
+    }
+
+    # Unknown filename structure?!
+    else {
+      logerror("Unknown filetype for site $sc->{site}: $ifn");
+      sysmv($ifn, "$SAVEDIR/stale", { log => 1 });
+    }
+
+    # clear for inbound queue and submit a new job for processing
+    delete $Inbound{$fn};
+    $job->submitjob('ftp') if defined $job;
+  }
+}
+
+my %opts = ();
+getopts('dl:', \%opts);
+my $log = defined $opts{'l'} ? $opts{'l'} : "/dev/null";
+
+# Daemonize if required
+my $PIDFILE = "$HOME/run/".basename($0).".pid";
+daemonize($log) if defined $opts{'d'};
+create_pid_file($PIDFILE);
+select(STDERR); $| = 1;
+select(STDOUT); $| = 1;
+
+my $inotify = new Linux::Inotify2
+	|| errdie("$0: unable to create new inotify object: $!");
+$inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE);
+
+# Setup signal handling
+my $sig_received = "";
+sub signal_handler {
+  $sig_received = shift;
+  loginfo("$sig_received signal received. Exiting...");
+}
+local $SIG{HUP} = 'IGNORE';
+local $SIG{INT} = \&signal_handler;
+local $SIG{TERM} = \&signal_handler;
+
+$DB = new GPSDB;
+
+loginfo("$0 started");
+
+$SIG{'ALRM'} = sub {
+};
+
+# Run loop until signal or pidfile is deleted
+#while (-f "$PIDFILE" && $sig_received eq "") {
+  scan_incoming();
+
+  if (scalar(keys %Inbound) == 0) {
+    alarm 61;
+    my @e = $inotify->read;
+    alarm 0;
+
+    foreach (@e) {
+      my $fn = basename($_->fullname);
+      $Inbound{$fn} = $_->fullname;
+    }
+  }
+  process();
+#}
+
+unlink($PIDFILE);
+loginfo("$0 stopped");
+exit(0);
