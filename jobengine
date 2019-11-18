@@ -1,0 +1,194 @@
+#!/usr/bin/perl
+#
+# Simple job scheduler.
+# Monitor $JOBQUEUE for new job files. Each jobfile spawns a process that do the
+# conversion and distribution. The scheduler defaults to 4 concurrent processes.
+#
+# Soren Juul Moller, Nov 2019
+
+use strict;
+use warnings;
+use Getopt::Std;
+use Fcntl qw(:DEFAULT :flock);
+use Parallel::ForkManager;
+use Linux::Inotify2;
+use lib '/home/gpsuser';
+use BaseConfig;
+use Utils;
+use Logger;
+use Job;
+
+my %Jobs;	# Queued jobs
+my %Running;	# Running jobs
+
+sub lock($) {
+  my $fn = shift;
+  my $fd;
+  return 0 unless sysopen($fd, $fn, O_CREAT|O_RDWR);
+  flock($fd, LOCK_EX);
+  return $fd;
+}
+
+sub unlock($) {
+  my $fd = shift;
+  return if $fd == 0; # if lock failed
+  flock($fd, LOCK_UN);
+  close($fd);
+}
+
+########################################
+# Manipulate $workdir/status.json.
+# Requires exclusive access
+#
+sub statusdb($;$$) {
+  my ($jsonfile, $hour, $status) = @_;
+  my $json = loadJSON($jsonfile);
+  $json = {} unless defined $json;
+  if (!defined $status && !defined $hour) {
+    $status = $json;
+  } elsif (!defined $status) {
+    $status = defined $json->{$hour} ? $json->{$hour} : "";
+  } else {
+    $json->{$hour} = $status;
+    storeJSON($jsonfile, $json);
+  }
+  return $status;
+}
+
+##########################################
+# Callback called when a child starts
+#
+sub onstart() {
+  my ($pid, $ident) = @_;
+  loginfo("$ident starting");
+}
+
+##########################################
+# Callback called when a child finishes
+#
+sub onfinish() {
+  my ($pid, $exitcode, $ident) = @_;
+  return unless defined $ident && defined $Running{$ident};
+  my ($site, $year, $doy, $hour) = split(/-/, $ident);
+  my $job = $Running{$ident};
+  my $workdir = $job->getWorkdir;
+  my $statusfile = "$workdir/status.json";
+
+  loginfo("$ident finished");
+  delete $Running{$ident};
+
+  my $lockfd = lock($statusfile);
+  statusdb($statusfile, $hour, "processed");
+
+  # check if day is complete (status.json still locked)
+  if ($hour ne '0') {
+    my $status = statusdb($statusfile);
+    if (!exists $status->{'0'}) {
+      my $complete = 1;
+      foreach my $h ('a'..'x') {
+        $complete = 0 unless exists $status->{$h} && $status->{$h} eq "processed";
+      }
+      if ($complete) {
+        my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $job->{'interval'});
+        $dayjob->submitjob('hour2daily');
+        statusdb($statusfile, '0', "queued");  # make sure nobody else do the same
+      }
+    }
+  }
+  unlock($lockfd);
+}
+
+#####################################
+# Spawn a job using fork
+#
+sub runjob($$) {
+  my ($FM, $job) = @_;
+  loginfo("Run ".$job->getIdent);
+  $FM->start($job->getIdent()) && return;  # start instance
+  chdir($job->getWorkdir());
+  $job->process();
+  $FM->finish(0);		# exit this instance
+}
+
+########################################################################################################
+# Main program
+#
+Logger::setprogram(basename($0));
+
+# Handle HUP, INT and TERM signal niecly
+my $sig_received = "";
+sub signal_handler {
+  $sig_received = shift;
+  loginfo("$sig_received signal received. Exiting...");
+}
+local $SIG{HUP} = 'IGNORE';
+local $SIG{INT} = \&signal_handler;
+local $SIG{TERM} = \&signal_handler;
+local $SIG{ALRM} = sub { };
+
+select(STDERR); $| = 1;         # Unbuffered output
+select(STDOUT); $| = 1;         # Unbuffered output
+
+my %opts = ();
+getopts('i:dl:p:', \%opts);
+my $log = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
+daemonize($log) if defined $opts{'d'};
+my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : 4);
+
+my $PIDFILE = "$HOME/run/".basename($0).".pid";
+$PIDFILE = $opts{'p'} if defined $opts{'p'};
+create_pid_file($PIDFILE);
+
+my $FM = new Parallel::ForkManager($Ninstances);
+$FM->run_on_start(\&onstart);
+$FM->run_on_finish(\&onfinish);
+
+# Setup queue event handler
+my $inotify = new Linux::Inotify2;
+$inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
+
+# main loop
+while (-f $PIDFILE && $sig_received eq "") {
+  $FM->reap_finished_children;
+  my @joblist = dirlist($JOBQUEUE);
+  foreach my $jobfile (@joblist) {
+    my $job = new Job(jobfile => "$JOBQUEUE/$jobfile");
+    unlink("$JOBQUEUE/$jobfile");
+    next unless defined $job && defined $job->{'site'};
+    my $ident = $job->getIdent;
+    next if exists $Running{$ident} || exists $Jobs{$ident};
+    $Jobs{$job->getIdent} = $job;
+  }
+  if (scalar(keys %Jobs) == 0) {
+    # queue empty, wait for a new job
+    loginfo("No jobs to run. Waiting for new jobs");
+    alarm 11;
+    my @e = $inotify->read;
+    alarm 0;
+    foreach my $jobfile (@e) {
+      next unless -f $jobfile->fullname;
+      my $job = new Job(jobfile => $jobfile->fullname);
+      unlink($jobfile->fullname);
+      $Jobs{$job->getIdent} = $job;
+    }
+  }
+  foreach my $ident (keys %Jobs) {
+    my $job = $Jobs{$ident};
+    my $workdir = $job->getWorkdir;
+    my $statusfile = "$workdir/status.json";
+    my $lockfd = lock($statusfile);
+    my $status = statusdb($statusfile, $job->{'hour'});
+    if ($status eq "running" || $status eq "processed") {
+      unlock($lockfd);
+      loginfo("Duplicate job $ident");
+    } else {
+      statusdb($statusfile, $job->{'hour'}, "running");
+      unlock($lockfd);
+      runjob($FM, $job);
+      $Running{$ident} = $job;
+    }
+    delete $Jobs{$ident};
+  }
+}
+
+$FM->wait_all_children;
