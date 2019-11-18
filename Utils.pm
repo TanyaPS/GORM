@@ -15,6 +15,7 @@ use File::stat;
 use File::Path qw(make_path);
 use Net::SMTP;
 use Date::Manip::Base;
+use JSON;
 
 use lib '/home/gpsuser/';
 use BaseConfig;
@@ -38,7 +39,7 @@ BEGIN {
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter
 	basename dirname fileage dirlist daemonize create_pid_file
-	getRinexInfo
+	getRinexInfo loadJSON storeJSON
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
   $DMB = new Date::Manip::Base;
@@ -177,6 +178,7 @@ sub year2sy($) {
 #
 sub hour2letter($) {
   my $hh = shift;
+  return '0' if $hh == 0;
   return chr(ord('a')+$hh);
 }
 
@@ -186,6 +188,7 @@ sub hour2letter($) {
 #
 sub letter2hour($) {
   my $letter = shift;
+  return 0 if $letter eq '0';
   return ord(lc($letter))-97;
 }
 
@@ -289,6 +292,26 @@ sub getRinexInfo($) {
   }
 
   return \%res;
+}
+
+
+##########################################################################################
+#
+sub loadJSON($) {
+  my $file = shift;
+  local $/;  # enable slurp
+  open(my $fh, '<', $file) || return undef;
+  my $json = <$fh>;
+  close($fh);
+  return undef if length($json) == 0;
+  return from_json($json);
+}
+
+sub storeJSON($$) {
+  my ($file, $ref) = @_;
+  open(my $fh, '>', $file) || die("cannot create $file: $!");
+  print $fh to_json($ref, { utf8 => 1, pretty => 1, canonical => 0 });
+  close($fh);
 }
 
 1;
