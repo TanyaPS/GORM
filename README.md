@@ -7,97 +7,88 @@ Developed on CentOS 7, but should un RHEL 7 and RHEL 8 as well.
 
 Currently support Leica and Trimbple data.
 
-==================
-Overall Dataflow
-==================
-  gpspickup detect new file in /data/ftp (FTP server inbound)
-    unpack zip/gz into workdir
-    create job in /data/queue
-  jobengine detect now job in /data/queue
-    read job and spawn a process (Job.pm)
-    if hourly file and day is complete
-      create day files
-      create day job in /data/queue
-  Job.pm workdir
-    rewrite RINEX headers
-    create required intervals
-    QC
-    copy to /data/upload
-    if daily file
-      remove workdir
-  ftpuploader
-    spawn a process per destination
-    wait for all childs, reload config periodically
-    ftpuploader childs
-      ftpupload detect new file(s) in /data/upload
-      upload file to destination(s) using either ftp og sftp
+## Overall Dataflow
+- gpspickup detect new file in /data/ftp (FTP server inbound)
+  - unpack zip/gz into workdir
+  - create job in /data/queue
+- jobengine detect now job in /data/queue
+  - read job and spawn a process (Job.pm)
+  - if hourly file and day is complete
+    - create day files
+    - create day job in /data/queue
+- Job.pm workdir
+  - rewrite RINEX headers
+  - create required intervals
+  - QC
+  - copy to /data/upload
+  - if daily file
+    - remove workdir
+- ftpuploader
+  - spawn a process per destination
+  - wait for all childs, reload config periodically
+  - ftpuploader childs
+    - ftpupload detect new file(s) in /data/upload
+    - upload file to destination(s) using either ftp og sftp
 
-
-=================
-Components
-=================
-vsftpd
+## Components
+### vsftpd
   FTP server receiving files from GNSS stations.
   Data arrives in /data/ftp
 
-gpspickup
+### gpspickup
   Monitors /data/ftp for new files.
   When a new file arrives, gpspickup unpacks zip or gz into workdir
   and creates a jobfile in /data/queue. The files are renamed
   to conform to RINEXv3 name standard.
 
-jobengine
+### jobengine
   Monitors /data/queue
   A simple process manager ensuring not too many jobs are running in parallel. Max currently 4.
   jobengine creates a Job object (Job.pm) for the job.
 
-Job.pm
+### Job.pm
   This is the main program containing all the conversions to be done
   on RINEX files.
 
-RinexSet.pm
+### RinexSet.pm
   Each hour and day consists of multiple files, observations and navigation data.
   Files belonging to same hour/day is represented by a RinexSet object.
   RinexSet handles the naming of files as well.
 
-ftpuploader
+### ftpuploader
   Monitors /data/upload
   Upload files to final destinations. That can be other FTP servers, SFTP servers
   or local directories (NFS mounts).
 
-BaseConfig.pm
+### BaseConfig.pm
   Global variables - mostly file paths
 
-GPSDB.pm
+### GPSDB.pm
   Interface to the MariaDB on local
 
-Utils.pm
+### Utils.pm
   Utility functions used in all modules
 
 
-=================
-Paths
-=================
-/data/ftp
+## Paths
+### /data/ftp
   Home directory for vsFTPd.
   This is where inbound data arrives.
   Monitored by gpspickup
 
-/data/work
+### /data/work
   Temporary files. All processing happens here.
 
-/data/queue
+### /data/queue
   Job spool directory.
   Monitored by jobengine.
 
-/home/gpsuser
+### /home/gpsuser
   The script home directory
 
-/data/upload
+### /data/upload
   ftpuploader home directory
   Subdirectories monitored by ftpuploader (configured in DB)
 
-=================
-Author
-=================
+## Author
 Soren Juul Moller, Nov 2019
