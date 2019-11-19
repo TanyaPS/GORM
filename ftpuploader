@@ -252,20 +252,8 @@ local $SIG{HUP} = sub { reload(); };
 local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
 
 reload();
-#
-#my $cmdsock = new GPSIPC(name => 'ftpuploader', server => 1);
-#
-#loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
-#
-#while (!$sig_received && -f $pidfile) {
-#  if (my $cmd = $cmdsock->getline()) {
-#    chomp($cmd);
-#    last if ($cmd eq "quit" || $cmd eq "exit");
-#    reload();
-#  } else {
-#    print("$0: socket read error");
-#  }
-#}
+
+loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
 
 kill(15, $_) foreach values %PIDS;	# Kill all childs
 wait;
