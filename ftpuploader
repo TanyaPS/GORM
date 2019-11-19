@@ -73,6 +73,7 @@ sub ftpuploader($) {
       foreach my $e (@in_events) {
         my $fn = $e->name;
         next if $fn eq "failed";
+        next unless -f $fn;
         $todo{$fn} = 0 unless defined $todo{$fn};
       }
     }
@@ -106,7 +107,7 @@ sub ftpuploader($) {
       # start a new session not logged in
       if (!defined $ftp) {
         if ($protocol eq 'ftp') {
-          $ftp = Net::FTP->new($host, Passive => 1, Debug => 1);
+          $ftp = Net::FTP->new($host, Passive => 1);
           $rc = $ftp->login($user, $pass);
           if (!$rc) {
             logerror("Cannot login at $host with user $user: $rc.");
@@ -172,7 +173,7 @@ sub ftpuploader($) {
 
       # Try upload
       $destpath .= '/' unless $destpath =~ /\/$/;
-      loginfo("upload $fn -> $destpath$fn");
+      loginfo("$localdir/$fn -> $protocol://$host$destpath$fn");
       $rc = $ftp->put($fn, $fn);
       if ($protocol eq 'sftp' && $ftp->error) {
         logerror("Error SFTP uploading $fn: ".$ftp->error);
