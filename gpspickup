@@ -51,7 +51,7 @@ sub process() {
   # Get the complete list of defined sites from DB
   # We only use the short version of sitename here.
   my $sql = $DB->{'DBH'}->prepare(q{
-	select	site, naming, freq, obsint, navlist
+	select	site, freq, obsint, navlist
 	from	siteconfig
   });
   my $aref = $DB->{'DBH'}->selectall_arrayref($sql, { Slice => {} });

@@ -192,7 +192,7 @@ sub gendayfiles() {
   foreach my $navtyp (keys %navbytyp) {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
-    my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile";
+    my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile >/dev/null 2>&1";
     sysrun($cmd);
     $rsday->{$navtyp} = $navoutfile;
   }

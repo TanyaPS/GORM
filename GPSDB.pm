@@ -70,43 +70,18 @@ sub ping() {
 
 ##############################################################
 # Fetch site configuration.
-# Param: site or sitealias
 #
 sub getSiteConfig() {
   my ($self, $site) = @_;
   my $dbh = $self->{'DBH'};
 
-  # Translate alias to real sitename
   my $sql = $dbh->prepare(q{
-	select site from sitealiases where sitealias = ?
-  });
-  my $r = $dbh->selectrow_hashref($sql, undef, uc($site));
-  $site = $r->{'site'} if defined $r && exists($r->{'site'});
-
-  $sql = $dbh->prepare(q{
-        select  site, naming, freq, obsint, navlist, ts, active
+        select  site, freq, obsint, navlist, ts, active
         from    siteconfig
         where   site = ?
   });
-  $r = $dbh->selectrow_hashref($sql, undef, uc($site));
+  my $r = $dbh->selectrow_hashref($sql, undef, uc($site));
   return $r;
-}
-
-
-##############################################################
-# Fetch all aliases for a given site
-#
-sub getSiteAliases() {
-  my ($self, $site) = @_;
-
-  my $aliaslist = $self->{'DBH'}->selectall_arrayref(q{
-	select sitealias from sitealiases where site = ?
-  }, { Slice => {} }, $site);
-  my @a = ();
-  if (defined $aliaslist) {
-    push(@a, $_->{'sitealias'}) foreach @$aliaslist;
-  }
-  return @a;
 }
 
 
