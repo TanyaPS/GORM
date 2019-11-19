@@ -1,4 +1,11 @@
 #!/usr/bin/perl
+#
+# Represents processing of one set of RINEXv3 file(s)
+# The configuration of the processing is loaded from a jobfile, usually from $JOBQUEUE.
+# The processeor is designed to run in parallel and is uniquely identified by
+# site-year-doy-hour (ident).
+#
+# Soren Juul Moller, Nov 2019
 
 package Job;
 
@@ -149,6 +156,7 @@ sub gendayfiles() {
   my $dbh = $self->{DB}->{DBH};
   my ($site, $year, $doy) = ($self->{'site'}, $self->{'year'}, $self->{'doy'});
   my @rslist = ();
+
   my $rsday = new RinexSet(site => $site, year => $year, doy => $doy, hour => '0');
 
   loginfo("Generating daily files for $site-$year-$doy");
