@@ -38,8 +38,8 @@ sub ftpuploader($) {
   # Setup signal handling
   my $sig_received = 0;
   local $SIG{TERM} = sub { $sig_received = 1; };
-  local $SIG{INT} = sub { $sig_received = 1; };
-  local $SIG{HUP} = 'IGNORE';
+  local $SIG{INT}  = sub { $sig_received = 1; };
+  local $SIG{HUP}  = 'IGNORE';
 
   # Arm directory monitor
   my $inotify = new Linux::Inotify2;
@@ -135,7 +135,7 @@ sub ftpuploader($) {
       if ($destpath =~ /%/) {
         #TEJH00DNK_R_20171890000_01D_30S_MO.rnx
         my ($site, $year, $doy);
-        if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})/) {
+        if ($fn =~ /^([a-zA-Z0-9]{4}).{5}_R_([0-9]{4})([0-9]{3})/) {
           ($site, $year, $doy) = ($1, $2, $3);
         }
         $destpath =~ s/%site%/$site/g if defined $site;
@@ -193,22 +193,31 @@ sub ftpuploader($) {
 # and kill deleted/deactived running clients
 #
 my %PIDS;
+my %TS;
 sub reload() {
   my $DB = new GPSDB;
   my $confs = $DB->DBH->selectall_arrayref(q{
-	select	f.name, f.host, f.protocol, f.user, f.pass, f.privatekey, p.path localdir, f.remotedir
+	select	f.name, f.host, f.protocol, f.user, f.pass, f.privatekey, p.path localdir, f.remotedir, f.ts
 	from	uploaddest f, localdirs p
 	where	f.localdir = p.name
 	  and	f.active = 1
   }, { Slice => {} });
   undef $DB;
 
+  my $changed = 0;
+
   # Stop all not in config
+  running:
   foreach my $name (keys %PIDS) {
-    next if exists $confs->{$name};
+    foreach my $conf (@$confs) {
+      next running if $conf->{'name'} eq $name && $conf->{'ts'} eq $TS{$name};
+      loginfo("Stopping ftpuploader [$name]");
+    }
     next unless exists $PIDS{$name};
     kill(15, $PIDS{$name});
     delete $PIDS{$name};
+    delete $TS{$name};
+    $changed = 1;
   }
 
   # Start all in config not already running
@@ -228,8 +237,11 @@ sub reload() {
       }
       # Parent
       $PIDS{$conf->{'name'}} = $pid;
+      $TS{$conf->{'name'}} = $conf->{'ts'};
+      $changed = 1;
     }
   }
+  loginfo("config loaded") if $changed;
 }
 
 #
@@ -246,14 +258,17 @@ create_pid_file($pidfile);
 
 # Setup signal handling
 my $sig_received = 0;
-local $SIG{TERM} = sub { $sig_received = 1; };
-local $SIG{INT} = sub { $sig_received = 1; };
-local $SIG{HUP} = sub { reload(); };
+local $SIG{TERM} = sub { loginfo("SIGTERM"); $sig_received = 1; };
+local $SIG{INT} = sub { loginfo("SIGINT");   $sig_received = 1; };
+local $SIG{HUP} = sub { loginfo("SIGHUP"); };
 local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
 
-reload();
-
 loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
+
+while (!$sig_received && -f $pidfile) {
+  reload();
+  sleep(1800);  # check for config change every half hour or if HUP'ed
+}
 
 kill(15, $_) foreach values %PIDS;	# Kill all childs
 wait;
