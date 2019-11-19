@@ -7,9 +7,9 @@ Developed on CentOS 7, but should un RHEL 7 and RHEL 8 as well.
 
 Currently support Leica and Trimbple data.
 
-================================================================
+==================
 Overall Dataflow
-================================================================
+==================
   gpspickup detect new file in /data/ftp (FTP server inbound)
     unpack zip/gz into workdir
     create job in /data/queue
@@ -33,9 +33,9 @@ Overall Dataflow
       upload file to destination(s) using either ftp og sftp
 
 
-================================================================
+=================
 Components
-================================================================
+=================
 vsftpd
   FTP server receiving files from GNSS stations.
   Data arrives in /data/ftp
@@ -75,9 +75,9 @@ Utils.pm
   Utility functions used in all modules
 
 
-================================================================
+=================
 Paths
-================================================================
+=================
 /data/ftp
   Home directory for vsFTPd.
   This is where inbound data arrives.
@@ -97,7 +97,7 @@ Paths
   ftpuploader home directory
   Subdirectories monitored by ftpuploader (configured in DB)
 
-================================================================
+=================
 Author
-================================================================
+=================
 Soren Juul Moller, Nov 2019
