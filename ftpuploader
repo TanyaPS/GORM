@@ -1,63 +1,39 @@
 #!/usr/bin/perl
 #
-# ftpuploader - FTP upload to multiple destinations.
+# ftpuploader - FTP/SFTP uploader.
 #
-# This script is a FTP client to multiple FTP servers.
-# The script monitor directories and uploads any file put there to the designated FTP server.
-# It get it's configuration from ftpupload table in MySQL.
+# ftpuploader forks a FTP/SFTP client per destination.
+# Each destination process monitor a local directory on this host. For each new file, the process
+# uploads the file to destination as configured.
 #
-# Main loop listens in 'ftpuploader' message queue. When a message is received, any new/enabled FTPclient is
-# forked and any deleted/disabled FTPclient is killed.
-# Each FTPclient monitors a specific path and when a new file is created, FTPclient uploads the file to
-# a specified URL and moves it to 'saved' subdir. Failed uploads is moved to 'failed' subdir.
-#
-#       v1.1 - 28/2-08  - sjm@snex.dk - Initial release.
-#       v1.2 - 14/7-12  - sjm@snex.dk - Rewritten to use MySQL as config store
-#       v2.0 - 17/10-12 - sjm@snex.dk - Rewritten to use threads, Inotify2 and Curl.
-#	v3.0 - 11/11-12 - sjm@snex.dk - Rewritten to use fork instead of threads.
-#	v3.1 - 24/11-12 - sjm@snex.dk - Enable remote commanding via IPC messages and support reloading.
-#	v3.2 - 03/11-17 - sjm@sjmit.dk - Changed from message queues to socket IPC
-#
+# Soren Juul Moller, Nov 2019
 
 use strict;
 use warnings;
-use WWW::Curl::Easy;
 use Getopt::Std;
-use IO::Socket::UNIX;
+use Net::FTP;
+use Net::SFTP::Foreign;
 use Linux::Inotify2;
 use lib '/home/gpsuser';
 use BaseConfig;
 use Utils;
 use Logger;
 use GPSDB;
-use GPSIPC;
 
-
-sub ren2dir($$) {
-  my ($src, $dstdir) = @_;
-
-  if (! -d $dstdir) {
-    mkdir($dstdir, 0777);
-    chown(1022, 1022, $dstdir);
-  }
-  my $dst = $dstdir.'/'.basename($src);
-  unlink($dst);
-  rename($src, $dst);
-}
-
-########################################################################################
-# Sub process
+###################################################
+# ftpuploader sub process
 #
-
-sub FTPclient($) {
+sub ftpuploader($) {
   my $conf = shift;
-  my ($name, $host, $user, $pass, $localdir, $remotedir) =
-     map { $conf->{$_} } qw(name host user pass localdir remotedir);
+  my ($name, $host, $protocol, $user, $pass, $privatekey, $localdir, $remotedir) =
+     map { defined $conf->{$_} ? $conf->{$_}:"" } qw(name host protocol user pass privatekey localdir remotedir);
   undef $conf;
 
   chdir($localdir) || errdie("$0: chdir: $!\n");
   select(STDERR); $| = 1;                # Unbuffered output
   select(STDOUT); $| = 1;                # Unbuffered output
+
+  system("mkdir failed") unless -d "failed";
 
   # Setup signal handling
   my $sig_received = 0;
@@ -65,152 +41,163 @@ sub FTPclient($) {
   local $SIG{INT} = sub { $sig_received = 1; };
   local $SIG{HUP} = 'IGNORE';
 
+  # Arm directory monitor
   my $inotify = new Linux::Inotify2;
   my $watch = $inotify->watch($localdir, IN_CLOSE_WRITE | IN_MOVED_TO);
 
-  my $PASSIVE_MODE = 1;
-
-  my $ftp;
-  my @todo = ();
-  my $dynamicdirs = (index($remotedir, '%') >= 0 ? 1 : 0);
-  my $failcount = 0;
-
-  my $had_error = 0;
-  $had_error = 1 if dirlist("$localdir/failed") > 0;
-
   loginfo("$name uploader started");
+
+  my $ftp;		# Net::FTP or Net::SFTP::Foreign object
+  my %todo = ();	# $todo{$filename} = $retrycount
+  my $first = 1;
 
   Inbound:
   while (!$sig_received) {
-    my @in_events = ();
-    @todo = ();
-    eval {
-      local $SIG{ALRM} = sub { die("alarm\n") };
-      alarm 301;
-      @in_events = $inotify->read;
-      alarm 0;
-    };
-    if ($@) {
-      last unless $@ eq "alarm\n";        # Alarm?
-      # Alarm occured. Scan and load @todo.
-      @todo = sort { substr($a,4,4) cmp substr($b,4,4) } dirlist($localdir);
-    }
-    foreach my $e (@in_events) {
-      my $fn = $e->name;
-      push(@todo, $fn);
+    my @files = dirlist($localdir);
+    foreach my $fn (@files) {
+      next if -d $fn;
+      $todo{$fn} = 0 unless defined $todo{$fn};
     }
 
-    if (scalar(@todo) == 0) {
-      undef $ftp if defined $ftp;
+    if (scalar(keys %todo) == 0) {
+      my @in_events = ();
+      eval {
+        local $SIG{ALRM} = sub { die("alarm\n") };
+        alarm 301;
+        @in_events = $inotify->read;
+        alarm 0;
+      };
+      if ($@) {
+        last unless $@ eq "alarm\n";        # Alarm?
+      }
+      foreach my $e (@in_events) {
+        my $fn = $e->name;
+        next if $fn eq "failed";
+        $todo{$fn} = 0 unless defined $todo{$fn};
+      }
+    }
+
+    if (scalar(keys %todo) == 0) {
+      if (defined $ftp) {
+        # stop session while waiting for files
+        $ftp->quit() if $protocol eq 'ftp';
+        undef $ftp;
+      }
       next;
     }
 
-    while (my $fn = shift(@todo)) {
+    # do the uploads
+    @files = sort { substr($a,4,4) cmp substr($b,4,4) } keys %todo;
+    foreach my $fn (@files) {
       last if $sig_received;
       next unless -f $fn;
 
-      # Crete a new FTP session if not already connected
+      if ($todo{$fn} > 3) {
+        logerror("Giving up on $fn after $todo{$fn} tries. Moved to $localdir/failed");
+        unlink("$localdir/failed/$fn");
+        rename("$localdir/$fn", "$localdir/failed/$fn");
+        delete $todo{$fn};
+        next;
+      }
+      $todo{$fn}++;
+
+      my $rc = 0;
+
+      # start a new session not logged in
       if (!defined $ftp) {
-	$ftp = new WWW::Curl::Easy;
-	$ftp->setopt(CURLOPT_UPLOAD, 1);
-	$ftp->setopt(CURLOPT_TIMEOUT, 15);
-	$ftp->setopt(CURLOPT_FTP_RESPONSE_TIMEOUT, 8);
-	$ftp->setopt(CURLOPT_FTP_CREATE_MISSING_DIRS, 1) if $dynamicdirs;
-	$ftp->setopt(CURLOPT_USERPWD, $user.':'.$pass);
-	if ($PASSIVE_MODE) {
-	  # Passive mode is default for Curl. Disable use of EPSV command in passive mode
-	  $ftp->setopt(CURLOPT_FTP_USE_EPSV, 0);
-	} else {
-	  # Disable passive mode and use of EPRT and LPRT command in active mode
-	  $ftp->setopt(CURLOPT_FTPPORT, "-");
-	  $ftp->setopt(CURLOPT_FTP_USE_EPRT, 0);
-	}
+        if ($protocol eq 'ftp') {
+          $ftp = Net::FTP->new($host, Passive => 1, Debug => 1);
+          $rc = $ftp->login($user, $pass);
+          if (!$rc) {
+            logerror("Cannot login at $host with user $user: $rc.");
+            undef $ftp;
+            next Inbound;
+          }
+          $ftp->binary();
+        }
+        elsif ($protocol eq 'sftp') {
+          loginfo("Login as $user using privatekey $privatekey");
+          $ftp = Net::SFTP::Foreign->new($host, user => $user, key_path => $privatekey);
+          if ($ftp->error) {
+            logerror("Cannot login at $host with user $user: ".$ftp->error);
+            undef $ftp;
+            next Inbound;
+          }
+        }
+        else {
+          logerror("Unknown protocol: $protocol. Exiting...");
+          exit(1);
+        }
       }
 
-      # Expand dynamic dir
-      my $rdir = "";
-      if ($dynamicdirs) {
-	if ($fn =~ /^[a-z0-9]{4}?(\d\d\d)[a-x0]\.(\d\d)[dng]/i) {
-	  my ($doy, $yyyy) = ($1, sy2year($2));
-	  my $p = $remotedir;
-	  $p =~ s/%year/$yyyy/ig;
-	  $p =~ s/%doy/$doy/ig;
-	  $rdir = $p;
-	} else {
-	  logerror("$fn must be SiteDDDh.YY[dng] for dynamicdirs. Moved to $localdir/failed.");
-	  ren2dir("$localdir/$fn", "$localdir/failed");
-	  next;
-	}
+      # Contruct destination path
+      my $destpath = $remotedir;
+      if ($destpath =~ /%/) {
+        #TEJH00DNK_R_20171890000_01D_30S_MO.rnx
+        my ($site, $year, $doy);
+        if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})/) {
+          ($site, $year, $doy) = ($1, $2, $3);
+        }
+        $destpath =~ s/%site%/$site/g if defined $site;
+        $destpath =~ s/%year%/$year/g if defined $year;
+        $destpath =~ s/%doy%/$doy/g if defined $doy;
+        if ($destpath =~ /%/) {
+          logerror("File $fn not recognized or invalid variable");
+          unlink("$localdir/failed/$fn");
+          rename("$localdir/$fn", "$localdir/failed/$fn");
+          delete $todo{$fn};
+          next;
+        } 
+      }
+
+      # Change dir to $destpath. Create if necessary.
+      if ($protocol eq 'ftp') {
+        $rc = $ftp->cwd($destpath);
+        if (!$rc) {
+          $ftp->mkdir($destpath, 1);
+          $rc = $ftp->cwd($destpath);
+        }
+      }
+      elsif ($protocol eq 'sftp') {
+        $rc = $ftp->setcwd($destpath);
+        if ($ftp->error) {
+          $ftp->mkpath($destpath, undef, 0);
+          $rc = $ftp->setcwd($destpath);
+        }
+      }
+      if (!$rc) {
+        logerror("Cannot change dir to $destpath");
+        next;
+      }
+
+      # Try upload
+      $destpath .= '/' unless $destpath =~ /\/$/;
+      loginfo("upload $fn -> $destpath$fn");
+      $rc = $ftp->put($fn, $fn);
+      if ($protocol eq 'sftp' && $ftp->error) {
+        logerror("Error SFTP uploading $fn: ".$ftp->error);
+      } elsif ($protocol eq 'ftp' && !$rc) {
+        logerror("Error FTP uploading $fn");
       } else {
-	$rdir = $remotedir;
-      }
-
-      # Build URL
-      my $url = "ftp://$host";
-      $url .= '/' unless $rdir =~ /^\//;
-      $url .= $rdir;
-      $url .= '/' unless $rdir =~ /\/$/;
-      $url .= $fn;
-      # logdebug("Try upload to $url");
-      $ftp->setopt(CURLOPT_URL, $url);
-
-      # Perform upload
-      $ftp->setopt(CURLOPT_INFILESIZE, -s "$localdir/$fn");
-      next if !open(my $fd, '<', "$localdir/$fn");
-      $ftp->setopt(CURLOPT_READDATA, $fd);
-      my $rc = $ftp->perform();
-      close($fd);
-
-      if ($rc) {
-	$failcount++;
-	if (fileage($fn) > 8*3600) {
-	  logerror("Giving up on uploading $fn to $name. Moved to $localdir/failed.");
-	  ren2dir("$localdir/$fn", "$localdir/failed");
-	}
-	$had_error = 1;
-	undef $ftp;        # Force a reconnect when an error occurred.
-      } else {
-	loginfo("$fn -> $url");
-	ren2dir("$localdir/$fn", "$localdir/saved");
-	$failcount = 0;
-	if ($had_error) {
-	  # Was in error mode, but ok now. Restore all failed files.
-	  my @files = dirlist("$localdir/failed");
-	  if (scalar(@files) > 0) {
-	    ren2dir("$localdir/failed/$_", $localdir) foreach @files;
-	    loginfo("Connection restored. Moved ".scalar(@files)." files to upload queue.");
-	  }
-	  $had_error = 0;
-	}
-      }
-      if ($failcount >= 30) {
-	my $count = dirlist($localdir);
-	logwarn("Trouble uploading to $name. $count files remain in upload queue.");
-	$failcount = 0;
-	next Inbound;
+        unlink("$localdir/$fn");
+        delete $todo{$fn};
       }
     }
   }
 
-  $watch->cancel;
-  loginfo("$name uploader stopped");
+  loginfo("ftpuploader [$name] stopped");
 }
-
-########################################################################################
-# Main process
-#
-
-my %PIDS = ();
 
 ###################################################
 # Spawn new/created clients not already started
 # and kill deleted/deactived running clients
 #
+my %PIDS;
 sub reload() {
   my $DB = new GPSDB;
   my $confs = $DB->DBH->selectall_arrayref(q{
-	select	f.name, f.host, f.user, f.pass, p.path localdir, f.remotedir
-	from	ftpupload f, paths p
+	select	f.name, f.host, f.protocol, f.user, f.pass, f.privatekey, p.path localdir, f.remotedir
+	from	uploaddest f, localdirs p
 	where	f.localdir = p.name
 	  and	f.active = 1
   }, { Slice => {} });
@@ -218,31 +205,30 @@ sub reload() {
 
   # Stop all not in config
   foreach my $name (keys %PIDS) {
-    my $found = 0;
-    foreach my $conf (@$confs) {
-      $found = 1 if $name eq $conf->{'name'};
-    }
-    next if $found;
-    my $pid = $PIDS{$name};
-    if (defined $pid) {
-      delete $PIDS{$name};
-      kill(15, $pid);
-    }
+    next if exists $confs->{$name};
+    next unless exists $PIDS{$name};
+    kill(15, $PIDS{$name});
+    delete $PIDS{$name};
   }
 
   # Start all in config not already running
   foreach my $conf (@$confs) {
     next if exists $PIDS{$conf->{'name'}};
-    my $pid = fork();
-    die("$0: cannot fork\n") unless defined $pid;
-    if ($pid == 0) {
-      # Child
-      $0 = "/usr/bin/perl $0 [$conf->{name}]";
-      FTPclient($conf);
-      exit(0);
+    if ($conf->{'protocol'} eq 'ftp' && (!exists $conf->{'pass'} || $conf->{'pass'} eq "")) {
+      logerror("ftp user without password ignored");
     }
-    # Parent
-    $PIDS{$conf->{'name'}} = $pid;
+    else {
+      my $pid = fork();
+      die("$0: cannot fork\n") unless defined $pid;
+      if ($pid == 0) {
+        # Child
+        $0 = "ftpuploader [$conf->{name}]";
+        ftpuploader($conf);
+        exit(0);
+      }
+      # Parent
+      $PIDS{$conf->{'name'}} = $pid;
+    }
   }
 }
 
@@ -266,24 +252,24 @@ local $SIG{HUP} = sub { reload(); };
 local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
 
 reload();
-
-my $cmdsock = new GPSIPC(name => 'ftpuploader', server => 1);
-
-loginfo("$0 [master] started (".(scalar(keys %PIDS))." instances)");
-
-while (!$sig_received && -f $pidfile) {
-  if (my $cmd = $cmdsock->getline()) {
-    chomp($cmd);
-    last if ($cmd eq "quit" || $cmd eq "exit");
-    reload();
-  } else {
-    print("$0: socket read error");
-  }
-}
+#
+#my $cmdsock = new GPSIPC(name => 'ftpuploader', server => 1);
+#
+#loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
+#
+#while (!$sig_received && -f $pidfile) {
+#  if (my $cmd = $cmdsock->getline()) {
+#    chomp($cmd);
+#    last if ($cmd eq "quit" || $cmd eq "exit");
+#    reload();
+#  } else {
+#    print("$0: socket read error");
+#  }
+#}
 
 kill(15, $_) foreach values %PIDS;	# Kill all childs
 wait;
 unlink($pidfile);
 
-loginfo("$0 [master] stopped");
+loginfo("ftpuploader [master] stopped");
 exit(0);
