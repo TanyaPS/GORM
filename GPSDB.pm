@@ -68,21 +68,4 @@ sub ping() {
   }
 }
 
-##############################################################
-# Fetch site configuration.
-#
-sub getSiteConfig() {
-  my ($self, $site) = @_;
-  my $dbh = $self->{'DBH'};
-
-  my $sql = $dbh->prepare(q{
-        select  site, freq, obsint, navlist, ts, active
-        from    siteconfig
-        where   site = ?
-  });
-  my $r = $dbh->selectrow_hashref($sql, undef, uc($site));
-  return $r;
-}
-
-
 1;

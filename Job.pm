@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-#
+###################################################################################
 # Represents processing of one set of RINEXv3 file(s)
 # The configuration of the processing is loaded from a jobfile, usually from $JOBQUEUE.
 # The processeor is designed to run in parallel and is uniquely identified by
@@ -73,7 +73,7 @@ sub deletejob() {
   unlink($self->jobfile());
 }
 
-##########################################################################################
+###################################################################################
 # Fetch station info from database for the RINEX header
 #
 sub getStationInfo($$) {
@@ -99,15 +99,15 @@ sub getStationInfo($$) {
 	limit	1
   };
   my $antrow = $dbh->selectrow_hashref($sql, undef, uc($self->{'site'}), $startdate);
-  if ($antrow->{anttype} =~ /,/) {
-    my @a = split(/,/, $antrow->{anttype});
-    $antrow->{anttype} = sprintf("%-16s%s", $a[0], $a[1]);
+  if ($antrow->{'anttype'} =~ /,/) {
+    my @a = split(/,/, $antrow->{'anttype'});
+    $antrow->{'anttype'} = sprintf("%-16s%s", $a[0], $a[1]);
   }
 
   return ($rcvrow, $antrow);
 }
 
-##########################################################################################
+###################################################################################
 # Decimate observation from $src_interval to $dst_interval
 #
 sub _decimate($$$$$) {
@@ -127,7 +127,7 @@ sub _decimate($$$$$) {
   }
 }
 
-##########################################################################################
+###################################################################################
 # Splice hourly observation file for the given interval
 #
 sub _splice($$$) {
@@ -147,7 +147,7 @@ sub _splice($$$) {
   $rsday->{'MO.'.$interval} = $outfile;
 }
 
-##########################################################################################
+###################################################################################
 # Check if a hourly site day is complete.
 # If so, splice hourly files into a day file and submit a new job
 #
@@ -220,7 +220,7 @@ sub gendayfiles() {
   # $dayjob->submitjob('daily');
 }
 
-###################################################
+###################################################################################
 # decimate obs into intervals we need to distribute
 #
 sub createWantedIntervals($) {
@@ -271,7 +271,7 @@ sub process() {
   my $freq = $hour eq '0' ? 'D':'H';
   my @tmpfiles = ();
 
-  #################
+  #################################
   # Patch RINEX header
   #
   if ($self->{'source'} eq 'ftp') {
@@ -301,7 +301,7 @@ sub process() {
   #
   $self->createWantedIntervals($rs);
 
-  #################
+  #################################
   # QC on 30s file
   #
   my $sumfile = $rs->getFilenamePrefix().'.sum';
@@ -345,7 +345,7 @@ sub process() {
 
   push(@tmpfiles, $sumfile);
 
-  #################
+  #################################
   # Distribute
   #
   my $sql = $dbh->prepare(q{

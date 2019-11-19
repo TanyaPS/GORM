@@ -35,11 +35,11 @@ BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	sysrun syscp sysmv make_workdir
+	sysrun syscp sysmv
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter
 	basename dirname fileage dirlist daemonize create_pid_file
-	getRinexInfo loadJSON storeJSON
+	loadJSON storeJSON
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
   $DMB = new Date::Manip::Base;
@@ -90,17 +90,6 @@ sub syscp($$;$) {
 sub sysmv($$;$) {
   my ($srclist, $dst, $opts) = @_;
   return _eval_cp_args('mv', $srclist, $dst, $opts);
-}
-
-
-##########################################################################
-# Move $files to $targetdir. Create $targetdir if necessary.
-#
-sub make_workdir($$$) {
-  my ($site, $year, $doy) = @_;
-  my $path = sprintf("%s/%s/%4d/%03d", $WORKDIR, $site, $year, $doy);
-  make_path($path) unless -d $path;
-  return $path;
 }
 
 
@@ -265,33 +254,6 @@ sub create_pid_file($) {
   my $fd = new IO::File ">$pidfile";
   print $fd "$$\n";
   return $pidfile;
-}
-
-##########################################################################################
-#
-sub getRinexInfo($) {
-  my $obsfile = shift;
-  my (%res, $firstobs, $interval, $tstr, $istr);
-
-  open(my $fd, '<', $obsfile);
-  while (<$fd>) {
-    chop;
-    last if /END OF HEADER\s*$/;
-    $tstr = $_ if /TIME OF FIRST OBS\s*$/;
-    $istr = $_ if /INTERVAL\s*/;
-  }
-  $tstr = <$fd> unless defined $tstr;
-  close($fd);
-
-  my @t = split(/\s+/, $tstr);
-  $res{'firstobs'} = sprintf("%4d-%02d-%02d %02d:%02d:%02d", @t[1..6]);
-
-  $res{'interval'} = 1;
-  if ($istr =~ /^\s+(\d)\./) {
-    $res{'interval'} = $1;
-  }
-
-  return \%res;
 }
 
 
