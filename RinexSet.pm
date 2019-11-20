@@ -65,19 +65,19 @@ sub getNavlist() {
   my $self = shift;
   my @fa = ();
   my $p = $self->getFilenamePrefix();
-  foreach (qw(GN RN EN JN CN)) {
+  foreach (qw(GN RN EN JN CN MN)) {
     push(@fa, $self->{$_}) if exists $self->{$_};
   }
   return \@fa;
 }
 
 # Defines $obj->{ftyp} if file exists.
-# ftyp is MO, CN, EN, GN, JN or RN.
+# ftyp is MO, CN, EN, GN, JN, RN or MN.
 #
 sub checkfiles() {
   my $self = shift;
   my $w = $self->getWorkdir;
-  foreach my $ftyp (qw(MO.1 MO.15 MO.30 CN EN GN JN RN)) {
+  foreach my $ftyp (qw(MO.1 MO.15 MO.30 CN EN GN JN RN MN)) {
     delete $self->{$ftyp};
     my $fn = $self->getRinexFilename($ftyp);
     $self->{$ftyp} = $fn if -f "$w/$fn";
@@ -126,7 +126,6 @@ sub unzip($$) {
     $ftyp .= '.'.$interval if $ftyp eq 'MO';
     $ofn = $self->getRinexFilename($ftyp);
     if ($ofn ne $zmfn) {
-print("mv $zmfn $ofn\n");
       unlink("$workdir/$ofn");
       link("$workdir/$zmfn", "$workdir/$ofn");
       unlink("$workdir/$zmfn");

@@ -1,4 +1,10 @@
 #!/usr/bin/perl
+#################
+# Monitor for new inbound GPS data files from Permanent GNSS Stations.
+# When a new file arrived, move it to $SAVEDIR and unpack it to $WORKDIR.
+# Files are renamed to RINEXv3 standard naming during unpack.
+#
+# Soren Juul Moller, Nov 2019
 
 use strict;
 use warnings;
@@ -16,7 +22,7 @@ my $DB;
 
 chdir('/data/ftp');
 
-#
+#############################################################################################
 # scan_incoming will add all plain files in /data/ftp to %Inbound
 #
 sub scan_incoming() {
@@ -32,6 +38,9 @@ sub scan_incoming() {
   close($fd);
 }
 
+#############################################################################################
+# Lookup site in gpssums. Returns true if current year-doy exists, false if not.
+#
 sub check_existing($$$$$) {
   my ($sql, $site, $year, $doy, $hour) = @_;
 
@@ -39,7 +48,8 @@ sub check_existing($$$$$) {
   return (defined $aref && $$aref[0]->{cnt} == 1);
 }
 
-#
+
+#############################################################################################
 # Process all files in %Inbound
 # Move complete filesets to workdir as is and create a job for processing the files
 # Unknown sites and unknown filetypes for site are moved to £SAVEDIR/stale.
@@ -89,17 +99,17 @@ sub process() {
     elsif ($fn =~ /^[A-Z0-9]{4}?(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
       my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
       my $doy = Day_of_Year($year, $mm, $dd);
-      my $hour = chr(ord('a')+$hh);
-      sysmv($ifn, $SAVEDIR.'/'.$sc->{site}, { log => 1, mkdir => 1 });
-      $ifn = $SAVEDIR.'/'.$sc->{site}.'/'.$fn;
-      if (check_existing($sql, $sc->{site}, $year, $doy, $hour)) {
+      my $hour = hour2letter($hh);
+      sysmv($ifn, $SAVEDIR.'/'.$sc->{'site'}, { log => 1, mkdir => 1 });
+      $ifn = $SAVEDIR.'/'.$sc->{'site'}.'/'.$fn;
+      if (check_existing($sql, $sc->{'site'}, $year, $doy, $hour)) {
         print "$fn processed already. Forget it before reprocessing.\n";
         next;
       }
-      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      $job = new Job(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       $job->mkWorkdir();
-      my $rs = new RinexSet(site => $sc->{site}, year => $year, doy => $doy, hour => $hour);
-      $rs->unzip($ifn, $sc->{obsint});
+      my $rs = new RinexSet(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour);
+      $rs->unzip($ifn, $sc->{'obsint'});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
     }
@@ -122,6 +132,43 @@ sub process() {
       $job->{'rsfile'} = $rs->getRsFile;
     }
 
+    # Septentrio (not zipped into one file)
+    elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)/) {
+      my ($year, $doy, $hh, $mi) = ($1, $2, $3, $4);
+      my $hour = hour2letter($hh);
+      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      my $rs = new RinexSet(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour);
+      my $workdir = $job->mkWorkdir();
+      my $savedir = $SAVEDIR.'/'.$sc->{'site'};
+      my $sfn = "$savedir/$fn";
+      my $wfn = "$workdir/$fn";
+      sysmv($ifn, $savedir, { mkdir => 1 });
+      if ($wfn =~ /\.gz$/) {
+        $wfn =~ s/\.gz$//;
+        sysrun("gzip -dc $sfn >$wfn");
+      } else {
+        syscp($sfn, $wfn, { log => 1 });
+      }
+
+      # TODO: Check if hour is complete. What if a navfile is missing and never arrives?
+      delete $Inbound{$fn};
+      my $obs = $rs->getRinexFilename('MO.'.$sc->{'obsint'});
+      next unless -f $workdir.'/'.$obs;
+      $rs->{'MO.'.$sc->{'obsint'}} = $obs;
+      my $complete = 1;
+      foreach my $navtyp (split(/,/,$sc->{'navlist'})) {
+        my $nav = $rs->getRinexFilename(uc($navtyp).'N');
+        $complete = 0 unless -f $workdir.'/'.$nav;
+        $rs->{uc($navtyp).'N'} = $nav;
+      }
+      if (!$complete) {
+        # TODO: if not complete, check if day is complete and complete it anyway
+      }
+      next unless $complete;
+      $rs->store();
+      $job->{'rsfile'} = $rs->getRsFile;
+    }
+
     # Unknown filename structure?!
     else {
       logerror("Unknown filetype for site $sc->{site}: $ifn");
@@ -129,11 +176,14 @@ sub process() {
     }
 
     # clear for inbound queue and submit a new job for processing
-    delete $Inbound{$fn};
+    delete $Inbound{$fn} if exists $Inbound{$fn};
     $job->submitjob('ftp') if defined $job;
   }
 }
 
+#############################################################################################
+# Main program
+#
 my %opts = ();
 getopts('dl:', \%opts);
 my $log = defined $opts{'l'} ? $opts{'l'} : "/dev/null";

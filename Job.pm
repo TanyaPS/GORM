@@ -129,7 +129,7 @@ sub _decimate($$$$$) {
 
 ###################################################################################
 # Splice hourly observation file for the given interval
-#
+# TODO: Handle splitted hours
 sub _splice($$$) {
   my ($rsday, $rslist, $interval) = @_;
 
