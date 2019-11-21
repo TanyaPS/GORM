@@ -261,7 +261,7 @@ sub _getQCandGaps($) {
     # G:   1?: Observations      :  33065 (   34634)    95.47 %
     # G:   1?: Gaps              :       55
     if (/^\s+([A-Z]):\s+\d[A-Z\?]: Observations.*\s([\d\.]+) %$/) {
-      next if exists $got{$1};
+      next if $1 eq 'S' || exists $got{$1};
       $got{$1} = 1;
       push(@qcs, $2);
     }
