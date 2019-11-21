@@ -33,3 +33,15 @@ inc/
 /MANIFEST.bak
 /pm_to_blib
 /*.zip
+
+# Custom
+.bash*
+.cache*
+.config
+.less*
+.lock
+.pki
+.ssh*
+.subversion
+.mysql*
+.vim*

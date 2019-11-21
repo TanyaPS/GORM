@@ -59,13 +59,21 @@ sub process() {
   my @flist = keys %Inbound;
 
   # Check for pending jobs
-  loginfo("check pending");
+  #loginfo("check pending");
   foreach my $ident (keys %Pending) {
     my $job = $Pending{$ident};
-    if (fileage($job->{'rsfile'}) > 14) {
-      loginfo("submitting $ident");
-      $job->submitjob('ftp');
-      delete $Pending{$ident};
+    if (time() - $job->{'timestamp'} > 14) {
+      # check nothing is being transferred right now
+      my $rs = new RinexSet(rsfile => $job->{'rsfile'});
+      my $prefix = $rs->getFilenamePrefix();
+      my @inbound = glob("$INCOMING/${prefix}*");
+      if (scalar(@inbound) == 0) {
+        # no active inbound, then submit
+        loginfo("submitting $ident");
+        delete $job->{'timestamp'};
+        $job->submitjob('ftp');
+        delete $Pending{$ident};
+      }
     }
   }
   return unless scalar(@flist) > 0;   # nothing to do
@@ -77,7 +85,7 @@ sub process() {
 	from	siteconfig
   });
   my $aref = $DB->{'DBH'}->selectall_arrayref($sql, { Slice => {} });
-  die("No sites") if !defined $aref || scalar(@$aref) == 0;
+  die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
   my %scs = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
 
   # First each of the files found in /data/ftp, move them to it's workdir.
@@ -92,35 +100,36 @@ sub process() {
   foreach my $fn (@flist) {
     my $ifn = $Inbound{$fn};
     # assume sitename is the 4 first letters in filename
-    my $siteshort = uc(substr($fn, 0, 4));
+    my $site4 = uc(substr($fn, 0, 4));
     my $job = undef;
 
     # Make sure we know the site
-    my $sc = $scs{$siteshort};
+    my $sc = $scs{$site4};
     if (!defined $sc) {
       sysmv($ifn, $SAVEDIR.'/stale', { log => 1 });
-      logwarn("No such site: $siteshort");
+      logwarn("No such site: $site4");
       next;
     }
+    my $site = $sc->{'site'};
 
     # Now that we know this is a known site, copy the file(s) to it's workdir and move to $SAVEDIR.
     # Derive the date & time from filename if possible.
 
     # Trinzic
     # ssssyyyymmddhhmiB.zip
-    elsif ($fn =~ /^[A-Z0-9]{4}?(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
+    if ($fn =~ /^[A-Z0-9]{4}?(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
       my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
       my $doy = Day_of_Year($year, $mm, $dd);
       my $hour = hour2letter($hh);
-      sysmv($ifn, $SAVEDIR.'/'.$sc->{'site'}, { log => 1, mkdir => 1 });
-      $ifn = $SAVEDIR.'/'.$sc->{'site'}.'/'.$fn;
-      if (check_existing($sql, $sc->{'site'}, $year, $doy, $hour)) {
+      sysmv($ifn, "$SAVEDIR/$site", { log => 1, mkdir => 1 });
+      $ifn = "$SAVEDIR/$site/$fn";
+      if (check_existing($sql, $site, $year, $doy, $hour)) {
         print "$fn processed already. Forget it before reprocessing.\n";
         next;
       }
-      $job = new Job(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       $job->mkWorkdir();
-      my $rs = new RinexSet(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour);
+      my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
       $rs->unzip($ifn, $sc->{'obsint'});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
@@ -130,39 +139,38 @@ sub process() {
     # ssssdddh.yyo.zip
     elsif ($fn =~ /^[A-Z0-9]{4}(\d\d\d)([a-x])\.(\d\d)o\.zip$/) {
       my ($doy, $hour, $year) = ($1, $2, sy2year($3));
-      sysmv($ifn, $SAVEDIR.'/'.$sc->{site}, { log => 1, mkdir => 1 });
-      $ifn = $SAVEDIR.'/'.$sc->{site}.'/'.$fn;
-      if (check_existing($sql, $sc->{site}, $year, $doy, $hour)) {
+      sysmv($ifn, "$SAVEDIR/site", { log => 1, mkdir => 1 });
+      $ifn = "$SAVEDIR/$site/$fn";
+      if (check_existing($sql, $site, $year, $doy, $hour)) {
         print "$fn processed already. Forget it before reprocessing.\n";
         next;
       }
-      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       $job->mkWorkdir();
-      my $rs = new RinexSet(site => $sc->{site}, year => $year, doy => $doy, hour => $hour);
+      my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
       $rs->unzip($ifn, $sc->{obsint});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
     }
 
     # Septentrio (not zipped into one file)
-    # Strategy is to submit job until the newest file is at least 15s old. Then its safe to assume all files have arrived
+    # Strategy is to submit job until the newest file is at least XXs old. Then its safe to assume all files have arrived
     # TA0200DNK_R_20190161900_01H_01S_MO.rnx
     # TA0200DNK_R_20190161800_01H_RN.rnx
-    elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(\w\w)\.rnx/) {
+    elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(MO|[A-Z]N)\.rnx/) {
       my ($year, $doy, $hh, $mi, $ftyp) = ($1, $2, $3, $4, $5);
       my $hour = hour2letter($hh);
 
       delete $Inbound{$fn};
       next unless -f $ifn;
 
-      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       my $ident = $job->getIdent();
-      my $workdir = $job->getWorkdir();
-      my $savedir = $SAVEDIR.'/'.$sc->{'site'};
-      my $rs = new RinexSet(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour);
-      $rs->load() if -f $rs->getRsFile();
+      my $workdir = $job->mkWorkdir();
+      my $savedir = "$SAVEDIR/$site";
+      my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
       $job->{'rsfile'} = $rs->getRsFile();
-      $job->mkWorkdir();
+      $rs->load() if -f $job->{'rsfile'};
       sysmv($ifn, $savedir, { log => 1, mkdir => 1 });
       $ifn = "$savedir/$fn";
 
@@ -177,13 +185,14 @@ sub process() {
       $ftyp .= '.'.$sc->{'obsint'} if $ftyp eq 'MO';
       $rs->{$ftyp} = $ufn;
       $rs->store();
+      $job->{'timestamp'} = time();
       $Pending{$ident} = $job;
       next;
     }
 
     # Unknown filename structure?!
     else {
-      logerror("Unknown filetype for site $sc->{site}: $ifn");
+      logerror("Unknown filetype for site $site: $ifn");
       sysmv($ifn, "$SAVEDIR/stale", { log => 1 });
     }
 

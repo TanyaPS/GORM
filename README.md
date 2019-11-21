@@ -5,7 +5,7 @@ Theese scripts are used for receiving, process and distribute RINEXv3
 data files received from Permanent GNSS Stations.
 Developed on CentOS 7, but should un RHEL 7 and RHEL 8 as well.
 
-Currently support Leica and Trimbple data.
+Currently support Leica, Trimbple and Septentrio data.
 
 ## Overall Dataflow
 - gpspickup detect new file in /data/ftp (FTP server inbound)

@@ -1,0 +1,76 @@
+
+Install CentOS 7, minimal installation
+- Disable SELinux in /etc/sysconfig/selinux
+
+Configure udev:
+Create file /etc/udev/rules.d/99-custom.rules
+   ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/scheduler}="noop"
+and run
+   udevadm trigger
+
+Add packages:
+	epel-release
+do yum update
+Add packages
+	open-vm-tools
+	wget
+	firewalld
+	mariadb
+	mariadb-server
+	perl-WWW-Curl
+	perl-Linux-Inotify2
+	perl-Date-Manip
+	perl-Sys-Syslog
+	perl-DBI
+	perl-JSON
+	perl-JSON-XS
+	perl-Parallel-ForkManager
+	perl-Archive-Zip
+	perl-Net-SFTP-Foreign
+
+Configure:
+
+postfix:
+	myhostname
+	mydomain
+	relayhost
+
+mariadb:
+	Create /data/mysql
+	Modify /etc/my.cnf.d/server.cnf
+		Add "datadir = /data/mysql" in [server] section
+	systemctl enable mariadb
+	systemctl start mariadb
+	Run "mysql_secure_installation"
+	Create gpsuser
+		mysql -u root -p mysql
+		create database gps;
+		create user gpsuser@localhost identifyed by 'gpsuser';
+		grant all privileges on gps.* to gpsuser@localhost;
+	Check local access with:
+		# mysql -u gpsuser -pgpsuser gps     (should be able to login)
+	Run SQL script
+		\. /home/gpsuser/sql/create-siteconfig.sql
+		show tables;
+	Should display:
+		+---------------+
+		| Tables_in_gps |
+		+---------------+
+		| antennas      |
+		| locations     |
+		  .....
+		| receivers     |
+		| siteconfig    |
+		+---------------+
+
+firewall:
+	CentOS 7 default firewall is firewall-cmd
+
+	Add new zone with
+		firewall-cmd --permanent --zone=ftp
+		firewall-cmd --permanent --zone=ftp --add-service=ftp
+		firewall-cmd --reload
+
+	When adding allowed sources
+		firewall-cmd --permanent --zone=ftp --add-source=1.2.3.4/32
+		firewall-cmd --reload
