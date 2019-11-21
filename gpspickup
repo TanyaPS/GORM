@@ -18,6 +18,7 @@ use Job;
 use GPSDB;
 
 my %Inbound = ();
+my %Pending = ();
 my $DB;
 
 chdir('/data/ftp');
@@ -32,7 +33,7 @@ sub scan_incoming() {
     chomp;
     next if fileage($_) < 2;
     my $fn = basename($_);
-    next if exists $Inbound{$fn};
+    next if exists $Inbound{$fn} || exists $Pending{$fn};
     $Inbound{$fn} = $_;
   }
   close($fd);
@@ -56,7 +57,18 @@ sub check_existing($$$$$) {
 #
 sub process() {
   my @flist = keys %Inbound;
-  return unless scalar(@flist) > 0;
+
+  # Check for pending jobs
+  loginfo("check pending");
+  foreach my $ident (keys %Pending) {
+    my $job = $Pending{$ident};
+    if (fileage($job->{'rsfile'}) > 14) {
+      loginfo("submitting $ident");
+      $job->submitjob('ftp');
+      delete $Pending{$ident};
+    }
+  }
+  return unless scalar(@flist) > 0;   # nothing to do
 
   # Get the complete list of defined sites from DB
   # We only use the short version of sitename here.
@@ -133,40 +145,40 @@ sub process() {
     }
 
     # Septentrio (not zipped into one file)
-    elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)/) {
-      my ($year, $doy, $hh, $mi) = ($1, $2, $3, $4);
+    # Strategy is to submit job until the newest file is at least 15s old. Then its safe to assume all files have arrived
+    # TA0200DNK_R_20190161900_01H_01S_MO.rnx
+    # TA0200DNK_R_20190161800_01H_RN.rnx
+    elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(\w\w)\.rnx/) {
+      my ($year, $doy, $hh, $mi, $ftyp) = ($1, $2, $3, $4, $5);
       my $hour = hour2letter($hh);
-      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-      my $rs = new RinexSet(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour);
-      my $workdir = $job->mkWorkdir();
-      my $savedir = $SAVEDIR.'/'.$sc->{'site'};
-      my $sfn = "$savedir/$fn";
-      my $wfn = "$workdir/$fn";
-      sysmv($ifn, $savedir, { mkdir => 1 });
-      if ($wfn =~ /\.gz$/) {
-        $wfn =~ s/\.gz$//;
-        sysrun("gzip -dc $sfn >$wfn");
-      } else {
-        syscp($sfn, $wfn, { log => 1 });
-      }
 
-      # TODO: Check if hour is complete. What if a navfile is missing and never arrives?
       delete $Inbound{$fn};
-      my $obs = $rs->getRinexFilename('MO.'.$sc->{'obsint'});
-      next unless -f $workdir.'/'.$obs;
-      $rs->{'MO.'.$sc->{'obsint'}} = $obs;
-      my $complete = 1;
-      foreach my $navtyp (split(/,/,$sc->{'navlist'})) {
-        my $nav = $rs->getRinexFilename(uc($navtyp).'N');
-        $complete = 0 unless -f $workdir.'/'.$nav;
-        $rs->{uc($navtyp).'N'} = $nav;
+      next unless -f $ifn;
+
+      $job = new Job(site => $sc->{site}, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+      my $ident = $job->getIdent();
+      my $workdir = $job->getWorkdir();
+      my $savedir = $SAVEDIR.'/'.$sc->{'site'};
+      my $rs = new RinexSet(site => $sc->{'site'}, year => $year, doy => $doy, hour => $hour);
+      $rs->load() if -f $rs->getRsFile();
+      $job->{'rsfile'} = $rs->getRsFile();
+      $job->mkWorkdir();
+      sysmv($ifn, $savedir, { log => 1, mkdir => 1 });
+      $ifn = "$savedir/$fn";
+
+      my $ufn = $fn; $ufn =~ s/\.gz$//;
+      my $wfn = "$workdir/$ufn";
+      if ($fn =~ /\.gz$/) {
+        $wfn =~ s/\.gz$//;
+        sysrun("gzip -dc $ifn >$wfn");
+      } else {
+        syscp($ifn, $wfn, { log => 1 });
       }
-      if (!$complete) {
-        # TODO: if not complete, check if day is complete and complete it anyway
-      }
-      next unless $complete;
+      $ftyp .= '.'.$sc->{'obsint'} if $ftyp eq 'MO';
+      $rs->{$ftyp} = $ufn;
       $rs->store();
-      $job->{'rsfile'} = $rs->getRsFile;
+      $Pending{$ident} = $job;
+      next;
     }
 
     # Unknown filename structure?!
@@ -217,11 +229,11 @@ $SIG{'ALRM'} = sub {
 };
 
 # Run loop until signal or pidfile is deleted
-#while (-f "$PIDFILE" && $sig_received eq "") {
+while (-f "$PIDFILE" && $sig_received eq "") {
   scan_incoming();
 
   if (scalar(keys %Inbound) == 0) {
-    alarm 61;
+    alarm 16;
     my @e = $inotify->read;
     alarm 0;
 
@@ -231,7 +243,7 @@ $SIG{'ALRM'} = sub {
     }
   }
   process();
-#}
+}
 
 unlink($PIDFILE);
 loginfo("$0 stopped");

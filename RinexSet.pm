@@ -9,6 +9,7 @@ package RinexSet;
 use JSON;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use lib '/home/gpsuser/';
+use BaseConfig;
 use Utils;
 use Logger;
 
@@ -27,7 +28,7 @@ sub new {
 
 sub getWorkdir() {
   my $self = shift;
-  return sprintf "/data/work/%s/%d/%03d", $self->{site}, $self->{year}, $self->{doy};
+  return sprintf "%s/%s/%d/%03d", $WORKDIR, $self->{site}, $self->{year}, $self->{doy};
 }
 
 sub getRsFile() {
@@ -82,6 +83,18 @@ sub checkfiles() {
     my $fn = $self->getRinexFilename($ftyp);
     $self->{$ftyp} = $fn if -f "$w/$fn";
   }
+}
+
+sub getYoungest() {
+  my $self = shift;
+  my $workdir = $self->getWorkdir();
+  my $youngest = 9999999;
+  foreach my $k (keys %$self) {
+    next unless $k =~ /^(MO|[A-Z]N)/;
+    my $age = fileage($workdir.'/'.$self->{$k});
+    $youngest = $age if $age < $youngest;
+  }
+  return $youngest;
 }
 
 #

@@ -247,6 +247,38 @@ sub createWantedIntervals($) {
   }
 }
 
+# TODO: Do a real gap count on obsfile
+sub _getQCandGaps($) {
+  my $sumfile = shift;
+  my ($qc, $obs, $have, $gaps) = (0, 0, 0, 0);
+  
+  open(my $fd, '<', $sumfile) || return { qc => 0, gaps => 0 };
+  my @qcs = ();
+  my @gapss = ();
+  my %got;
+  while (<$fd>) {
+    chomp;
+    # G:   1?: Observations      :  33065 (   34634)    95.47 %
+    # G:   1?: Gaps              :       55
+    if (/^\s+([A-Z]):\s+\d[A-Z\?]: Observations.*\s([\d\.]+) %$/) {
+      next if exists $got{$1};
+      $got{$1} = 1;
+      push(@qcs, $2);
+    }
+    elsif (/^\s+([A-Z]):\s+\d[A-Z]: Gaps\s.*(\d+)$/) {
+      next if exists $got{$1};
+      push(@gapss, $2);
+    }
+  }
+  close($fd);
+  if (scalar(@qcs) > 0) {
+    $qc += $_ foreach @qcs;
+    $qc /= scalar(@qcs);
+    $gaps = ($_ > $gaps) ? $_:$gaps foreach @gapss;
+  }
+  return { qc => $qc, gaps => $gaps };
+}
+
 ###################################################################################
 # Main processor. This is where the actual processing of RINEX files happen.
 #
@@ -255,6 +287,8 @@ sub process() {
 
   return unless sysopen(LOCK, $self->{'hour'}.'.lock', O_CREAT|O_EXCL);
   close(LOCK);
+
+  setprogram("job[$$]");
 
   $self->{DB} = new GPSDB;
   my $dbh = $self->{DB}->{DBH};
@@ -269,7 +303,6 @@ sub process() {
   my ($site, $year, $doy, $hour) = ($self->{'site'}, $self->{'year'}, $self->{'doy'}, $self->{'hour'});
   my $hh24 = ($hour eq '0') ? 0 : letter2hour($hour);
   my $freq = $hour eq '0' ? 'D':'H';
-  my @tmpfiles = ();
 
   #################################
   # Patch RINEX header
@@ -293,7 +326,6 @@ sub process() {
     ;
     sysrun($cmd);
     system("mv $obs.tmp $obs");
-    push(@tmpfiles, "patch.$hour.log");
   }
 
   #################################
@@ -314,19 +346,8 @@ sub process() {
 	"--key reqcOutLogFile $sumfile"
   ;
   sysrun($cmd);
-  # parse sumfile
-  open(my $fd, '<', $sumfile);
-  my ($obshave, $obspossible, $qc, $ngaps) = (0, 0, 0, 0);
-  while (<$fd>) {
-    if (/^\s+G:\s+1C: Observations\s+:\s*(\d+)\s+\(\s*(\d+)\)\s+([\d\.]+)/) {
-      ($obshave, $obspossible, $qc) = ($1, $2, $3);
-    }
-    elsif (/^\s+G:\s+1C: Gaps\s+:\s*(\d+)/) {
-      $ngaps = $1;
-    }
-  }
-  close($fd);
-  loginfo("$site-$year-$doy-$hour: QC: $obshave/$obspossible ($qc)");
+  my $qc = _getQCandGaps($sumfile);
+  loginfo("$site-$year-$doy-$hour: QC: $qc->{qc}");
   sysrun("gzip -f $sumfile");
   $sumfile .= ".gz";
 
@@ -339,11 +360,9 @@ sub process() {
   }, undef, $site, $year, $doy, $hour);
   $dbh->do(qq{
 	insert into gpssums
-	(site, year, doy, hour, jday, expt, have, quality, ngaps)
-	values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $obspossible, $obshave, $qc, $ngaps);
-
-  push(@tmpfiles, $sumfile);
+	(site, year, doy, hour, jday, quality, ngaps)
+	values (?, ?, ?, ?, ?, ?, ?)
+  }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $qc->{'qc'}, $qc->{'gaps'});
 
   #################################
   # Distribute
@@ -381,7 +400,6 @@ sub process() {
       $crxfile =~ s/\.rnx$/.crx.gz/;
       if (! -f $crxfile || fileage($filetosend) > fileage($crxfile)) {
         sysrun("$RNX2CRX - < $filetosend | gzip > $crxfile");
-        push(@tmpfiles, $crxfile);
       }
       syscp($crxfile, $destpath, { mkdir => 1, log => 1 } );
     }
@@ -394,7 +412,6 @@ sub process() {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile || fileage($navfile) > fileage($gzfile)) {
           system("gzip < $navfile > $gzfile");
-          push(@tmpfiles, $gzfile);
         }
         push(@copylist, $gzfile);
       }
