@@ -176,7 +176,7 @@ sub hour2letter($) {
 #
 sub letter2hour($) {
   my $letter = shift;
-  return 24 if $letter eq '0';
+  return 0 if $letter eq '0';
   return ord(lc($letter))-97;
 }
 

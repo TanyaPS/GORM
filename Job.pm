@@ -368,13 +368,12 @@ sub process() {
   # Distribute
   #
   my $sql = $dbh->prepare(q{
-        select  r.obsint, r.filetype, ld.path, s.navlist, ld.name
-        from    rinexdist r, localdirs ld, siteconfig s
+        select  r.obsint, r.filetype, ld.path, ld.name
+        from    rinexdist r, localdirs ld
         where   r.site = ?
           and   r.freq = ?
           and   r.active = 1
           and   r.localdir = ld.name
-          and   r.site = s.site
   });
   $sql->execute($site, $freq);
   my $aref = $sql->fetchall_arrayref({});

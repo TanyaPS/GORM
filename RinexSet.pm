@@ -65,9 +65,8 @@ sub getRinexFilename($) {
 sub getNavlist() {
   my $self = shift;
   my @fa = ();
-  my $p = $self->getFilenamePrefix();
-  foreach (qw(GN RN EN JN CN MN)) {
-    push(@fa, $self->{$_}) if exists $self->{$_};
+  foreach my $k (keys %$self) {
+    push(@fa, $self->{$k}) if $k =~ /[A-Z]N/;
   }
   return \@fa;
 }
@@ -83,18 +82,6 @@ sub checkfiles() {
     my $fn = $self->getRinexFilename($ftyp);
     $self->{$ftyp} = $fn if -f "$w/$fn";
   }
-}
-
-sub getYoungest() {
-  my $self = shift;
-  my $workdir = $self->getWorkdir();
-  my $youngest = 9999999;
-  foreach my $k (keys %$self) {
-    next unless $k =~ /^(MO|[A-Z]N)/;
-    my $age = fileage($workdir.'/'.$self->{$k});
-    $youngest = $age if $age < $youngest;
-  }
-  return $youngest;
 }
 
 #
@@ -133,7 +120,7 @@ sub unzip($$) {
     my $ftyp = "UU";
     if ($zmfn =~ /\.\d\d([onglfq])$/) {
       $ftyp = $v3typemap{$1};
-    } elsif ($zmfn =~ /_(MO|[GRECJ]N)\.rnx$/) {
+    } elsif ($zmfn =~ /_(MO|[A-Z]N)\.rnx$/) {
       $ftyp = $1;
     }
     $ftyp .= '.'.$interval if $ftyp eq 'MO';
