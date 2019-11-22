@@ -20,6 +20,8 @@ use Utils;
 use Logger;
 use GPSDB;
 
+my $Debug = 0;	# set with -d option
+
 ###################################################
 # ftpuploader sub process
 #
@@ -33,7 +35,7 @@ sub ftpuploader($) {
   select(STDERR); $| = 1;                # Unbuffered output
   select(STDOUT); $| = 1;                # Unbuffered output
 
-  system("mkdir failed") unless -d "failed";
+  sysrun("mkdir failed", { log => $Debug }) unless -d "failed";
 
   # Setup signal handling
   my $sig_received = 0;
@@ -242,20 +244,19 @@ sub reload() {
       $changed = 1;
     }
   }
-  loginfo("config loaded") if $changed;
+  loginfo("config (re)loaded") if $changed;
 }
 
 #
 # Main program
 #
 my %opts = ();
-getopts('dl:p:', \%opts);
+getopts('d:', \%opts);
+$Debug = $opts{'d'} if defined $opts{'d'};
 
-my $errlog = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
-daemonize($errlog) if defined $opts{'d'};
+$0 = basename($0)." ".join(' ',@ARGV);
 setprogram("ftpuploader");
-my $pidfile = (defined $opts{'p'} ? $opts{'p'} : $FTPUPLOAD_PID);
-create_pid_file($pidfile);
+$0 = "ftpuploader [master]";
 
 # Setup signal handling
 my $sig_received = 0;
@@ -266,14 +267,13 @@ local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
 
 loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
 
-while (!$sig_received && -f $pidfile) {
+while (!$sig_received) {
   reload();
   sleep(1800);  # check for config change every half hour or if HUP'ed
 }
 
 kill(15, $_) foreach values %PIDS;	# Kill all childs
 wait;
-unlink($pidfile);
 
 loginfo("ftpuploader [master] stopped");
 exit(0);

@@ -25,8 +25,8 @@ BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	logdebug loginfo logwarn logerror logfatal errdie logfmt logconvlog
-	setprogram $Program
+	setprogram logchannel $Program
+	logdebug loginfo logwarn logerror logfatal errdie logfmt
   );
 }
 
@@ -40,6 +40,11 @@ sub setprogram($) {
   closelog();
   $Program = shift;
   _openlog();
+}
+
+sub logchannel($) {
+  my $channel = shift;
+  $Channel = $channel;
 }
 
 sub logdebug(@) { _openlog(); syslog("debug|$Channel", "%s", @_);   closelog();  }
@@ -65,29 +70,6 @@ sub logfmt(@) {
   my ($level, $fmt, @args) = @_;
   _openlog();
   syslog("$level|$Channel", $fmt, @args);
-  closelog();
-}
-
-#
-# Dump a TEQC conversion stderr log to syslog
-#
-sub logconvlog($$) {
-  my ($tag, $fn) = @_;
-
-  _openlog();
-  if (open(my $fd, $fn)) {
-    while (<$fd>) {
-      s/\s+$//;
-      if (/^! Notice ! (.*)/) {
-        syslog("info|$Channel", "%s", $tag.": ".$1);
-      } elsif (/^! Warning ! (.*)/) {
-        syslog("warning|$Channel", "%s", $tag.": ".$1);
-      } elsif (/^! Error ! (.*)/) {
-        syslog("err|$Channel", "%s", $tag.": ".$1);
-      }
-    }
-    undef $fd;
-  }
   closelog();
 }
 

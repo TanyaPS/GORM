@@ -263,7 +263,7 @@ sub _getQCandGaps($) {
     if (/^\s+([A-Z]):\s+\d[A-Z\?]: Observations.*\s([\d\.]+) %$/) {
       next if $1 eq 'S' || exists $got{$1};
       $got{$1} = 1;
-      push(@qcs, $2);
+      push(@qcs, $2 > 100 ? 100 : $2);
     }
     elsif (/^\s+([A-Z]):\s+\d[A-Z]: Gaps\s.*(\d+)$/) {
       next if exists $got{$1};

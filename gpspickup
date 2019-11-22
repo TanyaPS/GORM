@@ -10,6 +10,7 @@ use strict;
 use warnings;
 use Getopt::Std;
 use Linux::Inotify2;
+use lib '/home/gpsuser';
 use BaseConfig;
 use Utils;
 use Logger;
@@ -20,6 +21,7 @@ use GPSDB;
 my %Inbound = ();
 my %Pending = ();
 my $DB;
+my $Debug = 0;
 
 chdir('/data/ftp');
 
@@ -69,7 +71,7 @@ sub process() {
       my @inbound = glob("$INCOMING/${prefix}*");
       if (scalar(@inbound) == 0) {
         # no active inbound, then submit
-        loginfo("submitting $ident");
+        loginfo("Submitting $ident");
         delete $job->{'timestamp'};
         $job->submitjob('ftp');
         delete $Pending{$ident};
@@ -99,6 +101,11 @@ sub process() {
 
   foreach my $fn (@flist) {
     my $ifn = $Inbound{$fn};
+    if (!-f $ifn) {
+      delete $Inbound{$fn};
+      next;
+    }
+
     # assume sitename is the 4 first letters in filename
     my $site4 = uc(substr($fn, 0, 4));
     my $job = undef;
@@ -106,7 +113,7 @@ sub process() {
     # Make sure we know the site
     my $sc = $scs{$site4};
     if (!defined $sc) {
-      sysmv($ifn, $SAVEDIR.'/stale', { log => 1 });
+      sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug });
       logwarn("No such site: $site4");
       next;
     }
@@ -117,19 +124,20 @@ sub process() {
 
     # Trinzic
     # ssssyyyymmddhhmiB.zip
-    if ($fn =~ /^[A-Z0-9]{4}?(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
+    if ($fn =~ /^[A-Z0-9]{4}(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
       my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
       my $doy = Day_of_Year($year, $mm, $dd);
       my $hour = hour2letter($hh);
-      sysmv($ifn, "$SAVEDIR/$site", { log => 1, mkdir => 1 });
+      sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
       $ifn = "$SAVEDIR/$site/$fn";
       if (check_existing($sql, $site, $year, $doy, $hour)) {
-        print "$fn processed already. Forget it before reprocessing.\n";
+        logerror("$fn processed already. Forget it before reprocessing");
         next;
       }
       $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-      $job->mkWorkdir();
+      my $workdir = $job->mkWorkdir();
       my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+      loginfo("Unzip $ifn to $workdir");
       $rs->unzip($ifn, $sc->{'obsint'});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
@@ -139,15 +147,16 @@ sub process() {
     # ssssdddh.yyo.zip
     elsif ($fn =~ /^[A-Z0-9]{4}(\d\d\d)([a-x])\.(\d\d)o\.zip$/) {
       my ($doy, $hour, $year) = ($1, $2, sy2year($3));
-      sysmv($ifn, "$SAVEDIR/site", { log => 1, mkdir => 1 });
+      sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
       $ifn = "$SAVEDIR/$site/$fn";
       if (check_existing($sql, $site, $year, $doy, $hour)) {
-        print "$fn processed already. Forget it before reprocessing.\n";
+        logerror("$fn processed already. Forget it before reprocessing");
         next;
       }
       $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-      $job->mkWorkdir();
+      my $workdir = $job->mkWorkdir();
       my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+      loginfo("unzip $ifn to $workdir");
       $rs->unzip($ifn, $sc->{obsint});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
@@ -160,10 +169,6 @@ sub process() {
     elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(MO|[A-Z]N)\.rnx/) {
       my ($year, $doy, $hh, $mi, $ftyp) = ($1, $2, $3, $4, $5);
       my $hour = hour2letter($hh);
-
-      delete $Inbound{$fn};
-      next unless -f $ifn;
-
       $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       my $ident = $job->getIdent();
       my $workdir = $job->mkWorkdir();
@@ -171,16 +176,16 @@ sub process() {
       my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
       $job->{'rsfile'} = $rs->getRsFile();
       $rs->load() if -f $job->{'rsfile'};
-      sysmv($ifn, $savedir, { log => 1, mkdir => 1 });
+      sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
       $ifn = "$savedir/$fn";
 
       my $ufn = $fn; $ufn =~ s/\.gz$//;
       my $wfn = "$workdir/$ufn";
       if ($fn =~ /\.gz$/) {
         $wfn =~ s/\.gz$//;
-        sysrun("gzip -dc $ifn >$wfn");
+        sysrun("gzip -dc $ifn >$wfn", { log => $Debug });
       } else {
-        syscp($ifn, $wfn, { log => 1 });
+        syscp($ifn, $wfn, { log => $Debug });
       }
       $ftyp .= '.'.$sc->{'obsint'} if $ftyp eq 'MO';
       $rs->{$ftyp} = $ufn;
@@ -193,11 +198,12 @@ sub process() {
     # Unknown filename structure?!
     else {
       logerror("Unknown filetype for site $site: $ifn");
-      sysmv($ifn, "$SAVEDIR/stale", { log => 1 });
+      sysmv($ifn, "$SAVEDIR/stale", { log => $Debug });
     }
 
     # clear for inbound queue and submit a new job for processing
     delete $Inbound{$fn} if exists $Inbound{$fn};
+    loginfo("Submitting ".$job->getIdent());
     $job->submitjob('ftp') if defined $job;
   }
 }
@@ -205,14 +211,17 @@ sub process() {
 #############################################################################################
 # Main program
 #
-my %opts = ();
-getopts('dl:', \%opts);
-my $log = defined $opts{'l'} ? $opts{'l'} : "/dev/null";
+setprogram(basename($0));
+$0 = basename($0)." ".join(' ',@ARGV);
 
-# Daemonize if required
-my $PIDFILE = "$HOME/run/".basename($0).".pid";
-daemonize($log) if defined $opts{'d'};
-create_pid_file($PIDFILE);
+my %opts = ();
+getopts('d:l:', \%opts);
+
+my $debug = 0;
+$Debug = $opts{'d'} if defined $opts{'d'};
+logchannel($opts{'l'}) if defined $opts{'l'};
+
+chdir($INCOMING);
 select(STDERR); $| = 1;
 select(STDOUT); $| = 1;
 
@@ -234,11 +243,10 @@ $DB = new GPSDB;
 
 loginfo("$0 started");
 
-$SIG{'ALRM'} = sub {
-};
+$SIG{'ALRM'} = sub { };
 
 # Run loop until signal or pidfile is deleted
-while (-f "$PIDFILE" && $sig_received eq "") {
+while ($sig_received eq "") {
   scan_incoming();
 
   if (scalar(keys %Inbound) == 0) {
@@ -254,6 +262,5 @@ while (-f "$PIDFILE" && $sig_received eq "") {
   process();
 }
 
-unlink($PIDFILE);
 loginfo("$0 stopped");
 exit(0);

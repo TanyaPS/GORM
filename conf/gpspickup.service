@@ -1,0 +1,12 @@
+[Unit]
+Description=GNSS gpspickup service
+After=network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+ExecStart=/home/gpsuser/gpspickup
+Environment="HOME=/home/gpsuser" "PERL5LIB=/home/gpsuser"
+
+[Install]
+WantedBy=multi-user.target

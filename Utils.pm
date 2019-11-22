@@ -49,9 +49,9 @@ BEGIN {
 ##########################################################################
 # Perform shell command and log.
 #
-sub sysrun($) {
-  my $cmd = shift;
-  loginfo($cmd);
+sub sysrun($;$) {
+  my ($cmd, $opts) = @_;
+  loginfo($cmd) if $$opts{'log'};
   system($cmd);
   if ($? == -1) {
     logerror("failed to execute: $!");

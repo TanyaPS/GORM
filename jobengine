@@ -20,6 +20,7 @@ use Job;
 
 my %Jobs;	# Queued jobs
 my %Running;	# Running jobs
+my $Debug = 0;  # set with -d option
 
 sub lock($) {
   my $fn = shift;
@@ -60,7 +61,7 @@ sub statusdb($;$$) {
 #
 sub onstart() {
   my ($pid, $ident) = @_;
-  loginfo("$ident starting");
+  loginfo("$ident starting") if $Debug;
 }
 
 ##########################################
@@ -74,7 +75,7 @@ sub onfinish() {
   my $workdir = $job->getWorkdir;
   my $statusfile = "$workdir/status.json";
 
-  loginfo("$ident finished");
+  loginfo("$ident finished") if $Debug;
   delete $Running{$ident};
 
   my $lockfd = lock($statusfile);
@@ -103,7 +104,7 @@ sub onfinish() {
 #
 sub runjob($$) {
   my ($FM, $job) = @_;
-  loginfo("Run ".$job->getIdent);
+  loginfo("Run ".$job->getIdent) if $Debug;
   $FM->start($job->getIdent()) && return;  # start instance
   chdir($job->getWorkdir());
   $job->process();
@@ -113,7 +114,8 @@ sub runjob($$) {
 ########################################################################################################
 # Main program
 #
-Logger::setprogram(basename($0));
+setprogram(basename($0));
+$0 = basename($0)." ".join(' ',@ARGV);
 
 # Handle HUP, INT and TERM signal niecly
 my $sig_received = "";
@@ -130,14 +132,9 @@ select(STDERR); $| = 1;         # Unbuffered output
 select(STDOUT); $| = 1;         # Unbuffered output
 
 my %opts = ();
-getopts('i:dl:p:', \%opts);
+getopts('d:i:l:', \%opts);
 my $log = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
-daemonize($log) if defined $opts{'d'};
 my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : 4);
-
-my $PIDFILE = "$HOME/run/".basename($0).".pid";
-$PIDFILE = $opts{'p'} if defined $opts{'p'};
-create_pid_file($PIDFILE);
 
 # Initialize ForkManager
 my $FM = new Parallel::ForkManager($Ninstances);
@@ -149,7 +146,7 @@ my $inotify = new Linux::Inotify2;
 $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
 
 # main loop
-while (-f $PIDFILE && $sig_received eq "") {
+while ($sig_received eq "") {
   # ForkManager needs reaping of finished childs to force callback
   $FM->reap_finished_children;
 
