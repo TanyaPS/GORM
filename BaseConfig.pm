@@ -7,24 +7,22 @@ use warnings;
 
 our $HOME = '/home/gpsuser';
 
-our $DBDSN = "DBI:mysql:gps";
-our $DBUSER = 'gpsuser';
-our $DBPASS = 'gpsuser';
+our $DBDSN    = "DBI:mysql:gps";
+our $DBUSER   = 'gpsuser';
+our $DBPASS   = 'gpsuser';
 
-our $INCOMING = '/data/ftp';
-our $WORKDIR = '/data/work';
-our $SAVEDIR = '/data/saved';
-our $STALEDIR = $SAVEDIR.'/stale';
-our $TMPDIR = '/data/tmp';
-our $UPLOAD = '/data/upload';
-our $JOBQUEUE = '/data/queue';
+my $DATAROOT  = '/data';
+our $INCOMING = "$DATAROOT/ftp";
+our $WORKDIR  = "$DATAROOT/work";
+our $SAVEDIR  = "$DATAROOT/saved";
+our $STALEDIR = "$SAVEDIR/stale";
+our $TMPDIR   = "$DATAROOT/tmp";
+our $JOBQUEUE = "$DATAROOT/queue";
 
-our $FTPUPLOAD_PID = '/home/gpsuser/run/ftpuploader.pid';
-
-our $BNC = '/usr/local/bin/bnc';
-our $GFZRNX = '/usr/local/bin/gfzrnx';
-our $RNX2CRX = '/usr/local/bin/rnx2crx';
-our $CRX2RNX = '/usr/local/bin/crx2rnx';
+our $BNC      = '/usr/local/bin/bnc';
+our $GFZRNX   = '/usr/local/bin/gfzrnx';
+our $RNX2CRX  = '/usr/local/bin/rnx2crx';
+our $CRX2RNX  = '/usr/local/bin/crx2rnx';
 
 our (@ISA, @EXPORT);
 BEGIN {
@@ -33,9 +31,7 @@ BEGIN {
   @EXPORT = qw(
 	$HOME
 	$DBDSN $DBUSER $DBPASS
-	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR
-	$UPLOAD $JOBQUEUE
-	$FTPUPLOAD_PID
+	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR $JOBQUEUE
 	$BNC $GFZRNX $RNX2CRX $CRX2RNX
   );
 }

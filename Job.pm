@@ -11,10 +11,9 @@ package Job;
 
 use strict;
 use warnings;
-use Data::Dumper;
+use Time::Local;
 use JSON;
 use Fcntl qw(:DEFAULT :flock);
-use lib '/home/gpsuser';
 use BaseConfig;
 use Utils;
 use Logger;
@@ -74,40 +73,6 @@ sub deletejob() {
 }
 
 ###################################################################################
-# Fetch station info from database for the RINEX header
-#
-sub getStationInfo($$) {
-  my ($self, $startdate) = @_;
-  my $dbh = $self->{'DB'}->{'DBH'};
-
-  my $sql = qq{
-	select	rectype, serialno, firmware
-	from	receivers
-	where	site = ?
-	  and	startdate < str_to_date(?, '%Y-%m-%d %T')
-	order	by startdate desc
-	limit	1
-  };
-  my $rcvrow = $dbh->selectrow_hashref($sql, undef, uc($self->{'site'}), $startdate);
-
-  $sql = qq{
-	select	anttype, serialno
-	from	antennas
-	where	site = ?
-	  and	startdate < str_to_date(?, '%Y-%m-%d %T')
-	order	by startdate desc
-	limit	1
-  };
-  my $antrow = $dbh->selectrow_hashref($sql, undef, uc($self->{'site'}), $startdate);
-  if ($antrow->{'anttype'} =~ /,/) {
-    my @a = split(/,/, $antrow->{'anttype'});
-    $antrow->{'anttype'} = sprintf("%-16s%s", $a[0], $a[1]);
-  }
-
-  return ($rcvrow, $antrow);
-}
-
-###################################################################################
 # Decimate observation from $src_interval to $dst_interval
 #
 sub _decimate($$$$$) {
@@ -148,12 +113,257 @@ sub _splice($$$) {
 }
 
 ###################################################################################
+# Fetch station info from database for the RINEX header
+#
+sub getStationInfo() {
+  my ($self) = @_;
+  my $dbh = $self->{'DB'}->{'DBH'};
+
+  my @ymd = Doy_to_Date($self->{'year'}, $self->{'doy'});
+  my $startdate = sprintf("%4d-%02d-%02d %02d:00:00", @ymd, letter2hour($self->{'hour'}));
+
+  my $loc = $dbh->selectrow_hashref(q{
+	select	markernumber, markertype, position, observer, agency
+	from	locations
+	where	site = ?
+  }, undef, $self->{'site'});
+
+  my $rec = $dbh->selectrow_hashref(q{
+	select	recsn, rectype, firmware
+	from	receivers
+	where	site = ?
+	  and	startdate < str_to_date(?, '%Y-%m-%d %T')
+	order	by startdate desc
+	limit	1
+  }, undef, $self->{'site'}, $startdate);
+
+  my $ant = $dbh->selectrow_hashref(q{
+	select	antsn, anttype, antdelta
+	from	antennas
+	where	site = ?
+	  and	startdate < str_to_date(?, '%Y-%m-%d %T')
+	order	by startdate desc
+	limit	1
+  }, undef, $self->{'site'}, $startdate);
+
+  $ant->{'anttype'} = sprintf("%-16s%4s", $1, $2) if $ant->{'anttype'} =~ /^(.+),(.+)$/;
+
+  my $sta = { site => $self->{'site'} };
+  $sta->{$_} = $loc->{$_} foreach keys $loc;
+  $sta->{$_} = $rec->{$_} foreach keys $rec;
+  $sta->{$_} = $ant->{$_} foreach keys $ant;
+  return $sta;
+}
+
+###################################################################################
+# Rewrite RINEX headers with the values from the database.
+#
+sub rewriteheaders($) {
+  my ($self, $obs) = @_;
+  my $dbh = $self->{'DB'}->{'DBH'};
+  my ($ifd, $ofd);
+
+  my $sta = $self->getStationInfo();
+
+  if (!open($ifd, '<', $obs)) {
+    logerror("Open error: $!");
+    return;
+  }
+  unlink("$obs.tmp");
+  if (!open($ofd, '>', "$obs.tmp")) {
+    logerror("Cannot open $obs.tmp for write: $!");
+    return;
+  }
+
+  my @hdr = ();
+  while ($_ = readline($ifd)) {
+    if (/MARKER NAME\s*$/) {
+      push(@hdr, sprintf "%-60sMARKER NAME\n", $sta->{'site'});
+    }
+    elsif (/MARKER NUMBER\s*$/) {
+      push(@hdr, sprintf "%-60sMARKER NUMBER\n", $sta->{'markernumber'}) if defined $sta->{'markernumber'};
+    }
+    elsif (/MARKER TYPE\s*$/) {
+      push(@hdr, sprintf "%-60sMARKER TYPE\n", $sta->{'markertype'}) if defined $sta->{'markertype'};
+    }
+    elsif (/AGENCY\s*$/) {
+      push(@hdr, sprintf "%-20s%-40sOBSERVER / AGENCY\n", $sta->{'observer'}, $sta->{'agency'});
+    }
+    elsif (/REC # \/ TYPE \/ VERS\s*$/) {
+      push(@hdr, sprintf "%-20s%-20s%-20sREC # / TYPE / VERS\n", $sta->{'recsn'}, $sta->{'rectype'}, $sta->{'firmware'});
+    }
+    elsif (/ANT # \/ TYPE\s*$/) {
+      push(@hdr, sprintf "%-20s%-40sANT # / TYPE\n", $sta->{'antsn'}, $sta->{'anttype'});
+    }
+    elsif (/APPROX POSITION XYZ\s*$/) {
+      my ($x, $y, $z) = split(/,/, $sta->{'position'});
+      push(@hdr, sprintf "%14.4f%14.4f%14.4f%18sAPPROX POSITION XYZ\n",$x,$y,$z,' ');
+    }
+    elsif (/DELTA H\/E\/N\s*$/) {
+      my ($x, $y, $z) = split(/,/, $sta->{'antdelta'});
+      push(@hdr, sprintf "%14.4f%14.4f%14.4f%18sANTENNA: DELTA H/E/N\n",$x,$y,$z,' ');
+    }
+    else {
+      push(@hdr, $_);
+    }
+    last if /END OF HEADERS\s*$/;
+  }
+
+  # Add missing headers that is defined in DB
+  if (defined $sta->{'markernumber'} && scalar(grep(/MARKER NUMBER\s*$/,@hdr)) == 0) {
+    my @n = ();
+    foreach my $h (@hdr) {
+      push(@n, $h);
+      push(@n, sprintf "%-60sMARKER NUMBER\n", $sta->{'markernumber'}) if $h =~ /MARKER NAME\s*$/;
+    }
+    @hdr = @n;
+  }
+  if (defined $sta->{'markertype'} && scalar(grep(/MARKER TYPE\s*$/,@hdr)) == 0) {
+    my @n = ();
+    foreach my $h (@hdr) {
+      push(@n, $h);
+      push(@n, sprintf "%-60sMARKER TYPE\n", $sta->{'markertype'}) if $h =~ /MARKER NAME\s*$/;
+    }
+    @hdr = @n;
+  }
+
+  # Write file
+  print $ofd $_ foreach @hdr;
+  while ($_ = readline($ifd)) {
+    print $ofd $_;
+  }
+
+  close($ifd);
+  close($ofd);
+  unlink($obs);
+  rename("$obs.tmp", $obs);
+}
+
+###################################################################################
+# Find and register gaps in observation file
+#
+sub gapanalyze($) {
+  my ($self, $obs) = @_;
+  my ($firstobs, $lastobs, $interval);
+  my ($firstyy, $firstmm, $firstdd);
+  my $hour = $self->{'hour'};
+
+  my $ifd;
+  if (!open($ifd, '<', $obs)) {
+    print "Open error: $!\n";
+    return 0;
+  }
+
+  while ($_ = readline($ifd)) {
+    $interval = int($1) if /^\s+([\d\.]+)\s+INTERVAL\s*$/;
+    last if /END OF HEADER\s*$/;
+  }
+
+  # Read the first observation header
+  $_ = readline($ifd);
+  if (index($_,'>') == 0) {
+    my @a = split(/\s+/, $_);
+    $firstobs = timegm($a[6],$a[5],$a[4],$a[3],$a[2]-1,$a[1]);
+    ($firstyy, $firstmm, $firstdd) = @a[1..3];
+    $interval = int($a[8]) unless defined $interval;
+  } else {
+    logerror "Expected first observation after headers. Aborting gapanalyze.";
+    return 0;
+  }
+
+  my @gaplen = ();
+  my @gapstart = ();
+  my @gapend = ();
+  my $ngaps = 0;
+
+  # Calculate the theoretical first obs time.
+  my $firsthh = timegm(0, 0, letter2hour($hour), $firstdd, $firstmm-1, $firstyy);
+
+  # If firstobs is not match firsthh, then register gap from firsthh until firstobs
+  if ($firstobs != $firsthh) {
+    $gaplen[0] = $firstobs - $firsthh;
+    $gapstart[0] = gm2str($firsthh);
+    $gapend[0] = gm2str($firstobs);
+    $ngaps = 1;
+  }
+
+  my $prevtime = $firstobs;
+  my $nobs = 1;
+  while ($_ = readline($ifd)) {
+    next unless index($_, '>') == 0;
+    my @a = split(/\s+/, $_);
+    my ($yyyy, $mm, $dd, $hh, $mi, $ss) = @a[1..6];
+    my $curtime = timegm($ss, $mi, $hh, $dd, $mm-1, $yyyy);
+    if ($prevtime + $interval != $curtime) {
+      my $prevstr = gm2str($prevtime+$interval);
+      my $len = $interval;
+      while ($prevtime + $len < $curtime) {
+	$len += $interval;
+      }
+      $len -= $interval;
+      if ($len > 0) {
+	my $endstr = sprintf("%4d-%02d-%02d %02d:%02d:%02d", $yyyy, $mm, $dd, $hh, $mi, $ss);
+	$gaplen[$ngaps] = $len;
+	$gapstart[$ngaps] = $prevstr;
+	$gapend[$ngaps] = $endstr;
+	$ngaps++;
+      }
+    }
+    $prevtime = $lastobs = $curtime;
+    $nobs++;
+  }
+
+  my $endobs;
+  if ($hour eq '0') {
+    # Last observation should be (firsthh+1day)-interval
+    $endobs = $firsthh + 86400 - $interval;
+  } else {
+    # assume 1 hour file
+    $endobs = $firsthh + 3600 - $interval;
+  }
+  if ($lastobs != $endobs) {
+    # gap from $prev to next midnight/end-of-hour
+    $gaplen[$ngaps] = $endobs - $lastobs;
+    $gapstart[$ngaps] = gm2str($lastobs + $interval);
+    $gapend[$ngaps] = gm2str($endobs + $interval);
+    $ngaps++;
+  }
+
+  close($ifd);
+
+  # Delete any datagaps from previous run
+  my $dbh = $self->{'DB'}->{'DBH'};
+  $dbh->do(q{
+	delete from datagaps where site=? and year=? and doy=? and hour=?
+  }, undef, $self->{'site'}, $self->{'year'}, $self->{'doy'}, $self->{'hour'});
+
+  return 0 if $ngaps == 0;
+
+  # Gaps found. Register gaps in DB.
+  for (my $i = 0; $i < $ngaps; $i++) {
+    loginfo($self->getIdent().": gap #$i: len=$gaplen[$i] start=$gapstart[$i] end=$gapend[$i]");
+  }
+  my $sql = $dbh->prepare(q{
+	insert into datagaps
+	(site, year, doy, hour, jday, gapno, gapstart, gapend)
+	values (?, ?, ?, ?, ?, ?, ?, ?)
+  });
+  my $jday = Doy_to_Days($self->{'year'}, $self->{'doy'});
+  for (my $i = 0; $i < $ngaps; $i++) {
+    $sql->execute($self->{'site'}, $self->{'year'}, $self->{'doy'}, $self->{'hour'},
+		  $jday, $i+1, $gapstart[$i], $gapend[$i]);
+  }
+
+  return $ngaps;
+}
+
+###################################################################################
 # Check if a hourly site day is complete.
 # If so, splice hourly files into a day file and submit a new job
 #
 sub gendayfiles() {
   my $self = shift;
-  my $dbh = $self->{DB}->{DBH};
+  my $dbh = $self->{'DB'}->{'DBH'};
   my ($site, $year, $doy) = ($self->{'site'}, $self->{'year'}, $self->{'doy'});
   my @rslist = ();
 
@@ -247,14 +457,12 @@ sub createWantedIntervals($) {
   }
 }
 
-# TODO: Do a real gap count on obsfile
-sub _getQCandGaps($) {
+sub _getQC($) {
   my $sumfile = shift;
   my ($qc, $obs, $have, $gaps) = (0, 0, 0, 0);
   
   open(my $fd, '<', $sumfile) || return { qc => 0, gaps => 0 };
   my @qcs = ();
-  my @gapss = ();
   my %got;
   while (<$fd>) {
     chomp;
@@ -265,18 +473,13 @@ sub _getQCandGaps($) {
       $got{$1} = 1;
       push(@qcs, $2 > 100 ? 100 : $2);
     }
-    elsif (/^\s+([A-Z]):\s+\d[A-Z]: Gaps\s.*(\d+)$/) {
-      next if exists $got{$1};
-      push(@gapss, $2);
-    }
   }
   close($fd);
   if (scalar(@qcs) > 0) {
     $qc += $_ foreach @qcs;
     $qc /= scalar(@qcs);
-    $gaps = ($_ > $gaps) ? $_:$gaps foreach @gapss;
   }
-  return { qc => $qc, gaps => $gaps };
+  return $qc;
 }
 
 ###################################################################################
@@ -304,38 +507,18 @@ sub process() {
   my $hh24 = ($hour eq '0') ? 0 : letter2hour($hour);
   my $freq = $hour eq '0' ? 'D':'H';
 
-  #################################
   # Patch RINEX header
-  #
   if ($self->{'source'} eq 'ftp') {
-    my $obs = $rs->{'MO.'.$self->{'interval'}};
-    my @ymd = Doy_to_Date($year, $doy);
-    my ($rcv,$ant) = $self->getStationInfo(sprintf("%4d-%02d-%02d %02d:00:00", @ymd, $hh24));
-    my $cmd =
-	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
-	"--key reqcRunBy SDFE ".
-	"--key reqcRnxVersion 3 ".
-	"--key reqcOutLogFile patch.$hour.log ".
-	"--key reqcObsFile $obs ".
-	"--key reqcOutObsFile $obs.tmp ".
-	"--key reqcNewMarkerName $site ".
-	"--key reqNewReceiverName \"$rcv->{rectype}\" ".
-	"--key reqcNewReceiverNumber $rcv->{serialno} ".
-	"--key reqcNewAntennaName \"$ant->{anttype}\" ".
-	"--key reqcNewAntennaNumber $ant->{serialno}"
-    ;
-    sysrun($cmd);
-    system("mv $obs.tmp $obs");
+    $self->rewriteheaders($rs->{'MO.'.$self->{'interval'}});
   }
 
-  #################################
   # Produce wanted intervals.
-  #
   $self->createWantedIntervals($rs);
 
-  #################################
+  # Find number of data gaps in source
+  my $ngaps = $self->gapanalyze($rs->{'MO.'.$self->{'interval'}});
+
   # QC on 30s file
-  #
   my $sumfile = $rs->getFilenamePrefix().'.sum';
   my $navfiles = $rs->getNavlist();
   my $cmd =
@@ -346,8 +529,8 @@ sub process() {
 	"--key reqcOutLogFile $sumfile"
   ;
   sysrun($cmd);
-  my $qc = _getQCandGaps($sumfile);
-  loginfo("$site-$year-$doy-$hour: QC: $qc->{qc}");
+  my $qc = _getQC($sumfile);
+  loginfo("$site-$year-$doy-$hour: QC: $qc, ngaps: $ngaps");
   sysrun("gzip -f $sumfile");
   $sumfile .= ".gz";
 
@@ -362,7 +545,7 @@ sub process() {
 	insert into gpssums
 	(site, year, doy, hour, jday, quality, ngaps)
 	values (?, ?, ?, ?, ?, ?, ?)
-  }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $qc->{'qc'}, $qc->{'gaps'});
+  }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $qc, $ngaps);
 
   #################################
   # Distribute
@@ -437,7 +620,7 @@ sub process() {
   if ($hour eq '0') {
     # This is a dayfile and is now processed. We are done and delete the workdir.
     chdir("..");
-    system("echo rm -rf ".$self->getWorkdir);
+    system("rm -rf ".$self->getWorkdir) unless -f 'debug';
   }
   unlink("$hour.lock");
   return 0;

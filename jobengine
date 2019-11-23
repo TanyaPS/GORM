@@ -12,7 +12,6 @@ use Getopt::Std;
 use Fcntl qw(:DEFAULT :flock);
 use Parallel::ForkManager;
 use Linux::Inotify2;
-use lib '/home/gpsuser';
 use BaseConfig;
 use Utils;
 use Logger;

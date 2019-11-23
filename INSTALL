@@ -35,6 +35,13 @@ postfix:
 	mydomain
 	relayhost
 
+users:
+	groupadd gnss
+	useradd -d /home/gpsuser -G gnss gpsuser
+	useradd -d /data/ftp gnss3
+	chgrp gnss /data/ftp
+	chmod 775 /data/ftp
+
 mariadb:
 	Create /data/mysql
 	Modify /etc/my.cnf.d/server.cnf
@@ -66,11 +73,27 @@ mariadb:
 firewall:
 	CentOS 7 default firewall is firewall-cmd
 
-	Add new zone with
-		firewall-cmd --permanent --zone=ftp
-		firewall-cmd --permanent --zone=ftp --add-service=ftp
+	Initial install: Add new zone with
+		firewall-cmd --permanent --new-zone=gnss
+		firewall-cmd --permanent --set-default-zone=gnss
+		firewall-cmd --permanent --add-service=ftp --add-service=http --add-service=https
+		firewall-cmd --permanent --add-source=x.x.x.x/x   (where x.x.x.x/x is your local nets)
 		firewall-cmd --reload
 
 	When adding allowed sources
-		firewall-cmd --permanent --zone=ftp --add-source=1.2.3.4/32
+		firewall-cmd --permanent --add-source=1.2.3.4/32
 		firewall-cmd --reload
+
+mount datastore:
+	mkdir /data
+	Mount data disk on /data
+
+services:
+	git clone scripts from https://github.com/Kortforsyningen/GORM.git
+	Move content to /home/gpsuser
+	chown -R gpsuser:gpsuser /home/gpsuser
+	Copy conf/*.service to /etc/systemd/system
+	Enable and start services:
+		systemctl daemon-reload
+		systemctl enable gpspickup jobengine ftpuploader
+		systemctl start gpspickup jobengine ftpuploader

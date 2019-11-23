@@ -10,7 +10,6 @@ use strict;
 use warnings;
 use Getopt::Std;
 use Linux::Inotify2;
-use lib '/home/gpsuser';
 use BaseConfig;
 use Utils;
 use Logger;
@@ -23,10 +22,10 @@ my %Pending = ();
 my $DB;
 my $Debug = 0;
 
-chdir('/data/ftp');
+chdir($INCOMING);
 
 #############################################################################################
-# scan_incoming will add all plain files in /data/ftp to %Inbound
+# scan_incoming will add all plain files in $INCOMING to %Inbound
 #
 sub scan_incoming() {
   my $fd;
@@ -90,7 +89,7 @@ sub process() {
   die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
   my %scs = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
 
-  # First each of the files found in /data/ftp, move them to it's workdir.
+  # First each of the files found in $INCOMING, move them to it's workdir.
   # if its not already process
  
   $sql = $DB->{DBH}->prepare(q{
