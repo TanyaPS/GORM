@@ -1,6 +1,7 @@
 [Unit]
 Description=GNSS gpspickup service
 After=network.target
+After=mariadb.service
 
 [Service]
 Type=simple

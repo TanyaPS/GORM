@@ -20,6 +20,7 @@ Currently support Leica, Trimbple and Septentrio data.
 - Job.pm workdir
   - rewrite RINEX headers
   - create required intervals
+  - Gapanalyze
   - QC
   - copy to /data/upload
   - if daily file

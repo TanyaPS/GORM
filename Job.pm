@@ -101,21 +101,24 @@ sub _splice($$$) {
   my $outfile = $rsday->getRinexFilename('MO.'.$interval);
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
-  my $cmd;
-  my $conv = 'BNC';	# gfzrnx is memory hungry, but twice as fast
-  if ($conv eq 'BNC') {
-    $cmd =
+  my $conv = 'GFZ';	# gfzrnx is memory hungry, but twice as fast
+  my $bnccmd =
 	"$BNC -nw --conf /dev/null --key reqcAction Edit/Concatenate ".
 	"--key reqcRunBy SDFE ".
 	"--key reqcRnxVersion 3 ".
 	"--key reqcObsFile \"".join(',',@infiles)."\" ".
 	"--key reqcOutObsFile $outfile";
-  } else {
-    $cmd =
+  my $gfzcmd =
 	"$GFZRNX -f -q -finp ".join(' ',@infiles)." -fout $outfile -kv -splice_direct";
-  }
   loginfo("Creating $outfile");
-  sysrun($cmd);
+  if ($conv eq 'GFZ') {
+    if (sysrun($gfzcmd)) {
+      logerror("Splice $outfile failed. Trying $BNC");
+      system($bnccmd);
+    }
+  } else {
+    system($bnccmd);
+  }
   $rsday->{'MO.'.$interval} = $outfile;
 }
 

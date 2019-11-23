@@ -1,6 +1,7 @@
 [Unit]
 Description=GNSS ftpuploader service
 After=network.target
+After=mariadb.service
 
 [Service]
 Type=simple

@@ -250,11 +250,12 @@ while ($sig_received eq "") {
   scan_incoming();
 
   if (scalar(keys %Inbound) == 0) {
-    alarm 16;
+    alarm 61;
     my @e = $inotify->read;
     alarm 0;
 
     foreach (@e) {
+      next unless $_->mask & (IN_MOVED_TO|IN_CLOSE_WRITE);
       my $fn = basename($_->fullname);
       $Inbound{$fn} = $_->fullname;
     }
