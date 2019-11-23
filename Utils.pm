@@ -2,22 +2,21 @@
 #
 # Common subroutines for the GPS monitor scripts. This module cannot be instantiated.
 #
-# sjm@snex.dk, August 2012.
+# Soren Juul Moller, August 2012.
+# Soren Juul Moller, Nov 2019
 
 package Utils;
 
 use strict;
 use warnings;
 
-use POSIX qw(setsid);
+use POSIX qw(strftime);
 use IO::File;
 use File::stat;
 use File::Path qw(make_path);
 use Net::SMTP;
 use Date::Manip::Base;
 use JSON;
-
-use lib '/home/gpsuser/';
 use BaseConfig;
 use Logger;
 
@@ -37,8 +36,8 @@ BEGIN {
   @EXPORT = qw(
 	sysrun syscp sysmv
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
-	sy2year year2sy letter2hour hour2letter
-	basename dirname fileage dirlist daemonize create_pid_file
+	sy2year year2sy letter2hour hour2letter gm2str
+	basename dirname fileage dirlist
 	loadJSON storeJSON
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
@@ -51,6 +50,7 @@ BEGIN {
 #
 sub sysrun($;$) {
   my ($cmd, $opts) = @_;
+  $opts = {} unless defined $opts;
   loginfo($cmd) if $$opts{'log'};
   system($cmd);
   if ($? == -1) {
@@ -58,7 +58,7 @@ sub sysrun($;$) {
     return -1;
   }
   if ($? & 127) {
-    logfmt("error", "child died with signal %d, %s coredump",
+    logfmt("err", "child died with signal %d, %s coredump",
 			   ($? & 127), ($? & 128 ? "with":"without"));
     return -1;
   }
@@ -75,20 +75,20 @@ sub _eval_cp_args($$$$) {
   my ($cmd, $srclist, $dst, $opts) = @_;
 
   $srclist = join(' ', @$srclist) if ref($srclist) eq "ARRAY";
-  if (defined $opts) {
-    loginfo("$cmd $srclist $dst") if $$opts{'log'};
-    make_path($dst) if ! -d $dst && $$opts{'mkdir'};
-  }
+  loginfo("$cmd $srclist $dst") if $$opts{'log'};
+  make_path($dst) if $$opts{'mkdir'} && ! -d $dst;
   return system("/bin/$cmd $srclist $dst");
 }
 
 sub syscp($$;$) {
   my ($srclist, $dst, $opts) = @_;
+  $opts = {} unless defined $opts;
   return _eval_cp_args('cp', $srclist, $dst, $opts);
 }
 
 sub sysmv($$;$) {
   my ($srclist, $dst, $opts) = @_;
+  $opts = {} unless defined $opts;
   return _eval_cp_args('mv', $srclist, $dst, $opts);
 }
 
@@ -182,6 +182,14 @@ sub letter2hour($) {
 
 
 ##########################################################################
+# Format GM time
+#
+sub gm2str($) {
+  my $gm = shift;
+  return strftime("%Y-%m-%d %H:%M:%S", gmtime($gm));
+}
+
+##########################################################################
 # Returns basename of filename
 #
 sub basename($) {
@@ -224,35 +232,6 @@ sub dirlist($) {
     closedir($dh);
   }
   return (wantarray ? @files : scalar(@files));
-}
-
-
-##########################################################################
-# Daemonize current process
-#
-sub daemonize($) {
-  my $log = shift;
-
-  chdir("/var/run");
-  exit if fork();
-  setsid();
-  exit if fork();
-  open(STDIN, "</dev/null");
-  open(STDOUT, ">>$log");
-  open(STDERR, ">&STDOUT");
-  sleep 1 until getppid() == 1;
-}
-
-
-##########################################################################
-# Create a file with the PID of this process in it
-#
-sub create_pid_file($) {
-  my $pidfile = shift;
-  $pidfile = "$ENV{HOME}/run/".basename($0).".pid" if !defined $pidfile || $pidfile eq "";
-  my $fd = new IO::File ">$pidfile";
-  print $fd "$$\n";
-  return $pidfile;
 }
 
 

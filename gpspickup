@@ -21,6 +21,7 @@ my %Inbound = ();
 my %Pending = ();
 my $DB;
 my $Debug = 0;
+my $sig_received = "";
 
 chdir($INCOMING);
 
@@ -99,6 +100,7 @@ sub process() {
   });
 
   foreach my $fn (@flist) {
+    last if $sig_received ne '';
     my $ifn = $Inbound{$fn};
     if (!-f $ifn) {
       delete $Inbound{$fn};
@@ -214,10 +216,9 @@ setprogram(basename($0));
 $0 = basename($0)." ".join(' ',@ARGV);
 
 my %opts = ();
-getopts('d:l:', \%opts);
+getopts('dl:', \%opts);
 
-my $debug = 0;
-$Debug = $opts{'d'} if defined $opts{'d'};
+$Debug = 1 if defined $opts{'d'};
 logchannel($opts{'l'}) if defined $opts{'l'};
 
 chdir($INCOMING);
@@ -229,7 +230,6 @@ my $inotify = new Linux::Inotify2
 $inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE);
 
 # Setup signal handling
-my $sig_received = "";
 sub signal_handler {
   $sig_received = shift;
   loginfo("$sig_received signal received. Exiting...");
@@ -240,7 +240,7 @@ local $SIG{TERM} = \&signal_handler;
 
 $DB = new GPSDB;
 
-loginfo("$0 started");
+loginfo("$0 started. Debug=$Debug");
 
 $SIG{'ALRM'} = sub { };
 

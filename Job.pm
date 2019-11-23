@@ -79,7 +79,6 @@ sub _decimate($$$$$) {
   my ($obsinfile, $obsoutfile, $src_interval, $dst_interval, $logfile) = @_;
 
   if ($src_interval < $dst_interval) {
-    loginfo("decimate $obsinfile to $obsoutfile");
     my $cmd =
 	"$BNC -nw -conf /dev/null --key reqcAction Edit/Concatenate ".
 	"--key reqcRunBy SDFE ".
@@ -88,6 +87,7 @@ sub _decimate($$$$$) {
 	"--key reqcOutLogFile $logfile ".
 	"--key reqcRnxVersion 3 ".
 	"--key reqcSampling $dst_interval";
+    loginfo("Decimate $obsinfile to $obsoutfile");
     sysrun($cmd);
   }
 }
@@ -99,7 +99,6 @@ sub _splice($$$) {
   my ($rsday, $rslist, $interval) = @_;
 
   my $outfile = $rsday->getRinexFilename('MO.'.$interval);
-  loginfo("Creating $outfile");
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
   my $cmd =
@@ -108,6 +107,7 @@ sub _splice($$$) {
 	"--key reqcRnxVersion 3 ".
 	"--key reqcObsFile \"".join(',',@infiles)."\" ".
 	"--key reqcOutObsFile $outfile";
+  loginfo("Creating $outfile");
   sysrun($cmd);
   $rsday->{'MO.'.$interval} = $outfile;
 }
@@ -149,9 +149,9 @@ sub getStationInfo() {
   $ant->{'anttype'} = sprintf("%-16s%4s", $1, $2) if $ant->{'anttype'} =~ /^(.+),(.+)$/;
 
   my $sta = { site => $self->{'site'} };
-  $sta->{$_} = $loc->{$_} foreach keys $loc;
-  $sta->{$_} = $rec->{$_} foreach keys $rec;
-  $sta->{$_} = $ant->{$_} foreach keys $ant;
+  $sta->{$_} = $loc->{$_} foreach keys %$loc;
+  $sta->{$_} = $rec->{$_} foreach keys %$rec;
+  $sta->{$_} = $ant->{$_} foreach keys %$ant;
   return $sta;
 }
 
@@ -174,6 +174,7 @@ sub rewriteheaders($) {
     logerror("Cannot open $obs.tmp for write: $!");
     return;
   }
+  loginfo("Rewrite $obs headers");
 
   my @hdr = ();
   while ($_ = readline($ifd)) {
@@ -250,7 +251,7 @@ sub gapanalyze($) {
 
   my $ifd;
   if (!open($ifd, '<', $obs)) {
-    print "Open error: $!\n";
+    logerror("gapanalyze: open error: $!");
     return 0;
   }
 
@@ -385,7 +386,7 @@ sub gendayfiles() {
   }
 
   # all hourfiles processed or forced.
-  print "$site $year-$doy complete\n";
+  loginfo("$site $year-$doy complete");
 
   # Splice navigation files
   my %navbytyp;
@@ -402,6 +403,7 @@ sub gendayfiles() {
   foreach my $navtyp (keys %navbytyp) {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
+    loginfo("Creating $navoutfile");
     my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile >/dev/null 2>&1";
     sysrun($cmd);
     $rsday->{$navtyp} = $navoutfile;
@@ -425,9 +427,6 @@ sub gendayfiles() {
 
   $rsday->store();
   return $rsday;
-  # my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0',
-  #                      interval => $interval, rsfile => $rsday->getRsFile);
-  # $dayjob->submitjob('daily');
 }
 
 ###################################################################################
@@ -457,6 +456,11 @@ sub createWantedIntervals($) {
   }
 }
 
+###################################################################################
+# Retrive QC values from sum file. QC is defined as the average of QC's
+# for all signal types. It is just an indicator of the data quality used for
+# monitoring.
+#
 sub _getQC($) {
   my $sumfile = shift;
   my ($qc, $obs, $have, $gaps) = (0, 0, 0, 0);
@@ -490,8 +494,6 @@ sub process() {
 
   return unless sysopen(LOCK, $self->{'hour'}.'.lock', O_CREAT|O_EXCL);
   close(LOCK);
-
-  setprogram("job[$$]");
 
   $self->{DB} = new GPSDB;
   my $dbh = $self->{DB}->{DBH};
@@ -528,6 +530,7 @@ sub process() {
 	"--key reqcLogSummaryOnly 2 ".
 	"--key reqcOutLogFile $sumfile"
   ;
+  loginfo("Running QC on ".$rs->{'MO.30'});
   sysrun($cmd);
   my $qc = _getQC($sumfile);
   loginfo("$site-$year-$doy-$hour: QC: $qc, ngaps: $ngaps");
@@ -574,13 +577,13 @@ sub process() {
       my $filetosend = $rs->{'MO.'.$r->{'obsint'}};
       if (!-f $filetosend) {
         logerror("Cannot distribute $filetosend. Does not exist?!");
-        print("Cannot distribute $filetosend. Does not exist?!");
         next;
       }
       # Compress and upload
       my $crxfile = $filetosend;
       $crxfile =~ s/\.rnx$/.crx.gz/;
       if (! -f $crxfile || fileage($filetosend) > fileage($crxfile)) {
+        loginfo("Compressing $filetosend");
         sysrun("$RNX2CRX - < $filetosend | gzip > $crxfile");
       }
       syscp($crxfile, $destpath, { mkdir => 1, log => 1 } );
@@ -593,6 +596,7 @@ sub process() {
       foreach my $navfile (@$navfiles) {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile || fileage($navfile) > fileage($gzfile)) {
+          loginfo("Compressing $navfile");
           system("gzip < $navfile > $gzfile");
         }
         push(@copylist, $gzfile);

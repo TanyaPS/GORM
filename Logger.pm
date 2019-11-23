@@ -16,16 +16,14 @@ use Carp;
 use Sys::Syslog qw(openlog syslog closelog);
 
 my $Channel = 'local1';
-
-my $idx = rindex($0, '/');
-our $Program = ($idx >= 0 ? substr($0, $idx+1) : $0);
+my $Program;
 
 our (@ISA, @EXPORT);
 BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	setprogram logchannel $Program
+	setprogram logchannel
 	logdebug loginfo logwarn logerror logfatal errdie logfmt
   );
 }
@@ -34,43 +32,37 @@ END {
   closelog();
 }
 
-sub _openlog() { openlog($Program, "nofatal", $Channel); }
-
 sub setprogram($) {
-  closelog();
   $Program = shift;
-  _openlog();
+  my $i = index($Program, ' ');
+  $Program = substr($Program, 0, $i) if $i > 0;
+  $i = rindex($Program, '/');
+  $Program = substr($Program, $i+1) if $i > 0;
+  openlog($Program, "nofatal,ndelay", $Channel);
 }
 
 sub logchannel($) {
-  my $channel = shift;
-  $Channel = $channel;
+  $Channel = shift;
 }
 
-sub logdebug(@) { _openlog(); syslog("debug|$Channel", "%s", @_);   closelog();  }
-sub loginfo(@)  { _openlog(); syslog("info|$Channel", "%s", @_);    closelog();  }
-sub logwarn(@)  { _openlog(); syslog("warning|$Channel", "%s", @_); closelog();  }
-sub logerror(@) { _openlog(); syslog("err|$Channel", "%s", @_);     closelog();  }
+sub logdebug(@) { syslog("debug|$Channel", "%s", join(' ',@_));   }
+sub loginfo(@)  { syslog("info|$Channel", "%s", join(' ',@_));    }
+sub logwarn(@)  { syslog("warning|$Channel", "%s", join(' ',@_)); }
+sub logerror(@) { syslog("err|$Channel", "%s", join(' ',@_));     }
 
 sub logfatal(@) {
-  _openlog();
-  syslog("err|$Channel", "%s", @_);
-  closelog();
+  syslog("err|$Channel", "%s", join(' ',@_));
   carp localtime().": ".join(' ', @_);
 }
 
 sub errdie(@) {
-  _openlog();
-  syslog("err|$Channel", "%s", @_);
-  closelog();
+  syslog("err|$Channel", "%s", join(' ',@_));
   croak join(' ', @_);
 }
 
 sub logfmt(@) {
   my ($level, $fmt, @args) = @_;
-  _openlog();
   syslog("$level|$Channel", $fmt, @args);
-  closelog();
 }
 
 1;

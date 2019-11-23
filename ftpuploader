@@ -254,7 +254,6 @@ my %opts = ();
 getopts('d:', \%opts);
 $Debug = $opts{'d'} if defined $opts{'d'};
 
-$0 = basename($0)." ".join(' ',@ARGV);
 setprogram("ftpuploader");
 $0 = "ftpuploader [master]";
 
