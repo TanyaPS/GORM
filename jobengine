@@ -145,7 +145,7 @@ $FM->run_on_finish(\&onfinish);
 
 # Setup queue event handler
 my $inotify = new Linux::Inotify2;
-$inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
+my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
 
 # main loop
 while ($sig_received eq "") {
@@ -201,7 +201,7 @@ while ($sig_received eq "") {
   }
 }
 
-$inotify->cancel;
+$watcher->cancel;
 $FM->wait_all_children;
 
 # Write unfinished jobs back into queue

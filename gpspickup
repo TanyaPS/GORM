@@ -62,20 +62,17 @@ sub process() {
 
   # Check for pending jobs
   #loginfo("check pending");
-  foreach my $ident (keys %Pending) {
-    my $job = $Pending{$ident};
+  foreach my $fn (keys %Pending) {
+    my $job = $Pending{$fn};
     if (time() - $job->{'timestamp'} > 14) {
       # check nothing is being transferred right now
       my $rs = new RinexSet(rsfile => $job->{'rsfile'});
       my $prefix = $rs->getFilenamePrefix();
-      my @inbound = glob("$INCOMING/${prefix}*");
-      if (scalar(@inbound) == 0) {
-        # no active inbound, then submit
-        loginfo("Submitting $ident");
-        delete $job->{'timestamp'};
-        $job->submitjob('ftp');
-        delete $Pending{$ident};
-      }
+      # no active inbound, then submit
+      loginfo("Submitting ".$job->getIdent());
+      delete $job->{'timestamp'};
+      $job->submitjob('ftp');
+      delete $Pending{$fn};
     }
   }
   return unless scalar(@flist) > 0;   # nothing to do
@@ -102,7 +99,7 @@ sub process() {
   foreach my $fn (@flist) {
     last if $sig_received ne '';
     my $ifn = $Inbound{$fn};
-    if (!-f $ifn) {
+    if (!-f $ifn || exists $Pending{$fn}) {
       delete $Inbound{$fn};
       next;
     }
@@ -131,6 +128,7 @@ sub process() {
       my $hour = hour2letter($hh);
       sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
       $ifn = "$SAVEDIR/$site/$fn";
+      loginfo("Received $fn");
       if (check_existing($sql, $site, $year, $doy, $hour)) {
         logerror("$fn processed already. Forget it before reprocessing");
         next;
@@ -138,7 +136,6 @@ sub process() {
       $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       my $workdir = $job->mkWorkdir();
       my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
-      loginfo("Unzip $ifn to $workdir");
       $rs->unzip($ifn, $sc->{'obsint'});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
@@ -150,6 +147,7 @@ sub process() {
       my ($doy, $hour, $year) = ($1, $2, sy2year($3));
       sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
       $ifn = "$SAVEDIR/$site/$fn";
+      loginfo("Received $fn");
       if (check_existing($sql, $site, $year, $doy, $hour)) {
         logerror("$fn processed already. Forget it before reprocessing");
         next;
@@ -157,7 +155,6 @@ sub process() {
       $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       my $workdir = $job->mkWorkdir();
       my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
-      loginfo("unzip $ifn to $workdir");
       $rs->unzip($ifn, $sc->{obsint});
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
@@ -172,13 +169,16 @@ sub process() {
       my $hour = hour2letter($hh);
       $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
       my $ident = $job->getIdent();
-      my $workdir = $job->mkWorkdir();
+
       my $savedir = "$SAVEDIR/$site";
+      sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
+      $ifn = "$savedir/$fn";
+      loginfo("Received $fn");
+
+      my $workdir = $job->mkWorkdir();
       my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
       $job->{'rsfile'} = $rs->getRsFile();
       $rs->load() if -f $job->{'rsfile'};
-      sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
-      $ifn = "$savedir/$fn";
 
       my $ufn = $fn; $ufn =~ s/\.gz$//;
       my $wfn = "$workdir/$ufn";

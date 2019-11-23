@@ -101,12 +101,19 @@ sub _splice($$$) {
   my $outfile = $rsday->getRinexFilename('MO.'.$interval);
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
-  my $cmd =
+  my $cmd;
+  my $conv = 'GFZRNX';	# BNC or GFZRNX
+  if ($conv eq 'BNC') {
+    $cmd =
 	"$BNC -nw --conf /dev/null --key reqcAction Edit/Concatenate ".
 	"--key reqcRunBy SDFE ".
 	"--key reqcRnxVersion 3 ".
 	"--key reqcObsFile \"".join(',',@infiles)."\" ".
 	"--key reqcOutObsFile $outfile";
+  } else {
+    $cmd =
+	"$GFZRNX -f -q -finp ".join(' ',@infiles)." -fout $outfile -kv -splice_direct";
+  }
   loginfo("Creating $outfile");
   sysrun($cmd);
   $rsday->{'MO.'.$interval} = $outfile;
