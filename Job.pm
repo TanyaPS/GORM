@@ -102,7 +102,7 @@ sub _splice($$$) {
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
   my $cmd;
-  my $conv = 'GFZRNX';	# BNC or GFZRNX
+  my $conv = 'BNC';	# gfzrnx is memory hungry, but twice as fast
   if ($conv eq 'BNC') {
     $cmd =
 	"$BNC -nw --conf /dev/null --key reqcAction Edit/Concatenate ".
@@ -411,7 +411,7 @@ sub gendayfiles() {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
     loginfo("Creating $navoutfile");
-    my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile >/dev/null 2>&1";
+    my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile -no_nav_stk >/dev/null 2>&1";
     sysrun($cmd);
     $rsday->{$navtyp} = $navoutfile;
   }

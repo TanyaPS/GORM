@@ -87,17 +87,14 @@ sub process() {
   die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
   my %scs = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
 
-  # First each of the files found in $INCOMING, move them to it's workdir.
-  # if its not already process
- 
   $sql = $DB->{DBH}->prepare(q{
 	select count(site) cnt
 	from gpssums
 	where site = ? and year = ? and doy = ? and hour = ?
   });
 
+  my @submitlist = ();
   foreach my $fn (@flist) {
-    last if $sig_received ne '';
     my $ifn = $Inbound{$fn};
     if (!-f $ifn || exists $Pending{$fn}) {
       delete $Inbound{$fn};
@@ -192,7 +189,7 @@ sub process() {
       $rs->{$ftyp} = $ufn;
       $rs->store();
       $job->{'timestamp'} = time();
-      $Pending{$ident} = $job;
+      $Pending{$fn} = $job;
       next;
     }
 
@@ -204,8 +201,12 @@ sub process() {
 
     # clear for inbound queue and submit a new job for processing
     delete $Inbound{$fn} if exists $Inbound{$fn};
+    push(@submitlist, $job) if defined $job;
+  }
+
+  foreach my $job (@submitlist) {
     loginfo("Submitting ".$job->getIdent());
-    $job->submitjob('ftp') if defined $job;
+    $job->submitjob('ftp');
   }
 }
 
