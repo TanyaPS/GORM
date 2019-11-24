@@ -1,4 +1,4 @@
--- Generation Time: Nov 24, 2019 at 03:25 PM
+-- Generation Time: Nov 24, 2019 at 03:36 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS `receivers` (
 CREATE TABLE IF NOT EXISTS `rinexdist` (
   `id` int(10) unsigned NOT NULL,
   `site` char(9) COLLATE utf8_unicode_ci NOT NULL,
-  `freq` char(1) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'D',
+  `freq` enum('D','H') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'D' COMMENT 'D for daily, H for hourly',
   `filetype` enum('Obs','Nav','Arc','Raw','Met','Sum') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'Obs',
   `obsint` tinyint(3) unsigned NOT NULL,
   `localdir` varchar(32) COLLATE utf8_unicode_ci NOT NULL,
@@ -137,7 +137,6 @@ CREATE TABLE IF NOT EXISTS `siteconfig` (
   `site` varchar(9) COLLATE utf8_unicode_ci NOT NULL,
   `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'D',
   `obsint` tinyint(6) unsigned NOT NULL DEFAULT '30',
-  `navlist` varchar(16) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'E,G,R,S',
   `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `active` tinyint(1) NOT NULL DEFAULT '1'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -267,4 +266,3 @@ ALTER TABLE `uploaddest`
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
