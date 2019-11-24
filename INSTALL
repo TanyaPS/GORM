@@ -17,7 +17,6 @@ Add packages
 	firewalld
 	mariadb
 	mariadb-server
-	perl-WWW-Curl
 	perl-Linux-Inotify2
 	perl-Date-Manip
 	perl-Sys-Syslog
@@ -26,6 +25,7 @@ Add packages
 	perl-JSON-XS
 	perl-Parallel-ForkManager
 	perl-Archive-Zip
+	perl-Net-FTP
 	perl-Net-SFTP-Foreign
 
 Configure:
@@ -42,8 +42,15 @@ users:
 	chgrp gnss /data/ftp
 	chmod 775 /data/ftp
 
+mount datastore:
+	mkdir /data
+	Mount data disk on /data
+
 mariadb:
 	Create /data/mysql
+		mkdir /data/mysql
+		chown mysql:mysql /data/mysql
+		chcon -R -u system_u -r object_r -t mysqld_db_t /data/mysql
 	Modify /etc/my.cnf.d/server.cnf
 		Add "datadir = /data/mysql" in [server] section
 	systemctl enable mariadb
@@ -52,12 +59,12 @@ mariadb:
 	Create gpsuser
 		mysql -u root -p mysql
 		create database gps;
-		create user gpsuser@localhost identifyed by 'gpsuser';
+		create user gpsuser@localhost identified by 'gpsuser';
 		grant all privileges on gps.* to gpsuser@localhost;
 	Check local access with:
 		# mysql -u gpsuser -pgpsuser gps     (should be able to login)
 	Run SQL script
-		\. /home/gpsuser/sql/create-siteconfig.sql
+		\. /home/gpsuser/sql/create-gps-db.sql
 		show tables;
 	Should display:
 		+---------------+
@@ -66,17 +73,16 @@ mariadb:
 		| antennas      |
 		| locations     |
 		  .....
-		| receivers     |
 		| siteconfig    |
+		| uploaddest    |
 		+---------------+
 
 firewall:
-	CentOS 7 default firewall is firewall-cmd
+	CentOS 7/8 default firewall is firewall-cmd
 
-	Initial install: Add new zone with
-		firewall-cmd --permanent --new-zone=gnss
-		firewall-cmd --permanent --set-default-zone=gnss
+	Initial install: Open firewall ports
 		firewall-cmd --permanent --add-service=ftp --add-service=http --add-service=https
+		firewall-cmd --permanent --add-source=127.0.0./8
 		firewall-cmd --permanent --add-source=x.x.x.x/x   (where x.x.x.x/x is your local nets)
 		firewall-cmd --reload
 
@@ -84,16 +90,21 @@ firewall:
 		firewall-cmd --permanent --add-source=1.2.3.4/32
 		firewall-cmd --reload
 
-mount datastore:
-	mkdir /data
-	Mount data disk on /data
-
 services:
 	git clone scripts from https://github.com/Kortforsyningen/GORM.git
 	Move content to /home/gpsuser
 	chown -R gpsuser:gpsuser /home/gpsuser
-	Copy conf/*.service to /etc/systemd/system
+	Create directories:
+		cd /data
+		mkdir ftp upload saved queue work
+		chown gpsuser:gpsuser ftp upload saved queue work
+	Add PERL5LIB
+		vi /root/.bashrc
+		export PERL5LIB=/home/gpsuser
+	Configure sites
+	Test
 	Enable and start services:
+		Copy conf/*.service to /etc/systemd/system
 		systemctl daemon-reload
 		systemctl enable gpspickup jobengine ftpuploader
 		systemctl start gpspickup jobengine ftpuploader
