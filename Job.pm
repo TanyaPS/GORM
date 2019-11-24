@@ -254,13 +254,13 @@ sub rewriteheaders($) {
 # Find and register gaps in observation file
 #
 sub gapanalyze($) {
-  my ($self, $obs) = @_;
+  my ($self, $obsfile) = @_;
   my ($firstobs, $lastobs, $interval);
   my ($firstyy, $firstmm, $firstdd);
   my $hour = $self->{'hour'};
 
   my $ifd;
-  if (!open($ifd, '<', $obs)) {
+  if (!open($ifd, '<', $obsfile)) {
     logerror("gapanalyze: open error: $!");
     return 0;
   }
@@ -346,12 +346,13 @@ sub gapanalyze($) {
 
   close($ifd);
 
-  # Delete any datagaps from previous run
+  # Delete any datagaps from previous run of this hour/day
   my $dbh = $self->{'DB'}->{'DBH'};
   $dbh->do(q{
 	delete from datagaps where site=? and year=? and doy=? and hour=?
   }, undef, $self->{'site'}, $self->{'year'}, $self->{'doy'}, $self->{'hour'});
 
+  loginfo("$obsfile nobs=$nobs, ngaps=$ngaps");
   return 0 if $ngaps == 0;
 
   # Gaps found. Register gaps in DB.
@@ -384,7 +385,6 @@ sub gendayfiles() {
 
   my $rsday = new RinexSet(site => $site, year => $year, doy => $doy, hour => '0');
 
-  loginfo("Generating daily files for $site-$year-$doy");
   foreach my $h ('a'..'x') {
     my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $h);
     if (-f $rs->getRsFile()) {
@@ -394,14 +394,13 @@ sub gendayfiles() {
       push(@rslist, $rs);
     }
   }
-  if (scalar(@rslist) != 24 && ! -f 'force-complete') {
-    unlink("daily.lock");
+  if (scalar(@rslist) != 24 && !exists $self->{'incomplete'}) {
+    logerror("Cannot splice incomplete day");
     return;
   }
+  loginfo("$site-$year-$doy: ".(exists $self->{'incomplete'} ? 'processing incomplete day':'all hours present'));
 
-  # all hourfiles processed or forced.
-  loginfo("$site $year-$doy complete");
-
+  loginfo("Generating daily files for $site-$year-$doy");
   # Splice navigation files
   my %navbytyp;
   foreach my $rs (@rslist) {
@@ -506,7 +505,7 @@ sub _getQC($) {
 sub process() {
   my $self = shift;
 
-  return unless sysopen(LOCK, $self->{'hour'}.'.lock', O_CREAT|O_EXCL);
+  return unless sysopen(LOCK, $self->{'hour'}.'.lock', O_CREAT|O_EXCL);  # safety lock
   close(LOCK);
 
   $self->{DB} = new GPSDB;
@@ -547,7 +546,7 @@ sub process() {
   loginfo("Running QC on ".$rs->{'MO.30'});
   sysrun($cmd);
   my $qc = _getQC($sumfile);
-  loginfo("$site-$year-$doy-$hour: QC: $qc, ngaps: $ngaps");
+  loginfo("$site-$year-$doy-$hour: QC: $qc");
   sysrun("gzip -f $sumfile");
   $sumfile .= ".gz";
 
@@ -632,15 +631,17 @@ sub process() {
 
   }
 
-  $rs->{'processed'} = 1;
-  $rs->store($self->{rsfile});
+  unlink("$hour.lock");
 
-  if ($hour eq '0') {
+  if ($hour eq '0' && !-f 'debug') {
     # This is a dayfile and is now processed. We are done and delete the workdir.
     chdir("..");
-    system("rm -rf ".$self->getWorkdir) unless -f 'debug';
+    system("rm -rf ".$self->getWorkdir);
+  } else {
+    $rs->{'processed'} = 1;
+    $rs->store($self->{rsfile});
   }
-  unlink("$hour.lock");
+
   return 0;
 }
 

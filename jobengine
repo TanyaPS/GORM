@@ -15,6 +15,7 @@ use Linux::Inotify2;
 use BaseConfig;
 use Utils;
 use Logger;
+use RinexSet;
 use Job;
 
 my $PollInterval = 11;
@@ -148,17 +149,18 @@ sub scan_for_forced_incompletes() {
         my $workdir = "$WORKDIR/$site/$year/$doy";
         my $statusfile = "$workdir/status.json";
         next unless -f "$workdir/force-complete" && -f $statusfile;
+        unlink("$workdir/force-complete");
         my $lock = lock($statusfile);
         my $sta = statusdb($statusfile);
         my $interval;
         foreach my $hour (keys %$sta) {
           next unless $sta->{$hour} eq "processed";
-          my $rs = RinsetSet(rsfile => "$workdir/rs.$hour.json");
+          my $rs = new RinexSet(rsfile => "$workdir/rs.$hour.json");
           $interval = $rs->{'interval'};
           last if defined $interval;
         }
         if (defined $interval) {
-          my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $interval);
+          my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $interval, incomplete => 1);
           $dayjob->submitjob('hour2daily');
           statusdb($statusfile, '0', "queued");
         } else {

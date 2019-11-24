@@ -88,7 +88,7 @@ sub process($$) {
     }
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     my $workdir = $job->mkWorkdir();
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     loginfo("Unzipping $fn to ".$rs->getWorkdir);
     $rs->unzip($ifn, $sc->{'obsint'});
     $rs->store();
@@ -108,7 +108,7 @@ sub process($$) {
     }
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     my $workdir = $job->mkWorkdir();
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     loginfo("Unzipping $fn to ".$rs->getWorkdir);
     $rs->unzip($ifn, $sc->{obsint});
     $rs->store();
@@ -131,7 +131,7 @@ sub process($$) {
     $ifn = "$savedir/$fn";
 
     my $workdir = $job->mkWorkdir();
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     $job->{'rsfile'} = $rs->getRsFile();
     $rs->load() if -f $job->{'rsfile'};
 
