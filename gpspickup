@@ -17,13 +17,151 @@ use RinexSet;
 use Job;
 use GPSDB;
 
-my %Inbound = ();
-my %Pending = ();
 my $DB;
+my %SCS;
+my %Pending;
 my $Debug = 0;
 my $sig_received = "";
+my $PollInterval = 16;		# Timeout for new files
 
 chdir($INCOMING);
+
+sub load_sites() {
+  # Get the complete list of defined sites from DB
+  # We only use the short version of sitename here.
+  my $sql = $DB->{'DBH'}->prepare(q{
+	select	site, freq, obsint
+	from	siteconfig
+  });
+  my $aref = $DB->{'DBH'}->selectall_arrayref($sql, { Slice => {} });
+  die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
+  %SCS = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
+}
+
+#############################################################################################
+# Lookup site in gpssums. Returns true if current year-doy exists, false if not.
+#
+sub check_existing($$$$) {
+  my ($site, $year, $doy, $hour) = @_;
+
+  my $href = $DB->{'DBH'}->selectrow_hashref(q{
+	select count(site) cnt
+	from gpssums
+	where site = ? and year = ? and doy = ? and hour = ?
+  }, undef, $site, $year, $doy, $hour);
+  return (defined $href && $href->{'cnt'});
+}
+
+
+#############################################################################################
+# Process all files in %Inbound
+# Move complete filesets to workdir as is and create a job for processing the files
+# Unknown sites and unknown filetypes for site are moved to £SAVEDIR/stale.
+#
+sub process($$) {
+  my ($ifn, $fn) = @_;
+
+  # Make sure we know the site
+  my $site4 = substr($fn, 0, 4);
+  my $sc = $SCS{$site4};
+  if (!defined $sc) {
+    sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug });
+    logwarn("No such site: $site4");
+    next;
+  }
+  my $site = $sc->{'site'};
+
+  # Now that we know this is a known site, copy the file(s) to it's workdir and move to $SAVEDIR.
+  # Derive the date & time from filename if possible.
+
+  # Trinzic
+  # ssssyyyymmddhhmiB.zip
+  if ($fn =~ /^[A-Z0-9]{4}(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
+    my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
+    my $doy = Day_of_Year($year, $mm, $dd);
+    my $hour = hour2letter($hh);
+    sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
+    $ifn = "$SAVEDIR/$site/$fn";
+    if (check_existing($site, $year, $doy, $hour)) {
+      logerror("$fn processed already. Forget it before reprocessing");
+      return;
+    }
+    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+    my $workdir = $job->mkWorkdir();
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+    loginfo("Unzipping $fn to ".$rs->getWorkdir);
+    $rs->unzip($ifn, $sc->{'obsint'});
+    $rs->store();
+    $job->{'rsfile'} = $rs->getRsFile;
+    $job->submitjob('ftp');
+  }
+
+  # Leica
+  # ssssdddh.yyo.zip
+  elsif ($fn =~ /^[A-Z0-9]{4}(\d\d\d)([a-x])\.(\d\d)o\.zip$/) {
+    my ($doy, $hour, $year) = ($1, $2, sy2year($3));
+    sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
+    $ifn = "$SAVEDIR/$site/$fn";
+    if (check_existing($site, $year, $doy, $hour)) {
+      logerror("$fn processed already. Forget it before reprocessing");
+      return;
+    }
+    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+    my $workdir = $job->mkWorkdir();
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+    loginfo("Unzipping $fn to ".$rs->getWorkdir);
+    $rs->unzip($ifn, $sc->{obsint});
+    $rs->store();
+    $job->{'rsfile'} = $rs->getRsFile;
+    $job->submitjob('ftp');
+  }
+
+  # Septentrio (not zipped into one file)
+  # Strategy is to submit job until the newest file is at least XXs old. Then its safe to assume all files have arrived
+  # TA0200DNK_R_20190161900_01H_01S_MO.rnx
+  # TA0200DNK_R_20190161800_01H_RN.rnx
+  elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(MO|[A-Z]N)\.rnx/) {
+    my ($year, $doy, $hh, $mi, $ftyp) = ($1, $2, $3, $4, $5);
+    my $hour = hour2letter($hh);
+    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
+    my $ident = $job->getIdent();
+
+    my $savedir = "$SAVEDIR/$site";
+    sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
+    $ifn = "$savedir/$fn";
+
+    my $workdir = $job->mkWorkdir();
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+    $job->{'rsfile'} = $rs->getRsFile();
+    $rs->load() if -f $job->{'rsfile'};
+
+    my $ufn = $fn; $ufn =~ s/\.gz$//;
+    my $wfn = "$workdir/$ufn";
+    if ($fn =~ /\.gz$/) {
+      $wfn =~ s/\.gz$//;
+      loginfo("Gunzip $fn to $workdir");
+      sysrun("gzip -dc $ifn >$wfn", { log => $Debug });
+    } else {
+      loginfo("Copy $fn to $workdir");
+      syscp($ifn, $wfn, { log => $Debug });
+    }
+    $ftyp .= '.'.$sc->{'obsint'} if $ftyp eq 'MO';
+    $rs->{$ftyp} = $ufn;
+    $rs->store();
+
+    # Register pending job if we got the observation file
+    if ($fn =~ /_MO\.rnx/) {
+      $job->{'timestamp'} = time();
+      $Pending{$fn} = $job;
+    }
+  }
+
+  # Unknown filename structure?!
+  else {
+    logerror("Unknown filetype for site $site: $ifn");
+    sysmv($ifn, "$SAVEDIR/stale", { log => $Debug });
+  }
+}
 
 #############################################################################################
 # scan_incoming will add all plain files in $INCOMING to %Inbound
@@ -33,36 +171,14 @@ sub scan_incoming() {
   open($fd, '-|', qq(/bin/find $INCOMING -type f -print));
   while (<$fd>) {
     chomp;
-    next if fileage($_) < 2;
-    my $fn = basename($_);
-    next if exists $Inbound{$fn} || exists $Pending{$fn};
-    $Inbound{$fn} = $_;
+    process($_, basename($_)) if fileage($_) > 15;
   }
   close($fd);
 }
 
-#############################################################################################
-# Lookup site in gpssums. Returns true if current year-doy exists, false if not.
-#
-sub check_existing($$$$$) {
-  my ($sql, $site, $year, $doy, $hour) = @_;
-
-  my $aref = $DB->{DBH}->selectall_arrayref($sql, {Slice=>{}}, $site, $year, $doy, $hour);
-  return (defined $aref && $$aref[0]->{cnt} == 1);
-}
-
-
-#############################################################################################
-# Process all files in %Inbound
-# Move complete filesets to workdir as is and create a job for processing the files
-# Unknown sites and unknown filetypes for site are moved to £SAVEDIR/stale.
-#
-sub process() {
-  my @flist = keys %Inbound;
-
-  # Check for pending jobs
-  #loginfo("check pending");
-  foreach my $fn (keys %Pending) {
+sub submit_pending() {
+  my @pending = keys %Pending;
+  foreach my $fn (@pending) {
     my $job = $Pending{$fn};
     if (time() - $job->{'timestamp'} > 14) {
       # check nothing is being transferred right now
@@ -75,139 +191,15 @@ sub process() {
       delete $Pending{$fn};
     }
   }
-  return unless scalar(@flist) > 0;   # nothing to do
+  my $left = scalar(keys %Pending);
+  loginfo("Pending left: $left") if $left > 0;
+}
 
-  # Get the complete list of defined sites from DB
-  # We only use the short version of sitename here.
-  my $sql = $DB->{'DBH'}->prepare(q{
-	select	site, freq, obsint
-	from	siteconfig
-  });
-  my $aref = $DB->{'DBH'}->selectall_arrayref($sql, { Slice => {} });
-  die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
-  my %scs = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
-
-  $sql = $DB->{DBH}->prepare(q{
-	select count(site) cnt
-	from gpssums
-	where site = ? and year = ? and doy = ? and hour = ?
-  });
-
-  my @submitlist = ();
-  foreach my $fn (@flist) {
-    my $ifn = $Inbound{$fn};
-    if (!-f $ifn || exists $Pending{$fn}) {
-      delete $Inbound{$fn};
-      next;
-    }
-
-    # assume sitename is the 4 first letters in filename
-    my $site4 = uc(substr($fn, 0, 4));
-    my $job = undef;
-
-    # Make sure we know the site
-    my $sc = $scs{$site4};
-    if (!defined $sc) {
-      sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug });
-      logwarn("No such site: $site4");
-      next;
-    }
-    my $site = $sc->{'site'};
-
-    # Now that we know this is a known site, copy the file(s) to it's workdir and move to $SAVEDIR.
-    # Derive the date & time from filename if possible.
-
-    # Trinzic
-    # ssssyyyymmddhhmiB.zip
-    if ($fn =~ /^[A-Z0-9]{4}(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
-      my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
-      my $doy = Day_of_Year($year, $mm, $dd);
-      my $hour = hour2letter($hh);
-      sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
-      $ifn = "$SAVEDIR/$site/$fn";
-      loginfo("Received $fn");
-      if (check_existing($sql, $site, $year, $doy, $hour)) {
-        logerror("$fn processed already. Forget it before reprocessing");
-        next;
-      }
-      $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-      my $workdir = $job->mkWorkdir();
-      my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
-      $rs->unzip($ifn, $sc->{'obsint'});
-      $rs->store();
-      $job->{'rsfile'} = $rs->getRsFile;
-    }
-
-    # Leica
-    # ssssdddh.yyo.zip
-    elsif ($fn =~ /^[A-Z0-9]{4}(\d\d\d)([a-x])\.(\d\d)o\.zip$/) {
-      my ($doy, $hour, $year) = ($1, $2, sy2year($3));
-      sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
-      $ifn = "$SAVEDIR/$site/$fn";
-      loginfo("Received $fn");
-      if (check_existing($sql, $site, $year, $doy, $hour)) {
-        logerror("$fn processed already. Forget it before reprocessing");
-        next;
-      }
-      $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-      my $workdir = $job->mkWorkdir();
-      my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
-      $rs->unzip($ifn, $sc->{obsint});
-      $rs->store();
-      $job->{'rsfile'} = $rs->getRsFile;
-    }
-
-    # Septentrio (not zipped into one file)
-    # Strategy is to submit job until the newest file is at least XXs old. Then its safe to assume all files have arrived
-    # TA0200DNK_R_20190161900_01H_01S_MO.rnx
-    # TA0200DNK_R_20190161800_01H_RN.rnx
-    elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(MO|[A-Z]N)\.rnx/) {
-      my ($year, $doy, $hh, $mi, $ftyp) = ($1, $2, $3, $4, $5);
-      my $hour = hour2letter($hh);
-      $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-      my $ident = $job->getIdent();
-
-      my $savedir = "$SAVEDIR/$site";
-      sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
-      $ifn = "$savedir/$fn";
-      loginfo("Received $fn");
-
-      my $workdir = $job->mkWorkdir();
-      my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
-      $job->{'rsfile'} = $rs->getRsFile();
-      $rs->load() if -f $job->{'rsfile'};
-
-      my $ufn = $fn; $ufn =~ s/\.gz$//;
-      my $wfn = "$workdir/$ufn";
-      if ($fn =~ /\.gz$/) {
-        $wfn =~ s/\.gz$//;
-        sysrun("gzip -dc $ifn >$wfn", { log => $Debug });
-      } else {
-        syscp($ifn, $wfn, { log => $Debug });
-      }
-      $ftyp .= '.'.$sc->{'obsint'} if $ftyp eq 'MO';
-      $rs->{$ftyp} = $ufn;
-      $rs->store();
-      $job->{'timestamp'} = time();
-      $Pending{$fn} = $job;
-      next;
-    }
-
-    # Unknown filename structure?!
-    else {
-      logerror("Unknown filetype for site $site: $ifn");
-      sysmv($ifn, "$SAVEDIR/stale", { log => $Debug });
-    }
-
-    # clear for inbound queue and submit a new job for processing
-    delete $Inbound{$fn} if exists $Inbound{$fn};
-    push(@submitlist, $job) if defined $job;
-  }
-
-  foreach my $job (@submitlist) {
-    loginfo("Submitting ".$job->getIdent());
-    $job->submitjob('ftp');
-  }
+sub inotify_callback() {
+  my $event = shift;
+  alarm 0;		# disable timer while processing
+  process($event->fullname, $event->name);
+  alarm $PollInterval;	# rearm timer
 }
 
 #############################################################################################
@@ -228,39 +220,31 @@ select(STDOUT); $| = 1;
 
 my $inotify = new Linux::Inotify2
 	|| errdie("$0: unable to create new inotify object: $!");
-$inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE);
-
-# Setup signal handling
-sub signal_handler {
-  $sig_received = shift;
-  loginfo("$sig_received signal received. Exiting...");
-}
-local $SIG{HUP} = 'IGNORE';
-local $SIG{INT} = \&signal_handler;
-local $SIG{TERM} = \&signal_handler;
+$inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
 
 $DB = new GPSDB;
+load_sites();
 
 loginfo("$0 started. Debug=$Debug");
 
-$SIG{'ALRM'} = sub { };
+scan_incoming();
 
-# Run loop until signal or pidfile is deleted
 while ($sig_received eq "") {
-  scan_incoming();
-
-  if (scalar(keys %Inbound) == 0) {
-    alarm 61;
-    my @e = $inotify->read;
+  eval {
+    local $SIG{ALRM} = sub { die("gpspickupalarm"); };
+    local $SIG{INT} = sub { die("interrupted"); };
+    local $SIG{TERM} = sub { die("terminated"); };
+    local $SIG{HUP} = 'IGNORE';
+    alarm $PollInterval;
+    $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
-
-    foreach (@e) {
-      next unless $_->mask & (IN_MOVED_TO|IN_CLOSE_WRITE);
-      my $fn = basename($_->fullname);
-      $Inbound{$fn} = $_->fullname;
-    }
+  };
+  if ($@) {
+    my $msg = $@;
+    last unless $msg =~ /^gpspickupalarm/;	# poll timeout?
+    scan_incoming();
+    submit_pending();
   }
-  process();
 }
 
 loginfo("$0 stopped");

@@ -37,12 +37,6 @@ sub ftpuploader($) {
 
   sysrun("mkdir failed", { log => $Debug }) unless -d "failed";
 
-  # Setup signal handling
-  my $sig_received = 0;
-  local $SIG{TERM} = sub { $sig_received = 1; };
-  local $SIG{INT}  = sub { $sig_received = 1; };
-  local $SIG{HUP}  = 'IGNORE';
-
   # Arm directory monitor
   my $inotify = new Linux::Inotify2;
   my $watch = $inotify->watch($localdir, IN_CLOSE_WRITE | IN_MOVED_TO);
@@ -54,7 +48,7 @@ sub ftpuploader($) {
   my $first = 1;
 
   Inbound:
-  while (!$sig_received) {
+  while (1) {
     my @files = dirlist($localdir);
     foreach my $fn (@files) {
       next if -d $fn;
@@ -64,13 +58,16 @@ sub ftpuploader($) {
     if (scalar(keys %todo) == 0) {
       my @in_events = ();
       eval {
-        local $SIG{ALRM} = sub { die("alarm\n") };
+        local $SIG{ALRM} = sub { die("ftpuploaderalarm"); };
+        local $SIG{INT}  = sub { die("interruped"); };
+        local $SIG{TERM} = sub { die("terminaed"); };
         alarm 301;
         @in_events = $inotify->read;
         alarm 0;
       };
       if ($@) {
-        last unless $@ eq "alarm\n";        # Alarm?
+        my $msg = $@;
+        last unless $msg =~ /^ftpuploaderalarm/;        # Alarm?
       }
       foreach my $e (@in_events) {
         my $fn = $e->name;
@@ -89,10 +86,9 @@ sub ftpuploader($) {
       next;
     }
 
-    # do the uploads
+    # Do the uploads
     @files = sort { substr($a,4,4) cmp substr($b,4,4) } keys %todo;
     foreach my $fn (@files) {
-      last if $sig_received;
       next unless -f $fn;
 
       if ($todo{$fn} > 3) {

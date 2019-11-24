@@ -271,12 +271,13 @@ sub gapanalyze($) {
   }
 
   # Read the first observation header
+  # > 2019 01 15 00 00  0.0000000  0 48
+  # > 2019 01 15 00 00  1.0000000  0 48
   $_ = readline($ifd);
   if (index($_,'>') == 0) {
     my @a = split(/\s+/, $_);
-    $firstobs = timegm($a[6],$a[5],$a[4],$a[3],$a[2]-1,$a[1]);
+    $firstobs = timegm(int($a[6]),$a[5],$a[4],$a[3],$a[2]-1,$a[1]);
     ($firstyy, $firstmm, $firstdd) = @a[1..3];
-    $interval = int($a[8]) unless defined $interval;
   } else {
     logerror "Expected first observation after headers. Aborting gapanalyze.";
     return 0;
@@ -290,12 +291,12 @@ sub gapanalyze($) {
   # Calculate the theoretical first obs time.
   my $firsthh = timegm(0, 0, letter2hour($hour), $firstdd, $firstmm-1, $firstyy);
 
-  # If firstobs is not match firsthh, then register gap from firsthh until firstobs
+  # If firstobs does not match firsthh, then register gap from firsthh until firstobs
   if ($firstobs != $firsthh) {
     $gaplen[0] = $firstobs - $firsthh;
     $gapstart[0] = gm2str($firsthh);
     $gapend[0] = gm2str($firstobs);
-    $ngaps = 1;
+    $ngaps++;
   }
 
   my $prevtime = $firstobs;
@@ -304,7 +305,10 @@ sub gapanalyze($) {
     next unless index($_, '>') == 0;
     my @a = split(/\s+/, $_);
     my ($yyyy, $mm, $dd, $hh, $mi, $ss) = @a[1..6];
-    my $curtime = timegm($ss, $mi, $hh, $dd, $mm-1, $yyyy);
+    my $curtime = timegm(int($ss), $mi, $hh, $dd, $mm-1, $yyyy);
+    if (!defined $interval) {
+      $interval = $curtime - $firstobs;   # in case of missing INTERVAL header
+    }
     if ($prevtime + $interval != $curtime) {
       my $prevstr = gm2str($prevtime+$interval);
       my $len = $interval;

@@ -17,9 +17,10 @@ use Utils;
 use Logger;
 use Job;
 
-my %Jobs;	# Queued jobs
-my %Running;	# Running jobs
-my $Debug = 0;  # set with -d option
+my $PollInterval = 11;
+my %Running;
+my $Debug = 1;  # set with -d option
+my $FM;		# FormManager
 
 sub lock($) {
   my $fn = shift;
@@ -60,7 +61,7 @@ sub statusdb($;$$) {
 #
 sub onstart() {
   my ($pid, $ident) = @_;
-  loginfo("$ident starting") if $Debug;
+  loginfo("$ident starting");
 }
 
 ##########################################
@@ -68,13 +69,12 @@ sub onstart() {
 #
 sub onfinish() {
   my ($pid, $exitcode, $ident) = @_;
-  return unless defined $ident && defined $Running{$ident};
   my ($site, $year, $doy, $hour) = split(/-/, $ident);
   my $job = $Running{$ident};
   my $workdir = $job->getWorkdir;
   my $statusfile = "$workdir/status.json";
 
-  loginfo("$ident finished") if $Debug;
+  loginfo("$ident finished");
   delete $Running{$ident};
 
   return unless -d $workdir;  # may have been removed
@@ -102,14 +102,83 @@ sub onfinish() {
 #####################################
 # Spawn a job using ForkManager
 #
-sub runjob($$) {
-  my ($FM, $job) = @_;
-  loginfo("Run ".$job->getIdent) if $Debug;
-  $FM->start($job->getIdent()) && return;  # start instance
+sub runjob($) {
+  my $jobfile = shift;
+
+  my $job = new Job(jobfile => $jobfile);
+  unlink($jobfile);
+
+  my $ident = $job->getIdent;
+  my $workdir = $job->getWorkdir;
+  my $statusfile = "$workdir/status.json";
+  my $lockfd = lock($statusfile);
+  my $status = statusdb($statusfile, $job->{'hour'});
+  if ($status eq "running" || $status eq "processed") {
+    unlock($lockfd);
+    loginfo("Duplicate job $ident");
+    return;
+  } else {
+    statusdb($statusfile, $job->{'hour'}, "running");
+    unlock($lockfd);
+  }
+  loginfo("Run $ident");
+
+  $Running{$ident} = $job;
+  $FM->start($ident) && return;  # start instance
   setprogram("job");
-  chdir($job->getWorkdir());
+  chdir($workdir);
   $job->process();
   $FM->finish(0);		# exit this instance
+}
+
+#####################################
+# Look for forced incomplete days and submit them
+#
+sub scan_for_forced_incompletes() {
+  sub dirscan($) {
+    my $dir = shift;
+    opendir(my $dh, $dir);
+    my @dirs = grep { index($_,'.') != 0 && -d "$dir/$_" } readdir($dh);
+    closedir($dh);
+    return @dirs;
+  }
+  foreach my $site (dirscan($WORKDIR)) {
+    foreach my $year (dirscan("$WORKDIR/$site")) {
+      foreach my $doy (dirscan("$WORKDIR/$site/$year")) {
+        my $workdir = "$WORKDIR/$site/$year/$doy";
+        my $statusfile = "$workdir/status.json";
+        next unless -f "$workdir/force-complete" && -f $statusfile;
+        my $lock = lock($statusfile);
+        my $sta = statusdb($statusfile);
+        my $interval;
+        foreach my $hour (keys %$sta) {
+          next unless $sta->{$hour} eq "processed";
+          my $rs = RinsetSet(rsfile => "$workdir/rs.$hour.json");
+          $interval = $rs->{'interval'};
+          last if defined $interval;
+        }
+        if (defined $interval) {
+          my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $interval);
+          $dayjob->submitjob('hour2daily');
+          statusdb($statusfile, '0', "queued");
+        } else {
+          logerror("Cannot force completion of $site-$year-$doy. No proccessed hours.");
+        }
+        unlock($lock);
+      }
+    }
+  }
+}
+
+#####################################
+# Inotify2 callback
+# Called for each file trigger
+#
+sub inotify_callback() {
+  my $event = shift;
+  alarm 0;
+  runjob($event->fullname);
+  alarm $PollInterval;
 }
 
 ########################################################################################################
@@ -124,89 +193,47 @@ my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : 4);
 setprogram($0);
 $0 = basename($0)." ".join(' ',@ARGV);
 
-# Handle HUP, INT and TERM signal niecly
-my $sig_received = "";
-sub signal_handler {
-  $sig_received = shift;
-  loginfo("$sig_received signal received. Exiting...");
-}
 local $SIG{HUP} = 'IGNORE';
-local $SIG{INT} = \&signal_handler;
-local $SIG{TERM} = \&signal_handler;
-local $SIG{ALRM} = sub { };
 
 select(STDERR); $| = 1;         # Unbuffered output
 select(STDOUT); $| = 1;         # Unbuffered output
 
 # Initialize ForkManager
-my $FM = new Parallel::ForkManager($Ninstances);
+$FM = new Parallel::ForkManager($Ninstances);
 $FM->run_on_start(\&onstart);
 $FM->run_on_finish(\&onfinish);
 
+# Run jobs in queue already
+runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
+
 # Setup queue event handler
 my $inotify = new Linux::Inotify2;
-my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
+my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
 
 # main loop
-while ($sig_received eq "") {
+while (1) {
   # ForkManager needs reaping of finished childs to force callback
   $FM->reap_finished_children;
 
-  # Read job directory
-  my @joblist = dirlist($JOBQUEUE);
-
-  # Enqueue all jobs in job directory
-  foreach my $jobfile (@joblist) {
-    my $job = new Job(jobfile => "$JOBQUEUE/$jobfile");
-    unlink("$JOBQUEUE/$jobfile");
-    next unless defined $job && defined $job->{'site'};
-    my $ident = $job->getIdent;
-    next if exists $Running{$ident} || exists $Jobs{$ident};
-    $Jobs{$job->getIdent} = $job;
-  }
-
-  # If no files in job directory, enter wait for new files
-  if (scalar(keys %Jobs) == 0) {
-    # queue empty, wait for a new job
-    alarm 11;
-    my @e = $inotify->read;
+  eval {
+    local $SIG{ALRM} = sub { die("jobenginealarm"); };
+    local $SIG{INT} = sub { die("interrupted"); };
+    local $SIG{TERM} = sub { die("terminated"); };
+    alarm $PollInterval;
+    $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
-    foreach my $jobfile (@e) {
-      next unless -f $jobfile->fullname;
-      my $job = new Job(jobfile => $jobfile->fullname);
-      unlink($jobfile->fullname);
-      $Jobs{$job->getIdent} = $job;
+  };
+  if ($@) {
+    my $msg = $@;
+    if ($msg =~ /^jobenginealarm/) {
+      runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
+      scan_for_forced_incompletes();
+    } elsif ($msg =~ /^(\w+)/) {
+      loginfo($1);
+      last;
     }
-  }
-
-  # Process all jobs in job queue
-  # Lock status.json file, as many processes access it.
-  foreach my $ident (keys %Jobs) {
-    last if $sig_received;
-    my $job = $Jobs{$ident};
-    my $workdir = $job->getWorkdir;
-    my $statusfile = "$workdir/status.json";
-    my $lockfd = lock($statusfile);
-    my $status = statusdb($statusfile, $job->{'hour'});
-    if ($status eq "running" || $status eq "processed") {
-      unlock($lockfd);
-      loginfo("Duplicate job $ident");
-    } else {
-      statusdb($statusfile, $job->{'hour'}, "running");
-      unlock($lockfd);
-      runjob($FM, $job);
-      $Running{$ident} = $job;
-    }
-    delete $Jobs{$ident};
   }
 }
 
 $watcher->cancel;
 $FM->wait_all_children;
-
-# Write unfinished jobs back into queue
-foreach my $job (keys %Jobs) {
-  $job->submitjob($job->{'source'});
-  loginfo("Unfinished job ".$job->getIdent()." resubmitted");
-}
-
