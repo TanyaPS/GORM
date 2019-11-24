@@ -45,3 +45,5 @@ inc/
 .subversion
 .mysql*
 .vim*
+v5old/
+old/
