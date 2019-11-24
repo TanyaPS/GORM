@@ -31,7 +31,7 @@ sub load_sites() {
   # We only use the short version of sitename here.
   my $sql = $DB->{'DBH'}->prepare(q{
 	select	site, freq, obsint
-	from	siteconfig
+	from	locations
   });
   my $aref = $DB->{'DBH'}->selectall_arrayref($sql, { Slice => {} });
   die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;

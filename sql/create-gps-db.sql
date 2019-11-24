@@ -1,4 +1,4 @@
--- Generation Time: Nov 24, 2019 at 03:36 PM
+-- Generation Time: Nov 24, 2019 at 09:53 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -87,8 +87,10 @@ CREATE TABLE IF NOT EXISTS `localdirs` (
 CREATE TABLE IF NOT EXISTS `locations` (
   `id` int(11) NOT NULL,
   `site` varchar(9) COLLATE utf8_unicode_ci NOT NULL,
+  `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'H',
+  `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
   `markernumber` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `markertype` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `markertype` enum('GEODETIC','NON_GEODETIC','NON_PHYSICAL','SPACEBORNE','GROUND_CRAFT','WATER_CRAFT','AIRBORNE','FIXED_BUOY','FLOATING_BUOY','FLOATING_ICE','GLACIER','BALLISTIC','ANIMAL','HUMAN') COLLATE utf8_unicode_ci DEFAULT 'GEODETIC',
   `position` varchar(40) COLLATE utf8_unicode_ci NOT NULL,
   `observer` varchar(20) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
   `agency` varchar(24) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE'
@@ -129,21 +131,6 @@ CREATE TABLE IF NOT EXISTS `rinexdist` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `siteconfig`
---
-
-CREATE TABLE IF NOT EXISTS `siteconfig` (
-  `id` int(11) NOT NULL,
-  `site` varchar(9) COLLATE utf8_unicode_ci NOT NULL,
-  `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'D',
-  `obsint` tinyint(6) unsigned NOT NULL DEFAULT '30',
-  `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `active` tinyint(1) NOT NULL DEFAULT '1'
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
-
--- --------------------------------------------------------
-
---
 -- Table structure for table `uploaddest`
 --
 
@@ -169,7 +156,8 @@ CREATE TABLE IF NOT EXISTS `uploaddest` (
 -- Indexes for table `antennas`
 --
 ALTER TABLE `antennas`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `antennas_site` (`id`);
 
 --
 -- Indexes for table `datagaps`
@@ -203,7 +191,8 @@ ALTER TABLE `locations`
 -- Indexes for table `receivers`
 --
 ALTER TABLE `receivers`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `receivers_site` (`id`);
 
 --
 -- Indexes for table `rinexdist`
@@ -211,12 +200,6 @@ ALTER TABLE `receivers`
 ALTER TABLE `rinexdist`
   ADD PRIMARY KEY (`id`),
   ADD KEY `rinexdist_site` (`site`,`freq`);
-
---
--- Indexes for table `siteconfig`
---
-ALTER TABLE `siteconfig`
-  ADD PRIMARY KEY (`id`);
 
 --
 -- Indexes for table `uploaddest`
@@ -244,6 +227,11 @@ ALTER TABLE `datagaps`
 ALTER TABLE `gpssums`
   MODIFY `id` int(10) unsigned NOT NULL AUTO_INCREMENT;
 --
+-- AUTO_INCREMENT for table `locations`
+--
+ALTER TABLE `locations`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+--
 -- AUTO_INCREMENT for table `receivers`
 --
 ALTER TABLE `receivers`
@@ -254,11 +242,6 @@ ALTER TABLE `receivers`
 ALTER TABLE `rinexdist`
   MODIFY `id` int(10) unsigned NOT NULL AUTO_INCREMENT;
 --
--- AUTO_INCREMENT for table `siteconfig`
---
-ALTER TABLE `siteconfig`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
---
 -- AUTO_INCREMENT for table `uploaddest`
 --
 ALTER TABLE `uploaddest`
@@ -266,3 +249,4 @@ ALTER TABLE `uploaddest`
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+

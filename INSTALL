@@ -74,7 +74,6 @@ mariadb:
 		| antennas      |
 		| locations     |
 		  .....
-		| siteconfig    |
 		| uploaddest    |
 		+---------------+
 
