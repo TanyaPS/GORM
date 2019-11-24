@@ -1,4 +1,4 @@
--- Generation Time: Nov 24, 2019 at 09:53 PM
+-- Generation Time: Nov 24, 2019 at 10:16 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -85,7 +85,6 @@ CREATE TABLE IF NOT EXISTS `localdirs` (
 --
 
 CREATE TABLE IF NOT EXISTS `locations` (
-  `id` int(11) NOT NULL,
   `site` varchar(9) COLLATE utf8_unicode_ci NOT NULL,
   `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'H',
   `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
@@ -157,7 +156,7 @@ CREATE TABLE IF NOT EXISTS `uploaddest` (
 --
 ALTER TABLE `antennas`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `antennas_site` (`id`);
+  ADD KEY `antennas_site` (`site`) USING BTREE;
 
 --
 -- Indexes for table `datagaps`
@@ -185,14 +184,14 @@ ALTER TABLE `localdirs`
 -- Indexes for table `locations`
 --
 ALTER TABLE `locations`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`site`);
 
 --
 -- Indexes for table `receivers`
 --
 ALTER TABLE `receivers`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `receivers_site` (`id`);
+  ADD KEY `receivers_site` (`site`) USING BTREE;
 
 --
 -- Indexes for table `rinexdist`
@@ -227,11 +226,6 @@ ALTER TABLE `datagaps`
 ALTER TABLE `gpssums`
   MODIFY `id` int(10) unsigned NOT NULL AUTO_INCREMENT;
 --
--- AUTO_INCREMENT for table `locations`
---
-ALTER TABLE `locations`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
---
 -- AUTO_INCREMENT for table `receivers`
 --
 ALTER TABLE `receivers`
@@ -249,4 +243,3 @@ ALTER TABLE `uploaddest`
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
-
