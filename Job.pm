@@ -11,6 +11,7 @@ package Job;
 
 use strict;
 use warnings;
+use Data::Dumper;
 use Time::Local;
 use JSON;
 use Fcntl qw(:DEFAULT :flock);
@@ -120,6 +121,7 @@ sub _splice($$$) {
     system($bnccmd);
   }
   $rsday->{'MO.'.$interval} = $outfile;
+  return $rsday;
 }
 
 ###################################################################################
@@ -261,7 +263,7 @@ sub gapanalyze($) {
 
   my $ifd;
   if (!open($ifd, '<', $obsfile)) {
-    logerror("gapanalyze: open error: $!");
+    logerror("gapanalyze: open $obsfile error: $!");
     return 0;
   }
 
@@ -531,7 +533,9 @@ sub process() {
   $self->createWantedIntervals($rs);
 
   # Find number of data gaps in source
-  my $ngaps = $self->gapanalyze($rs->{'MO.'.$self->{'interval'}});
+  my $interval = $self->{'interval'};
+  $interval = 30 unless defined $rs->{'MO.'.$interval};		# we may not have created 1s file
+  my $ngaps = $self->gapanalyze($rs->{'MO.'.$interval});
 
   # QC on 30s file
   my $sumfile = $rs->getFilenamePrefix().'.sum';
@@ -631,15 +635,22 @@ sub process() {
 
   }
 
+  delete $self->{'DB'};
   unlink("$hour.lock");
+
+  if (-f 'debug') {
+    open(my $fd, ">jobdump.$hour");
+    print $fd Dumper $self;
+    close($fd);
+  }
+
+  $rs->{'processed'} = 1;
+  $rs->store($self->{'rsfile'});
 
   if ($hour eq '0' && !-f 'debug') {
     # This is a dayfile and is now processed. We are done and delete the workdir.
     chdir("..");
     system("rm -rf ".$self->getWorkdir);
-  } else {
-    $rs->{'processed'} = 1;
-    $rs->store($self->{rsfile});
   }
 
   return 0;
