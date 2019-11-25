@@ -258,7 +258,7 @@ sub showdoy($$$$$) {
 
   my $aref = $dbh->selectall_arrayref(q{
       select s.site, s.ts as sitets, unix_timestamp(now())-unix_timestamp(s.ts) as deltats,
-             g.year, g.doy, g.hour, round(g.quality,0) quality, g.ngaps, g.ts
+             g.year, g.doy, g.hour, g.quality, g.ngaps, g.ts
       from   locations s, gpssums g
       where  s.freq = 'H'
         and  s.active = 1
@@ -375,12 +375,12 @@ sub show24h($$) {
   my ($year, $mon, $dd, $doy) = Day2Date($dayReqd);
 
   my $aref = $dbh->selectall_arrayref(q{
-      select g.site, s.gpstype, s.ts as sitets, unix_timestamp(now())-unix_timestamp(s.ts) as deltats,
-             g.year, g.doy, g.hour, g.jday, g.quality, g.have, g.expt, g.ngaps, g.oslps, g.ts
-      from   siteconfig s, gpssums g
-      where  s.active = 1
+      select g.site, s.ts as sitets, unix_timestamp(now())-unix_timestamp(s.ts) as deltats,
+             g.year, g.doy, g.hour, g.jday, g.quality, g.ngaps, g.ts
+      from   locations s, gpssums g
+      where  g.site = s.site
+        and  s.active = 1
         and  g.hour = '0'
-        and  g.site = s.site
         and  g.jday >= ?
         and  g.jday <= ?
   }, { Slice => {} }, $dayReqd-25, $dayReqd);
@@ -388,11 +388,9 @@ sub show24h($$) {
   my %H = ();
   my (%sites1, %sites2, %sites3, %sites4);
   foreach my $r (@$aref) {
-    my ($site, $gpstype) = ($r->{'site'}, $r->{'gpstype'});
-    if ($gpstype eq "FEH")        { $sites2{$site} = 1; }
-    elsif ($gpstype eq "RNX-DGZ") { $sites3{$site} = 1; }
-    elsif ($gpstype eq "RNX-OZ")  { $sites4{$site} = 1; }
-    else                          { $sites1{$site} = 1; }
+    my $site = $r->{'site'};
+    if ($site =~ /^TA\d\d/) { $sites2{$site} = 1; }	# Group by site importance in %sites[1-4]
+    else                    { $sites1{$site} = 1 }
     if (!exists($H{$site}{'_row'})) {
       $H{$site}{'_row'} = new Cell(txt => $site, ts => $r->{'sitets'}, deltats => $r->{'deltats'},
                                    url => "?fnc=24h\&site=$site\&doy=$doy");
@@ -455,7 +453,7 @@ sub showsite_1h($$$) {
   my $doyReqd = $doy;
 
   my $aref = $dbh->selectall_arrayref(q{
-	select	site, year, doy, jday, hour, round(quality,0) quality, ngaps, ts
+	select	site, year, doy, jday, hour, quality, ngaps, ts
 	from	gpssums
 	where	site = ?
 	  and	jday >= ?
@@ -522,7 +520,7 @@ sub showsite_24h($$$) {
   my $doyReqd = $doy;
 
   my $aref = $dbh->selectall_arrayref(q{
-	select	site, year, doy, jday, hour, quality, have, expt, ngaps, oslps, ts
+	select	site, year, doy, jday, hour, quality, ngaps, ts
 	from	gpssums
 	where	site = ?
 	  and	jday > ?

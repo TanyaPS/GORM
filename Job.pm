@@ -13,6 +13,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 use Time::Local;
+use Math::Round;
 use JSON;
 use Fcntl qw(:DEFAULT :flock);
 use BaseConfig;
@@ -498,7 +499,7 @@ sub _getQC($) {
     $qc += $_ foreach @qcs;
     $qc /= scalar(@qcs);
   }
-  return $qc;
+  return round($qc);
 }
 
 ###################################################################################

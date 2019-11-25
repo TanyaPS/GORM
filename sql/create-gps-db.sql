@@ -1,4 +1,4 @@
--- Generation Time: Nov 25, 2019 at 07:48 PM
+-- Generation Time: Nov 25, 2019 at 08:31 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS `gpssums` (
   `doy` smallint(3) NOT NULL,
   `hour` char(1) COLLATE utf8_unicode_ci NOT NULL,
   `jday` mediumint(7) unsigned NOT NULL DEFAULT '0',
-  `quality` decimal(6,2) unsigned NOT NULL DEFAULT '0.00',
+  `quality` tinyint(3) unsigned NOT NULL DEFAULT '0',
   `ngaps` mediumint(5) unsigned NOT NULL DEFAULT '0',
   `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -93,8 +93,8 @@ CREATE TABLE IF NOT EXISTS `locations` (
   `position` varchar(40) COLLATE utf8_unicode_ci NOT NULL,
   `observer` varchar(20) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
   `agency` varchar(24) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
-  `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  `active` tinyint(1) NOT NULL DEFAULT '1'
+  `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `active` tinyint(1) unsigned NOT NULL DEFAULT '1'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 -- --------------------------------------------------------
