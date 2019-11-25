@@ -14,7 +14,6 @@ use Getopt::Std;
 use Net::FTP;
 use Net::SFTP::Foreign;
 use Linux::Inotify2;
-use lib '/home/gpsuser';
 use BaseConfig;
 use Utils;
 use Logger;
@@ -115,7 +114,7 @@ sub ftpuploader($) {
           $ftp->binary();
         }
         elsif ($protocol eq 'sftp') {
-          loginfo("Login as $user using privatekey $privatekey");
+          loginfo("Login as $user using privatekey $privatekey") if $Debug;
           $ftp = Net::SFTP::Foreign->new($host, user => $user, key_path => $privatekey);
           if ($ftp->error) {
             logerror("Cannot login at $host with user $user: ".$ftp->error);
@@ -260,11 +259,12 @@ local $SIG{INT} = sub { loginfo("SIGINT");   $sig_received = 1; };
 local $SIG{HUP} = sub { loginfo("SIGHUP"); };
 local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
 
+reload();
 loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
 
 while (!$sig_received) {
+  sleep(300);  # check for config change every 5min or if HUP'ed
   reload();
-  sleep(1800);  # check for config change every half hour or if HUP'ed
 }
 
 kill(15, $_) foreach values %PIDS;	# Kill all childs

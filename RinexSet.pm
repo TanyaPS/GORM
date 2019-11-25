@@ -8,7 +8,6 @@ package RinexSet;
 
 use JSON;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
-use lib '/home/gpsuser/';
 use BaseConfig;
 use Utils;
 use Logger;

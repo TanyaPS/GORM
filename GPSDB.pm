@@ -11,7 +11,6 @@ use warnings;
 use DBI;
 use IO::Compress::Gzip qw(gzip :level);
 use Errno qw(EINTR);
-use lib '/home/gpsuser';
 use BaseConfig;
 use Logger;
 

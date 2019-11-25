@@ -36,22 +36,23 @@ postfix:
 	mydomain
 	relayhost
 
-users:
-	groupadd gnss
-	useradd -d /home/gpsuser -G gnss gpsuser
-	useradd -d /data/ftp gnss3
-	chgrp gnss /data/ftp
-	chmod 775 /data/ftp
-
 mount datastore:
 	mkdir /data
 	Mount data disk on /data
+
+users:
+	groupadd gnss
+	groupadd gpsuser
+	useradd -d /home/gpsuser -g gpsuser -G gnss gpsuser
+	useradd -d /data/ftp -p gnss3 gnss3
+	chown gnss3:gnss /data/ftp
+	chmod 775 /data/ftp
 
 mariadb:
 	Create /data/mysql
 		mkdir /data/mysql
 		chown mysql:mysql /data/mysql
-		chcon -R -u system_u -r object_r -t mysqld_db_t /data/mysql
+		chcon -u system_u -r object_r -t mysqld_db_t /data/mysql
 	Modify /etc/my.cnf.d/server.cnf
 		Add "datadir = /data/mysql" in [server] section
 	systemctl enable mariadb
@@ -63,7 +64,7 @@ mariadb:
 		create user gpsuser@localhost identified by 'gpsuser';
 		grant all privileges on gps.* to gpsuser@localhost;
 	Check local access with:
-		# mysql -u gpsuser -pgpsuser gps     (should be able to login)
+		# mysql -ugpsuser -pgpsuser gps     (should be able to login)
 	Run SQL script
 		\. /home/gpsuser/sql/create-gps-db.sql
 		show tables;
