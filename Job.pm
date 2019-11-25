@@ -567,6 +567,12 @@ sub process() {
 	values (?, ?, ?, ?, ?, ?, ?)
   }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $qc, $ngaps);
 
+  $dbh->do(q{
+	update	locations
+	set	ts = current_timestamp()
+	where	site = ?
+  }, undef, $site);
+
   #################################
   # Distribute
   #
