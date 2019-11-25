@@ -47,3 +47,6 @@ inc/
 .vim*
 v5old/
 old/
+conf/setup.sh
+doc/
+software/
