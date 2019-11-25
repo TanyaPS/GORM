@@ -1,4 +1,4 @@
--- Generation Time: Nov 24, 2019 at 10:17 PM
+-- Generation Time: Nov 25, 2019 at 07:50 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -14,6 +14,22 @@ SET time_zone = "+00:00";
 --
 -- Database: `gps`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `antennas`
+--
+
+CREATE TABLE IF NOT EXISTS `antennas` (
+  `id` int(11) NOT NULL,
+  `site` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `anttype` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `antsn` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `antdelta` varchar(42) COLLATE utf8_unicode_ci NOT NULL DEFAULT '0,0,0',
+  `startdate` datetime NOT NULL,
+  `enddate` datetime DEFAULT NULL
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 --
 -- Dumping data for table `antennas`
@@ -46,25 +62,60 @@ INSERT INTO `antennas` (`id`, `site`, `anttype`, `antsn`, `antdelta`, `startdate
 (24, 'SKEJ00DNK', 'LEIAR20,LEIM', '21102016', '0.1714,0,0', '2019-01-31 00:00:00', NULL),
 (25, 'SMI200DNK', 'LEIAR25.R4,LEIT', '10361018', '0,0,0', '2011-06-27 00:00:00', NULL);
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `locations`
+--
+
+CREATE TABLE IF NOT EXISTS `locations` (
+  `site` varchar(9) COLLATE utf8_unicode_ci NOT NULL,
+  `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'H',
+  `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
+  `markernumber` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `markertype` enum('GEODETIC','NON_GEODETIC','NON_PHYSICAL','SPACEBORNE','GROUND_CRAFT','WATER_CRAFT','AIRBORNE','FIXED_BUOY','FLOATING_BUOY','FLOATING_ICE','GLACIER','BALLISTIC','ANIMAL','HUMAN') COLLATE utf8_unicode_ci DEFAULT 'GEODETIC',
+  `position` varchar(40) COLLATE utf8_unicode_ci NOT NULL,
+  `observer` varchar(20) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
+  `agency` varchar(24) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
+  `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `active` tinyint(1) NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
 --
 -- Dumping data for table `locations`
 --
 
-INSERT INTO `locations` (`site`, `freq`, `obsint`, `markernumber`, `markertype`, `position`, `observer`, `agency`) VALUES
-('ARGI00FRO', 'H', 1, '10117M002', 'GEODETIC', '2981489.90,-354651.39,5608474.89', 'SDFE', 'SDFE'),
-('BUDD00DNK', 'H', 1, '10101S001', 'GEODETIC', '3513649.6780,778954.8840,5248201.7020', 'SDFE', 'SDFE'),
-('ESBC00DNK', 'H', 1, '10118M001', 'GEODETIC', '3582104.9927,532589.9611,5232754.9972', 'SDFE', 'SDFE'),
-('ESBH00DNK', 'H', 1, '10115M002', 'GEODETIC', '3585278,9871,531971,1748,5230646,5204', 'SDFE', 'SDFE'),
-('FER500DNK', 'H', 1, '10125M001', 'GEODETIC', '3491111.736,497994.648,5296842.694', 'SDFE', 'SDFE'),
-('FYHA00DNK', 'H', 1, '10125M001', 'GEODETIC', '3491111.736,497994.648,5296842.694', 'SDFE', 'SDFE'),
-('GESR00DNK', 'H', 1, '10116M002', 'GEODETIC', '3625387.3007,765504.1576,5174102.6952', 'SDFE', 'SDFE'),
-('HABY00DNK', 'H', 1, '10123M001', 'GEODETIC', '3507447.274,704378.957,5262740.112', 'SDFE', 'SDFE'),
-('HIRS00DNK', 'H', 1, '10106M002', 'GEODETIC', '3374903.0200,593115.5935,5361509.4889', 'SDFE', 'SDFE'),
-('SKEJ00DNK', 'H', 1, '10128M001', 'GEODETIC', '3501565,628758,5276185', 'SDFE', 'SDFE'),
-('SMI200DNK', 'H', 1, '10114M002', 'GEODETIC', '3557905.801,599174.330,5242071.404', 'SDFE', 'SDFE'),
-('SUL500DNK', 'H', 1, '10113M002', 'GEODETIC', '3446402.8218,0591713.3327,5316376.7351', 'SDFE', 'SDFE'),
-('TA0200DNK', 'H', 1, NULL, 'GEODETIC', '3500379.0234,641356.0851,5275393.0898', 'SDFE', 'SDFE'),
-('TEJH00DNK', 'H', 1, '10124M001', 'GEODETIC', '3522395.5281,933244.4797,5217231.2731', 'SDFE', 'SDFE');
+INSERT INTO `locations` (`site`, `freq`, `obsint`, `markernumber`, `markertype`, `position`, `observer`, `agency`, `ts`, `active`) VALUES
+('ARGI00FRO', 'H', 1, '10117M002', 'GEODETIC', '2981489.90,-354651.39,5608474.89', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('BUDD00DNK', 'H', 1, '10101S001', 'GEODETIC', '3513649.6780,778954.8840,5248201.7020', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('ESBC00DNK', 'H', 1, '10118M001', 'GEODETIC', '3582104.9927,532589.9611,5232754.9972', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('ESBH00DNK', 'H', 1, '10115M002', 'GEODETIC', '3585278,9871,531971,1748,5230646,5204', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('FER500DNK', 'H', 1, '10125M001', 'GEODETIC', '3491111.736,497994.648,5296842.694', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('FYHA00DNK', 'H', 1, '10125M001', 'GEODETIC', '3491111.736,497994.648,5296842.694', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('GESR00DNK', 'H', 1, '10116M002', 'GEODETIC', '3625387.3007,765504.1576,5174102.6952', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('HABY00DNK', 'H', 1, '10123M001', 'GEODETIC', '3507447.274,704378.957,5262740.112', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('HIRS00DNK', 'H', 1, '10106M002', 'GEODETIC', '3374903.0200,593115.5935,5361509.4889', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('SKEJ00DNK', 'H', 1, '10128M001', 'GEODETIC', '3501565,628758,5276185', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('SMI200DNK', 'H', 1, '10114M002', 'GEODETIC', '3557905.801,599174.330,5242071.404', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('SUL500DNK', 'H', 1, '10113M002', 'GEODETIC', '3446402.8218,0591713.3327,5316376.7351', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('TA0200DNK', 'H', 1, NULL, 'GEODETIC', '3500379.0234,641356.0851,5275393.0898', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1),
+('TEJH00DNK', 'H', 1, '10124M001', 'GEODETIC', '3522395.5281,933244.4797,5217231.2731', 'SDFE', 'SDFE', '2019-11-25 18:52:22', 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `receivers`
+--
+
+CREATE TABLE IF NOT EXISTS `receivers` (
+  `id` int(11) NOT NULL,
+  `site` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `recsn` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `rectype` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `firmware` varchar(24) COLLATE utf8_unicode_ci NOT NULL,
+  `startdate` datetime NOT NULL,
+  `enddate` datetime DEFAULT NULL
+) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 --
 -- Dumping data for table `receivers`
@@ -141,6 +192,44 @@ INSERT INTO `receivers` (`id`, `site`, `recsn`, `rectype`, `firmware`, `startdat
 (68, 'SMI200DNK', '5238K52581', 'TRIMBLE NETR9', '5.33', '2018-04-03 08:20:00', '2019-08-08 14:00:00'),
 (69, 'SMI200DNK', '5238K52581', 'TRIMBLE NETR9', '5.42', '2019-08-08 14:00:00', NULL);
 
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `antennas`
+--
+ALTER TABLE `antennas`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `antennas_site` (`site`) USING BTREE;
+
+--
+-- Indexes for table `locations`
+--
+ALTER TABLE `locations`
+  ADD PRIMARY KEY (`site`);
+
+--
+-- Indexes for table `receivers`
+--
+ALTER TABLE `receivers`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `receivers_site` (`site`) USING BTREE;
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `antennas`
+--
+ALTER TABLE `antennas`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT,AUTO_INCREMENT=26;
+--
+-- AUTO_INCREMENT for table `receivers`
+--
+ALTER TABLE `receivers`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT,AUTO_INCREMENT=70;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
