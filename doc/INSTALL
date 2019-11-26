@@ -79,17 +79,16 @@ mariadb:
 		+---------------+
 
 firewall:
-	CentOS 7/8 default firewall is firewall-cmd
+	This system uses iptables as firewall. By default firewalld is installed and enabled
+	and needs to be disabled:
+		systemctl stop firewalld
+		systemctl disable firewalld
 
-	Initial install: Open firewall ports
-		firewall-cmd --permanent --add-service=ftp --add-service=http --add-service=https
-		firewall-cmd --permanent --add-source=127.0.0./8
-		firewall-cmd --permanent --add-source=x.x.x.x/x   (where x.x.x.x/x is your local nets)
-		firewall-cmd --reload
-
-	When adding allowed sources
-		firewall-cmd --permanent --add-source=1.2.3.4/32
-		firewall-cmd --reload
+	If iptables.cf does not exist, create one:
+		cd ~gpsuser
+		iptables-save >iptables.cf
+	Then add/edit the rules and install using:
+		util/fw commit		(reads, load and installs ~gpsuser/iptables.cf)
 
 services:
 	git clone scripts from https://github.com/Kortforsyningen/GORM.git
