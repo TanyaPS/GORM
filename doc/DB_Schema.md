@@ -9,7 +9,8 @@ User: gpsuser/gpsuser
 ### id
 Internal id. Will automatically be filled if left blank. Must be unique.
 ### site
-9 letter sitename. Ex BUDD00DNK, ARGI00FRO, ...
+9 letter uppercase sitename. Ex BUDD00DNK, ARGI00FRO, ...
+This is the primary key throughout the intire system.
 ### year
 4 digit year of observation.
 ### doy
@@ -22,6 +23,7 @@ Julian day.
 
 ## antennas
 This contains all antennas for all stations.
+Overlapping start- and enddates will cause errors.
 ### id, site
 See recurring fields.
 ### anttype
@@ -45,6 +47,7 @@ Records of missing observations (gaps) in observation files. **No manual editing
 Maintained by Job.pm.
 ### id, site, year, doy, hour, jday
 See recurring fields.
+site+year+doy+hour must be unique.
 ### gapno
 Gap sequence number within the hour/day.
 ### gapstart
@@ -57,6 +60,8 @@ QC results for each observation file.
 Also used for checking if the file is processed already. If reprocessing needed, then
 the records for that particular day and hours must be deleted before reprocessing.
 ### id, site, year, doy, hour, jday
+See recurring fields.
+site+year+doy+hour must be unique.
 ### quality
 The QC result.
 ### ngaps
@@ -68,7 +73,7 @@ on reporting in.
 ## localdirs
 The name and physical location of an directory containing files to be uploaded.
 ### name
-The label name for this directory.
+The label name for this directory. This is a unique key.
 This is a foreign key in _uploaddest_ (localdir) and _rinexdist_ (localdir).
 ### path
 The full path for the directory.
@@ -76,7 +81,7 @@ The full path for the directory.
 ## locations
 All the sites.
 ### site
-See recurring fields.
+See recurring fields. This is a unique key.
 ### freq
 How often the site sends data. Either _H_ (hourly) or _D_ (daily).
 ### obsint
@@ -98,6 +103,7 @@ Date and time of last received data from that site.
 
 ## receivers
 Current and previous receivers.
+Overlapping start- and enddates will cause errors.
 ### id, site
 See recurrent fields.
 ### recsn
@@ -152,13 +158,12 @@ Full pathname for the SSH private key to use if using _sftp_.
 The name of the local directory (localdirs.name).
 ### remotedir
 Path on the remote server to store files in. Following variables available:
+- %site%: 9-letter sitename.
+- %site4%: 4-letter sitename.
 - %year%: Will be replaced with the file year.
 - %doy%: Day of year of the file.
-- %site%: Sitename
-- %site4%: 4-letter sitename.
 - %hour%: 1 letter hour (a-x, 0). 0 is a dayfile.
 - %hh24%: 2 letter hour (00-23, 24). 24 is is a dayfile.
-- %interval%: Interval in seconds. Usually 1 or 30.
-Variables can only be used on files named ssss##ccc_R_yyyydddhhss_01f_iiS* (ex: TEJH00DNK_R_20171890000_01D_30S_MO.crx.gz).
+Variables can only be used on files named ssss##ccc_R_yyyydddhh* (ex: TEJH00DNK_R_20171890000_01D_30S_MO.crx.gz).
 ### active
 Wether or not thils destination is active. Either _0_ (inactive) or _1_ (active).

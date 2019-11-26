@@ -132,8 +132,8 @@ sub ftpuploader($) {
       my $destpath = $remotedir;
       if ($destpath =~ /%/) {
         #TEJH00DNK_R_20171890000_01D_30S_MO.rnx
-        if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})[0-9]{2}_[0-9]{2}[DH]_([0-9]{2})S/) {
-          my ($site, $year, $doy, $hh, $interval) = ($1, $2, int($3), int($4), int($5));
+        if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})/) {
+          my ($site, $year, $doy, $hh) = ($1, $2, int($3), int($4));
           my $site4 = substr($site, 0, 4);
           my $hour = hour2letter($hh);
           $destpath =~ s/%site%/$site/g;
@@ -142,7 +142,6 @@ sub ftpuploader($) {
           $destpath =~ s/%doy%/$doy/g;
           $destpath =~ s/%hour%/$hour/g;
           $destpath =~ s/%hh24%/$hh/g;
-          $destpath =~ s/%interval%/$interval/g;
         }
         if ($destpath =~ /%/) {
           logerror("Invalid variable in $fn");
