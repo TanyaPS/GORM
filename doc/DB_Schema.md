@@ -76,7 +76,11 @@ The name and physical location of an directory containing files to be uploaded.
 The label name for this directory. This is a unique key.
 This is a foreign key in _uploaddest_ (localdir) and _rinexdist_ (localdir).
 ### path
-The full path for the directory.
+The full path for the directory. Following variables available:
+- %site%: 9-letter site name.
+- %site4%: 4-letter site name.
+- %year%: 4-digit year.
+- %doy%: Day of year
 
 ## locations
 All the sites.

@@ -621,8 +621,11 @@ sub process() {
     next if (-f "do-not-upload" && $r->{'name'} =~ /^ftp-/);
 
     my $destpath = $r->{'path'};
-    $destpath =~ s/%year/$year/g;
-    $destpath =~ s/%doy/$doy/g;
+    $destpath =~ s/%site%/$site/g;
+    my $site4 = substr($site, 0, 4);
+    $destpath =~ s/%site4%/$site4/g;
+    $destpath =~ s/%year%/$year/g;
+    $destpath =~ s/%doy%/$doy/g;
 
     ######
     # Obs
