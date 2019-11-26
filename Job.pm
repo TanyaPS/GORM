@@ -21,6 +21,7 @@ use Utils;
 use Logger;
 use RinexSet;
 use GPSDB;
+use Data::Dumper;
 
 sub new {
   my $class = shift;
@@ -502,6 +503,28 @@ sub _getQC($) {
   return round($qc);
 }
 
+sub save_originals($) {
+  my ($self, $rs) = @_;
+
+  my $aref = $self->{'DB'}->{'DBH'}->selectrow_arrayref(q{
+	select	count(*)
+	from	rinexdist
+	where	site = ?
+	  and	freq = ?
+	  and	filetype = 'Arc'
+  }, undef, $rs->{'site'}, $rs->{'hour'} eq '0' ? 'D':'H');
+  return if $aref->[0] eq '0';
+
+  my @files = ();
+  push(@files, $rs->{$_}) foreach grep(/^(MO\.\d+|[A-Z]N)$/, keys %$rs);
+  if (scalar(@files) > 0) {
+    my $fn = $rs->getFilenamePrefix;
+    loginfo("Creating $fn.zip");
+    sysrun("zip -9q $fn.zip ".join(' ',@files), { log => 1 });
+    $rs->{'zipfile'} = "$fn.zip";
+  }
+}
+
 ###################################################################################
 # Main processor. This is where the actual processing of RINEX files happen.
 #
@@ -527,6 +550,7 @@ sub process() {
 
   # Patch RINEX header
   if ($self->{'source'} eq 'ftp') {
+    $self->save_originals($rs) unless exists $rs->{'zipfile'};
     $self->rewriteheaders($rs->{'MO.'.$self->{'interval'}});
   }
 

@@ -38,7 +38,7 @@ BEGIN {
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter gm2str
 	basename dirname fileage dirlist
-	loadJSON storeJSON
+	loadJSON storeJSON parseFilename
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
   $DMB = new Date::Manip::Base;
@@ -236,6 +236,7 @@ sub dirlist($) {
 
 
 ##########################################################################################
+# Load a JSON file into a hash reference
 #
 sub loadJSON($) {
   my $file = shift;
@@ -243,15 +244,57 @@ sub loadJSON($) {
   open(my $fh, '<', $file) || return undef;
   my $json = <$fh>;
   close($fh);
-  return undef if length($json) == 0;
+  return undef if !defined $json || length($json) == 0;
   return from_json($json);
 }
 
+
+##########################################################################################
+# Store a hash reference in the named file
+#
 sub storeJSON($$) {
   my ($file, $ref) = @_;
   open(my $fh, '>', $file) || die("cannot create $file: $!");
   print $fh to_json($ref, { utf8 => 1, pretty => 1, canonical => 0 });
   close($fh);
+}
+
+
+##########################################################################################
+# Extract date and time from a filename
+# Returns a hash reference with info or undef if not recognized.
+#
+sub parseFilename($) {
+  my $fn = shift;
+  my ($site, $site4, $year, $yy, $doy, $mm, $dd, $hour, $hh, $mi);
+  study($fn);
+  # Trinzic: ssssyyyymmddhhmiB.zip
+  # Leica:   ssssdddh*.yyo.zip
+  # Septentrio: sssssssss_R_yyyydddhhmi_##H_##S_MO.rnx
+  #             sssssssss_R_yyyydddhhmi_##H_xN.rnx
+  if ($fn =~ /^([a-z0-9]{4})([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})B\.zip$/i) {
+    ($site4, $year, $yy, $mm, $dd, $hh, $hour, $mi) =
+		(uc($1), int($2), year2sy($2), int($3), int($4), int($5), hour2letter($5), int($6));
+    $yy = year2sy($year);
+    $doy = Day_of_Year($year, $mm, $dd);
+  }
+  elsif ($fn =~ /^([a-zA-Z0-9]{4})([0-9]{3})([a-xA-X0]).*\.([0-9]{2})[a-z]\.zip$/i) {
+    ($site4, $doy, $hour, $hh, $yy, $year, $mi) = (uc($1), int($2), $3, letter2hour($3), int($4), sy2year($4), 0);
+    ($year, $mm, $dd) = Doy_to_Date($year, $doy);
+  }
+  elsif ($fn =~ /^([A-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})([0-9]{2})/i) {
+    ($site, $year, $yy, $doy, $hh, $hour, $mi) = (uc($1), int($2), year2sy($2), int($3), int($4), hour2letter($4), int($5));
+    ($year, $mm, $dd) = Doy_to_Date($year, $doy);
+  }
+  return undef if !defined $site && !defined $site4;
+  if (!defined $site) {
+    $site = $site4."00DNK";
+    $site = $site4."00FRO" if $site4 eq 'ARGI';
+  }
+  $site4 = substr($site, 0, 4) if !defined $site4;
+
+  return { site => $site, site4 => $site4, year => $year, doy => $doy, yy => $yy, mm => $mm, dd => $dd,
+           hour => $hour, hh => $hh, mi => $mi };
 }
 
 1;
