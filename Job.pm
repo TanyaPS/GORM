@@ -608,16 +608,14 @@ sub process() {
   #################################
   # Distribute
   #
-  my $sql = $dbh->prepare(q{
+  my $aref = $dbh->selectall_arrayref(q{
         select  r.obsint, r.filetype, ld.path, ld.name
         from    rinexdist r, localdirs ld
         where   r.site = ?
           and   r.freq = ?
           and   r.active = 1
           and   r.localdir = ld.name
-  });
-  $sql->execute($site, $freq);
-  my $aref = $sql->fetchall_arrayref({});
+  }, { Slice => {} }, $site, $freq);
 
   foreach my $r (@$aref) {
     next if (-f "do-not-upload" && $r->{'name'} =~ /^ftp-/);
