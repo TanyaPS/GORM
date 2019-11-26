@@ -503,9 +503,16 @@ sub _getQC($) {
   return round($qc);
 }
 
+###################################################################################
+# Create zipfile in workking directory if distribution requires it and it
+# does not exist already.
+#
 sub save_originals($) {
   my ($self, $rs) = @_;
 
+  return if exists $rs->{'zipfile'};
+
+  # Check if we need a Arc. If not, don't bother creating one.
   my $aref = $self->{'DB'}->{'DBH'}->selectrow_arrayref(q{
 	select	count(*)
 	from	rinexdist
@@ -550,7 +557,7 @@ sub process() {
 
   # Patch RINEX header
   if ($self->{'source'} eq 'ftp') {
-    $self->save_originals($rs) unless exists $rs->{'zipfile'};
+    $self->save_originals($rs);
     $self->rewriteheaders($rs->{'MO.'.$self->{'interval'}});
   }
 

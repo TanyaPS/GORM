@@ -1,4 +1,4 @@
--- Generation Time: Nov 25, 2019 at 08:31 PM
+-- Generation Time: Nov 26, 2019 at 05:00 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -23,7 +23,7 @@ SET time_zone = "+00:00";
 
 CREATE TABLE IF NOT EXISTS `antennas` (
   `id` int(11) NOT NULL,
-  `site` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `site` char(9) COLLATE utf8_unicode_ci NOT NULL,
   `anttype` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
   `antsn` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
   `antdelta` varchar(42) COLLATE utf8_unicode_ci NOT NULL DEFAULT '0,0,0',
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS `localdirs` (
 --
 
 CREATE TABLE IF NOT EXISTS `locations` (
-  `site` varchar(9) COLLATE utf8_unicode_ci NOT NULL,
+  `site` char(9) COLLATE utf8_unicode_ci NOT NULL,
   `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'H',
   `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
   `markernumber` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS `locations` (
 
 CREATE TABLE IF NOT EXISTS `receivers` (
   `id` int(11) NOT NULL,
-  `site` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
+  `site` char(9) COLLATE utf8_unicode_ci NOT NULL,
   `recsn` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
   `rectype` varchar(20) COLLATE utf8_unicode_ci NOT NULL,
   `firmware` varchar(24) COLLATE utf8_unicode_ci NOT NULL,
