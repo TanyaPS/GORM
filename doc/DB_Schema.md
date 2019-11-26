@@ -5,52 +5,73 @@ Database variant: MariaDB
 Database name: gps
 User: gpsuser/gpsuser
 
-## Tables
-
-### antennas
+## antennas
 This contains all antennas for all stations.
-#### id
+### id
 Internal id. Will automatically be filled if left blank. Must be unique.
-#### site
+### site
 9 letter sitename. Ex BUDD00DNK, ARGI00FRO, ...
-#### anttype
+### anttype
 Antenna product name. Ex "LEIAT504GG,LEIS".
 The comma in the name will be replaced with blanks so the left word is left justified
 and the right word is right justified in a 20ch value. Ex
 LEIAT504GG,LEIS -> LEIAT504GG     LEIS
-#### antsn
+### antsn
 Antenna serial number.
-#### antdelta
+### antdelta
 Antenna height, east and north eccentricity seperated by commas. Ex 0.244,0,0
-#### startdate
+### startdate
 The date and time of start of usage. Should match the previous enddate.
 Ex: 2017-09-16 07:00:00
-#### enddate
+### enddate
 The date and time of end of usage or NULL if still in use.
 Ex: 2017-09-16 07:00:00
 
-### datagaps
+## datagaps
 Records of missing observations (gaps) in observation files. **No manual editing needed.**
 Maintained by Job.pm.
-#### id
+### id
 Internal id. Will automatically be filled if left blank. Must be unique.
-#### site
+### site
 9 letter sitename. Ex BUDD00DNK, ARGI00FRO, ...
-#### year
+### year
 4 digit year of observation.
-#### doy
+### doy
 Day of year
-#### hour
+### hour
 Letter representation of the observation hour.
 'a' is UTC hour 0, 'x' is UTC hour 23. '0' is the whole day.
-#### jday
+### jday
 Julian day.
-#### gapno
+### gapno
 Gap sequence number within the hour/day.
-#### gapstart
+### gapstart
 Date and time of start of the gap.
-#### gapend
+### gapend
 Date and time of end of the gap.
 
-### gpssums
+## gpssums
+QC results for each observation file.
+Also used for checking if the file is processed already. If reprocessing needed, then
+the records for that particular day and hours must be deleted before reprocessing.
+### id
+Internal id. Will automatically be filled if left blank. Must be unique.
+### site
+9 letter sitename. Ex BUDD00DNK, ARGI00FRO, ...
+### year
+4 digit year of observation.
+### doy
+Day of year
+### hour
+Letter representation of the observation hour.
+'a' is UTC hour 0, 'x' is UTC hour 23. '0' is the whole day.
+### jday
+Julian day.
+### quality
+The QC result.
+### ngaps
+Number of gaps in the hourly/daily observation file.
+### ts
+Timestamp of the record. Used for QC status viewer to detect when a site is late
+on reporting in.
 
