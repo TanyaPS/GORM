@@ -1,6 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
 ## 2019-11-26	sjm	Database scheda documentation added.
+Commenting and documentation.
+util/forget utility added.
 
 ## 2019-11-25	sjm	Initial release.
 First release includes processing of Leica, Trimble and Septentrio RINEX3
