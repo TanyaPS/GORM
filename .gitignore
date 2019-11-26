@@ -45,6 +45,7 @@ inc/
 .subversion
 .mysql*
 .vim*
+iptables.cf
 v5old/
 old/
 conf/setup.sh

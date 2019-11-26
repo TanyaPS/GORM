@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Load, save and install /home/gpsuser/iptables.cf
+#
+# Soren Juul Moller, Nov 2019
+
+IPT=/home/gpsuser/iptables.cf
+
+if [ ! -f $IPT ]; then
+  echo "$0: $IPT not found" >&2
+  exit 2
+fi
+
+case "$1" in
+
+  commit)
+    iptables-restore < $IPT
+    iptables-save > /etc/sysconfig/iptables
+    ;;
+
+  show)
+    iptables -L -vn
+    ;;
+
+  start|stop|restart|status)
+    /etc/init.d/iptables $1
+    ;;
+
+  *)
+    echo "Usage: $0 {commit|show|start|stop|restart|status}" >&2
+    ;;
+esac
