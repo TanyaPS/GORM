@@ -1,0 +1,25 @@
+#!/usr/bin/perl
+#
+# "Forget" an entire day so it can be reprocessed.
+#
+# Usage:  ~gpsuer/util/forget sitename 4-digit-year doy
+# Example:
+#	~gpsuser/util/forget SUL500DNK 2019 152
+#
+# Soren Juul Moller, Nov 2019
+
+use strict;
+use warnings;
+use GPSDB;
+
+if (scalar(@ARGV) != 3) {
+  print STDERR "Usage: $0 site year doy\n";
+  exit(2);
+}
+
+my $db = new GPSDB;
+$db->{'DBH'}->do(q{
+	delete from gpssums where site=? and year=? and doy=?
+}, undef, uc($ARGV[0]), int($ARGV[1]), int($ARGV[2]));
+
+print "done\n";
