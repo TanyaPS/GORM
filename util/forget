@@ -16,6 +16,10 @@ if (scalar(@ARGV) != 3) {
   print STDERR "Usage: $0 site year doy\n";
   exit(2);
 }
+my $site = uc($ARGV[0]);
+if (length($site) == 4) {
+  $site .= ($site eq 'ARGI' ? '00FRO':'00DNK');
+}
 
 my $db = new GPSDB;
 $db->{'DBH'}->do(q{
