@@ -26,8 +26,8 @@ Add packages
 	perl-Parallel-ForkManager
 	perl-Archive-Zip
 	perl-Net-FTP
-	perl-IO-Pty
 	perl-Net-SFTP-Foreign
+	perl-Math-Round
 
 Configure:
 
