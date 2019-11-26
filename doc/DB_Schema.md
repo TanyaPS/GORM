@@ -69,7 +69,7 @@ on reporting in.
 The name and physical location of an directory containing files to be uploaded.
 ### name
 The label name for this directory.
-This is a foreign key in ''uploaddest'' (localdir) and ''rinexdist'' (localdir).
+This is a foreign key in _uploaddest_ (localdir) and _rinexdist_ (localdir).
 ### path
 The full path for the directory.
 
@@ -78,7 +78,7 @@ All the sites.
 ### site
 See recurring fields.
 ### freq
-How often the site sends data. Either ''H'' (hourly) or ''D'' (daily).
+How often the site sends data. Either _H_ (hourly) or _D_ (daily).
 ### obsint
 The observation interval. Usually 1 or 30.
 ### markernumber
@@ -129,9 +129,9 @@ The file type is applies to. Can be one of the following:
 The observation interval this applies to. Must be either the same as the original observation interval
 or 30. 30s is always available.
 ### localdir
-Where to copy the file. This is the key in ''localdirs''.
+Where to copy the file. This is the key in _localdirs_.
 ### active
-Wether or not this rule is active. Either ''0'' (inactive) or ''1'' (active).
+Wether or not this rule is active. Either _0_ (inactive) or _1_ (active).
 
 ## uploaddest
 ### id
@@ -139,15 +139,15 @@ See recurrent fields.
 ### name
 The name of the destination.
 ### protocol
-Protocol used to transfer the file. Either ''ftp'' or ''sftp''.
+Protocol used to transfer the file. Either _ftp_ or _sftp_.
 ### host
 Fully qualified DNS name of the host. Must be resolvable.
 ### user
 Username to login with.
 ### pass
-Password to use if using ''ftp''.
+Password to use if using _ftp_.
 ### privatekey
-Full pathname for the SSH private key to use if using ''sftp''.
+Full pathname for the SSH private key to use if using _sftp_.
 ### localdir
 The name of the local directory (localdirs.name).
 ### remotedir
@@ -161,4 +161,4 @@ Path on the remote server to store files in. Following variables available:
 - %interval%: Interval in seconds. Usually 1 or 30.
 Variables can only be used on files named ssss##ccc_R_yyyydddhhss_01f_iiS* (ex: TEJH00DNK_R_20171890000_01D_30S_MO.crx.gz).
 ### active
-Wether or not thils destination is active. Either ''0'' (inactive) or ''1'' (active).
+Wether or not thils destination is active. Either _0_ (inactive) or _1_ (active).
