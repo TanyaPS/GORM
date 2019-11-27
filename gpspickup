@@ -152,9 +152,10 @@ sub process($$) {
     $rs->{$ftyp} = $ufn;
     $rs->store();
 
-    # Register pending job if we got the observation file
+    # Update timestamp for each file added to this job
+    $job->{'timestamp'} = time();
+    # Register pending job only if we got the observation file (see submit_pending)
     if ($fn =~ /_MO\.rnx/) {
-      $job->{'timestamp'} = time();
       $Pending{$fn} = $job;
     }
   }
@@ -182,7 +183,9 @@ sub scan_incoming() {
 
 
 #############################################################################################
-# Submit pendig jobs if no files with same prefix is present in $INCOMING
+# Submit pending jobs if no files with same prefix is present in $INCOMING
+# A job is pending if this is a multi-file upload and the obs file is received. It will be
+# submitted if no new files have arrived the last 15s.
 #
 sub submit_pending() {
   my @pending = keys %Pending;
