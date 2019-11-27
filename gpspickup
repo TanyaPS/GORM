@@ -1,5 +1,5 @@
 #!/usr/bin/perl
-#################
+#############################################################################################
 # Monitor for new inbound GPS data files from Permanent GNSS Stations.
 # When a new file arrived, move it to $SAVEDIR and unpack it to $WORKDIR.
 # Files are renamed to RINEXv3 standard naming during unpack.
@@ -18,14 +18,16 @@ use Job;
 use GPSDB;
 
 my $DB;
-my %SCS;
-my %Pending;
+my %SCS;			# All sites defined
+my %Pending;			# Postponed jobs to be submitted
 my $Debug = 0;
-my $sig_received = "";
+my $sig_received = "";		# Set on SIGINT and SIGTERM
 my $PollInterval = 16;		# Timeout for new files
 
-chdir($INCOMING);
 
+#############################################################################################
+# Load all sites from locations table into %SCS
+#
 sub load_sites() {
   # Get the complete list of defined sites from DB
   # We only use the short version of sitename here.
@@ -37,6 +39,7 @@ sub load_sites() {
   die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
   %SCS = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
 }
+
 
 #############################################################################################
 # Lookup site in gpssums. Returns true if current year-doy exists, false if not.
@@ -163,6 +166,7 @@ sub process($$) {
   }
 }
 
+
 #############################################################################################
 # scan_incoming will add all plain files in $INCOMING to %Inbound
 #
@@ -176,6 +180,10 @@ sub scan_incoming() {
   close($fd);
 }
 
+
+#############################################################################################
+# Submit pendig jobs if no files with same prefix is present in $INCOMING
+#
 sub submit_pending() {
   my @pending = keys %Pending;
   foreach my $fn (@pending) {
@@ -184,7 +192,8 @@ sub submit_pending() {
       # check nothing is being transferred right now
       my $rs = new RinexSet(rsfile => $job->{'rsfile'});
       my $prefix = $rs->getFilenamePrefix();
-      # no active inbound, then submit
+      next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
+      # no active inbound found, then submit
       loginfo("Submitting ".$job->getIdent());
       delete $job->{'timestamp'};
       $job->submitjob('ftp');
@@ -195,12 +204,17 @@ sub submit_pending() {
   loginfo("Pending left: $left") if $left > 0;
 }
 
+
+#############################################################################################
+# Called from Linux::Inotify2 for each file event
+#
 sub inotify_callback() {
   my $event = shift;
   alarm 0;		# disable timer while processing
   process($event->fullname, $event->name);
   alarm $PollInterval;	# rearm timer
 }
+
 
 #############################################################################################
 # Main program
