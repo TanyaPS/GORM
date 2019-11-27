@@ -37,7 +37,7 @@ BEGIN {
 	sysrun syscp sysmv
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter gm2str
-	basename dirname fileage dirlist
+	basename dirname fileage dirlist round
 	loadJSON storeJSON parseFilename
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
@@ -232,6 +232,18 @@ sub dirlist($) {
     closedir($dh);
   }
   return (wantarray ? @files : scalar(@files));
+}
+
+
+##########################################################################################
+# Returns rounded float.
+# round(3.1415)=3, round(3.5666,2)=3.57.
+#
+sub round($;$) {
+  my ($dbl,$dig) = @_;
+  my $fmt = "%.f";
+  $fmt = '%.'.$dig.'f' if defined $dig;
+  return sprintf($fmt, $dbl);
 }
 
 
