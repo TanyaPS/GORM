@@ -7,8 +7,6 @@ Install all required packages. Run
 	sudo setup/install.sh
 
 Download latest released BNC source code from https://igs.bkg.bund.de/ntrip/bnc
-If not installed already, install gcc and g++:
-	yum install gcc g++ make qt4 qt4-devel
 Compile BNC:
 	unzip bnc-x.x.x-source.zip
 	cd bnc-x.x.x-source
@@ -47,20 +45,22 @@ Transfer sbf2bin to the host you are installing and install using
 
 Configure:
 
-postfix:
+Postfix:
 	myhostname
 	mydomain
 	relayhost
 
-mount datastore:
+Mount datastore:
 	mkdir /data
 	Mount data disk on /data
+	mkdir /data/{ftp,upload,saved,queue,work}
 
-users:
+Users:
 	groupadd gnss
 	groupadd gpsuser
 	useradd -d /home/gpsuser -g gpsuser -G gnss gpsuser
 	useradd -d /data/ftp -p gnss3 gnss3
+	chown gpsuser:gpsuser /data/*
 	chown gnss3:gnss /data/ftp
 	chmod 775 /data/ftp
 
@@ -98,8 +98,3 @@ mariadb:
 firewall:
 	If this host is exposed to the internet, then it should have a firewall install.
 	/usr/local/bin/fw is a tool to maintain iptables as firewall.
-
-Datadir:
-	Mount data disk on /data
-	mkdir /data/{ftp,upload,saved,queue,work}
-	chown -R gpsuser:gpsuser /data/*
