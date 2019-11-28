@@ -7,7 +7,7 @@ After=mariadb.service
 Type=simple
 Restart=on-failure
 ExecStart=/usr/local/sbin/ftpuploader
-Environment="HOME=/home/gpsuser" "PERL5LIB=/usr/local/lib/gnss"
+Environment="PERL5LIB=/usr/local/lib/gnss"
 
 [Install]
 WantedBy=multi-user.target

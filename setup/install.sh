@@ -59,7 +59,7 @@ apachectl restart
 echo "Installing daemons in /usr/local/sbin"
 for i in gpspickup jobengine ftpuploader; do
   install -o root -g daemon -m 755 $i /usr/local/sbin
-  install -o root -g sys -m 644 setup/$i.service /etc/systemd/system
+  install -o root -g root -m 644 setup/$i.service /etc/systemd/system
 done
 
 echo "Restarting daemons"

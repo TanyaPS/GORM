@@ -55,12 +55,8 @@ Mount datastore:
 	Mount data disk on /data
 	mkdir /data/{ftp,upload,saved,queue,work}
 
-Users:
-	groupadd gnss
-	groupadd gpsuser
-	useradd -d /home/gpsuser -g gpsuser -G gnss gpsuser
+FTP users:
 	useradd -d /data/ftp -p gnss3 gnss3
-	chown gpsuser:gpsuser /data/*
 	chown gnss3:gnss /data/ftp
 	chmod 775 /data/ftp
 
@@ -68,7 +64,7 @@ mariadb:
 	Create /data/mysql
 		mkdir /data/mysql
 		chown mysql:mysql /data/mysql
-		chcon -u system_u -r object_r -t mysqld_db_t /data/mysql
+		chcon -u system_u -r object_r -t mysqld_db_t /data/mysql  (only if SElinux is not disabled)
 	Modify /etc/my.cnf.d/server.cnf
 		Add "datadir = /data/mysql" in [server] section
 	systemctl enable mariadb

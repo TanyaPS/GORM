@@ -33,9 +33,9 @@ Currently support Leica, Trimbple and Septentrio data.
     - upload file to destination(s) using either ftp og sftp
 
 ## Components
-### vsftpd
-  FTP server receiving files from GNSS stations.
-  Data arrives in /data/ftp
+gpspickup, jobengine and ftpuploader are installed in /usr/local/sbin.
+All .pm are installed in /usr/lccal/lib/gnss.
+Utilities and binaries are installed in /usr/local/bin.
 
 ### gpspickup
   Monitors /data/ftp for new files.
@@ -84,9 +84,6 @@ Currently support Leica, Trimbple and Septentrio data.
 ### /data/queue
   Job spool directory.
   Monitored by jobengine.
-
-### /home/gpsuser
-  The script home directory
 
 ### /data/upload
   ftpuploader home directory
