@@ -21,6 +21,7 @@ our $BNC      = '/usr/local/bin/bnc';
 our $GFZRNX   = '/usr/local/bin/gfzrnx';
 our $RNX2CRX  = '/usr/local/bin/rnx2crx';
 our $CRX2RNX  = '/usr/local/bin/crx2rnx';
+our $SBF2RIN  = '/usr/local/bin/sbf2rin';
 
 our (@ISA, @EXPORT);
 BEGIN {

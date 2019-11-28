@@ -28,12 +28,12 @@ perl-Date-Manip
 perl-File-Path
 zip
 unzip
+vsftpd
 %EOD
 
 echo "Installing binaries in /usr/local/bin"
-mkdir tmp.$$
-unzip -q binaries.zip -d tmp.$$
-for i in tmp.$$/*; do
+unzip -q setup/binaries.zip -d tmp.$$
+for i in bin/* tmp.$$/*; do
   install -o root -g bin -m 755 $i /usr/local/bin
 done
 rm -r tmp.$$
