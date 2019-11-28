@@ -46,7 +46,7 @@ inc/
 .mysql*
 .vim*
 iptables.cf
+bin/
 v5old/
 old/
-conf/setup.sh
 software/

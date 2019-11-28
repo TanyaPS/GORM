@@ -5,8 +5,6 @@ package BaseConfig;
 use strict;
 use warnings;
 
-our $HOME = '/home/gpsuser';
-
 our $DBDSN    = "DBI:mysql:gps";
 our $DBUSER   = 'gpsuser';
 our $DBPASS   = 'gpsuser';
@@ -29,7 +27,6 @@ BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	$HOME
 	$DBDSN $DBUSER $DBPASS
 	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR $JOBQUEUE
 	$BNC $GFZRNX $RNX2CRX $CRX2RNX

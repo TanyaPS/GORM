@@ -6,8 +6,8 @@ After=mariadb.service
 [Service]
 Type=simple
 Restart=on-failure
-ExecStart=/home/gpsuser/gpspickup
-Environment="HOME=/home/gpsuser" "PERL5LIB=/home/gpsuser"
+ExecStart=/usr/local/sbin/gpspickup
+Environment="HOME=/home/gpsuser" "PERL5LIB=/usr/local/lib/gnss"
 
 [Install]
 WantedBy=multi-user.target
