@@ -1,32 +1,49 @@
 
 Install CentOS 7, minimal installation
 - Disable SELinux in /etc/sysconfig/selinux
+- Reboot
 
-Configure udev:
-Create file /etc/udev/rules.d/99-custom.rules
-   ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/scheduler}="noop"
-and run
-   udevadm trigger
+Install all required packages. Run
+	sudo setup/install.sh
 
-Add packages:
-	epel-release
-do yum update
-Add packages
-	open-vm-tools
-	wget
-	mariadb
-	mariadb-server
-	perl-Linux-Inotify2
-	perl-Date-Manip
-	perl-Sys-Syslog
-	perl-DBI
-	perl-JSON
-	perl-JSON-XS
-	perl-Parallel-ForkManager
-	perl-Archive-Zip
-	perl-Net-FTP
-	perl-Net-SFTP-Foreign
-	perl-Math-Round
+Download latest released BNC source code from https://igs.bkg.bund.de/ntrip/bnc
+If not installed already, install gcc and g++:
+	yum install gcc g++ make qt4 qt4-devel
+Compile BNC:
+	unzip bnc-x.x.x-source.zip
+	cd bnc-x.x.x-source
+	/usr/lib64/qt4/bin/qmake bnc.pro
+	make
+	sudo install -o root -g bin -m 755 bnc /usr/local/bin
+
+Download latest gfzrnx Linux x64 binary from
+	http://semisys.gfz-potsdam.de/semisys/scripts/download/index.php
+(GFZ Software tab)
+Install using
+	sudo install -o root -g bin -m 755 gfzrnx_lx /usr/local/bin/gfzrnx
+
+Download latest Hatanaka compression software (RNXCMP) from:
+	https://terras.gsi.go.jp/ja/crx2rnx.html
+Unpack, compile and install with
+	tar xzf RNXCMP_4.0.8_src.tar.gz
+	cd RNXCMP_4.0.8_src/source
+	gcc -O2 crx2rnx.c -o crx2rnx
+	gcc -O2 rnx2crx.c -o rnx2crx
+	install -o root -g bin -m 755 crx2rnx rnx2crx /usr/local/bin
+
+Download lastest version of Septentrio RxTools from:
+	https://www.septentrio.com/en/support/software/rxtools
+Download rxtools_19_0_0_installer_x64.bin
+Upload the file to an RHEL with X11 interface.
+Login using the X11 interface login.
+Using a terminal shell session, do:
+		chmod 755 rxtools_*
+		mkdir -m 700 xdg
+		XDG_RUNTIME=`pwd`/xdg ./rxtools_19_0_0_installer_x64.bin
+			(follow the install instructions. install everything).
+The sbf2rin can now be found in $HOME/RxTools/bin
+Transfer sbf2bin to the host you are installing and install using
+	install -o root -g bin -m 755 sbf2rin /usr/local/bin
 
 Configure:
 
@@ -65,7 +82,8 @@ mariadb:
 	Check local access with:
 		# mysql -ugpsuser -pgpsuser gps     (should be able to login)
 	Run SQL script
-		\. /home/gpsuser/sql/create-gps-db.sql
+		cd sql
+		\. create-gps-db.sql
 		show tables;
 	Should display:
 		+---------------+
@@ -78,32 +96,10 @@ mariadb:
 		+---------------+
 
 firewall:
-	This system uses iptables as firewall. By default firewalld is installed and enabled
-	and needs to be disabled:
-		systemctl stop firewalld
-		systemctl disable firewalld
+	If this host is exposed to the internet, then it should have a firewall install.
+	/usr/local/bin/fw is a tool to maintain iptables as firewall.
 
-	If iptables.cf does not exist, create one:
-		cd ~gpsuser
-		iptables-save >iptables.cf
-	Then add/edit the rules and install using:
-		util/fw commit		(reads, load and installs ~gpsuser/iptables.cf)
-
-services:
-	git clone scripts from https://github.com/Kortforsyningen/GORM.git
-	Move content to /home/gpsuser
-	chown -R gpsuser:gpsuser /home/gpsuser
-	Create directories:
-		cd /data
-		mkdir ftp upload saved queue work
-		chown gpsuser:gpsuser ftp upload saved queue work
-	Add PERL5LIB
-		vi /root/.bashrc
-		export PERL5LIB=/home/gpsuser
-	Configure sites
-	Test
-	Enable and start services:
-		Copy conf/*.service to /etc/systemd/system
-		systemctl daemon-reload
-		systemctl enable gpspickup jobengine ftpuploader
-		systemctl start gpspickup jobengine ftpuploader
+Datadir:
+	Mount data disk on /data
+	mkdir /data/{ftp,upload,saved,queue,work}
+	chown -R gpsuser:gpsuser /data/*

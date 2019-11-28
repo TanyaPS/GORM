@@ -11,9 +11,15 @@ function errexit() {
 
 test `id -u` = 0 || errexit "You must be root to run this. Try 'sudo $0'."
 
+if ! rpm -q epel-release >/dev/null; then
+  yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+  yum -y update
+fi
+
 while read rpm; do
-  rpm -q $rpm >/dev/null || errexit "$rpm not installed. Install using 'rpm install $rpm'"
+  rpm -q $rpm >/dev/null || yum -y install $rpm
 done <<%EOD
+perl-Sys-Syslog
 perl-Net-SFTP-Foreign
 perl-Linux-Inotify2
 perl-Parallel-ForkManager
@@ -32,14 +38,11 @@ zip
 unzip
 mariadb
 mariadb-server
+gcc
+gcc-c++
+qt
+qt-devel
 %EOD
-
-echo "Installing binaries in /usr/local/bin"
-unzip -q setup/binaries.zip -d tmp.$$
-for i in bin/* tmp.$$/*; do
-  install -o root -g bin -m 755 $i /usr/local/bin
-done
-rm -r tmp.$$
 
 echo "Installing GNSS perl library in /usr/local/lib/gnss"
 test -d /usr/local/lib/gnss || mkdir -m 755 /usr/local/lib/gnss
@@ -62,5 +65,9 @@ done
 echo "Restarting daemons"
 systemctl daemon-reload
 systemctl restart gpspickup jobengine ftpuploader
+
+for i in bnc gfzrnx rnx2crx crx2rnx sbf2rin; do
+  test -x /usr/local/bin/$i || echo "You need to install /usr/local/bin/$i. See doc/INSTALL"
+done
 
 echo "Done"
