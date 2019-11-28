@@ -26,9 +26,12 @@ perl-Compress-Raw-Zlib
 perl-Archive-Zip
 perl-Date-Manip
 perl-File-Path
+httpd
+vsftpd
 zip
 unzip
-vsftpd
+mariadb
+mariadb-server
 %EOD
 
 echo "Installing binaries in /usr/local/bin"
@@ -43,6 +46,12 @@ test -d /usr/local/lib/gnss || mkdir -m 755 /usr/local/lib/gnss
 for pm in BaseConfig.pm GPSDB.pm Job.pm Logger.pm RinexSet.pm Utils.pm; do
   install -o root -g root -m 644 $pm /usr/local/lib/gnss
 done
+
+echo "Installing CGI programs in /var/www/gnss-cgi"
+test -d /var/www/gnss-cgi || mkdir -m 755 /var/www/gnss-cgi
+install -o root -g root cgi/status.cgi /var/www/gnss-cgi
+install -o root -g root setup/gnss-cgi.conf /etc/httpd/conf.d
+apachectl restart
 
 echo "Installing daemons in /usr/local/sbin"
 for i in gpspickup jobengine ftpuploader; do
