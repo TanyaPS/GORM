@@ -565,11 +565,15 @@ sub save_originals($) {
   return if $aref->[0] eq '0';
 
   my @files = ();
-  push(@files, $rs->{$_}) foreach grep(/^(MO\.\d+|[A-Z]N)$/, keys %$rs);
+  if (exists $rs->{'rawfile'}) {
+    push(@files, $rs->{'rawfile'});
+  } else {
+    push(@files, $rs->{$_}) foreach grep(/^(MO\.\d+|[A-Z]N)$/, keys %$rs);
+  }
   if (scalar(@files) > 0) {
     my $fn = $rs->getFilenamePrefix;
     loginfo("Creating $fn.zip");
-    sysrun("zip -9q $fn.zip ".join(' ',@files), { log => $Debug });
+    sysrun("zip -9jq $fn.zip ".join(' ',@files), { log => $Debug });
     $rs->{'zipfile'} = "$fn.zip";
   }
 }

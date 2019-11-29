@@ -127,8 +127,8 @@ sub process($$) {
     $ifn = "$SAVEDIR/$site/$fn";
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     my $workdir = $job->mkWorkdir();
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    loginfo("Unpack Septentrio raw file into $workdir");
+    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, rawfile => $ifn);
+    loginfo("Unpack Septentrio raw file $fn into $workdir");
     chdir($workdir);
     sysrun("$SBF2RIN -f $ifn -l -R3 -nONGLHI >/dev/null");
     chdir($INCOMING);
