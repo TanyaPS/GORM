@@ -130,7 +130,8 @@ sub process($$) {
     my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     chdir($workdir);
-    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGLHI >/dev/null");
+    my $countrycode = substr($site, 6, 3);
+    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHI -O $countrycode >/dev/null");
     chdir($INCOMING);
     $rs->checkfiles();
     $rs->store();
