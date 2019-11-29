@@ -22,6 +22,8 @@ use RinexSet;
 use GPSDB;
 use Data::Dumper;
 
+my $Debug = 0;
+
 sub new {
   my $class = shift;
   my %args = @_;
@@ -90,7 +92,7 @@ sub _decimate($$$$$) {
 	"--key reqcRnxVersion 3 ".
 	"--key reqcSampling $dst_interval";
     loginfo("Decimate $obsinfile to $obsoutfile");
-    sysrun($cmd);
+    sysrun($cmd, { log => $Debug });
   }
 }
 
@@ -114,7 +116,7 @@ sub _splice($$$) {
 	"$GFZRNX -f -q -finp ".join(' ',@infiles)." -fout $outfile -kv -splice_direct";
   loginfo("Creating $outfile");
   if ($conv eq 'GFZ') {
-    if (sysrun($gfzcmd)) {
+    if (sysrun($gfzcmd, { log => $Debug })) {
       logerror("Splice $outfile failed. Trying $BNC");
       system($bnccmd);
     }
@@ -421,7 +423,7 @@ sub gendayfiles() {
     my $aref = $navbytyp{$navtyp};
     loginfo("Creating $navoutfile");
     my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile -no_nav_stk >/dev/null 2>&1";
-    sysrun($cmd);
+    sysrun($cmd, { log => $Debug });
     $rsday->{$navtyp} = $navoutfile;
   }
 
@@ -477,11 +479,22 @@ sub createWantedIntervals($) {
 # for all signal types. It is just an indicator of the data quality used for
 # monitoring.
 #
-sub _getQC($) {
-  my $sumfile = shift;
-  my ($qc, $obs, $have, $gaps) = (0, 0, 0, 0);
-  
-  open(my $fd, '<', $sumfile) || return { qc => 0, gaps => 0 };
+sub _QC($) {
+  my $rs = shift;
+
+  my $sumfile = $rs->getFilenamePrefix().'.sum';
+  my $navfiles = $rs->getNavlist();
+  my $cmd =
+	"$BNC --nw --conf /dev/null --key reqcAction Analyze ".
+	"--key reqcObsFile ".$rs->{'MO.30'}." ".
+	"--key reqcNavFile \"".join(',',@$navfiles)."\" ".
+	"--key reqcLogSummaryOnly 2 ".
+	"--key reqcOutLogFile $sumfile"
+  ;
+  loginfo("Running QC on ".$rs->{'MO.30'});
+  sysrun($cmd, { log => $Debug});
+
+  open(my $fd, '<', $sumfile) || return 0;
   my @qcs = ();
   my %got;
   while (<$fd>) {
@@ -489,16 +502,22 @@ sub _getQC($) {
     # G:   1?: Observations      :  33065 (   34634)    95.47 %
     # G:   1?: Gaps              :       55
     if (/^\s+([A-Z]):\s+\d[A-Z\?]: Observations.*\s([\d\.]+) %$/) {
-      next if $1 eq 'S' || exists $got{$1};
+      next if $1 eq 'S' || exists $got{$1};  # ignore SBAS
       $got{$1} = 1;
       push(@qcs, $2 > 100 ? 100 : $2);
     }
   }
   close($fd);
+
+  my $qc = 0;
   if (scalar(@qcs) > 0) {
     $qc += $_ foreach @qcs;
     $qc /= scalar(@qcs);
   }
+
+  sysrun("gzip -f $sumfile");
+  $rs->{'sumfile'} = $sumfile.'.gz';
+
   return round($qc);
 }
 
@@ -526,7 +545,7 @@ sub save_originals($) {
   if (scalar(@files) > 0) {
     my $fn = $rs->getFilenamePrefix;
     loginfo("Creating $fn.zip");
-    sysrun("zip -9q $fn.zip ".join(' ',@files), { log => 1 });
+    sysrun("zip -9q $fn.zip ".join(' ',@files), { log => $Debug });
     $rs->{'zipfile'} = "$fn.zip";
   }
 }
@@ -569,21 +588,8 @@ sub process() {
   my $ngaps = $self->gapanalyze($rs->{'MO.'.$interval});
 
   # QC on 30s file
-  my $sumfile = $rs->getFilenamePrefix().'.sum';
-  my $navfiles = $rs->getNavlist();
-  my $cmd =
-	"$BNC --nw --conf /dev/null --key reqcAction Analyze ".
-	"--key reqcObsFile ".$rs->{'MO.30'}." ".
-	"--key reqcNavFile \"".join(',',@$navfiles)."\" ".
-	"--key reqcLogSummaryOnly 2 ".
-	"--key reqcOutLogFile $sumfile"
-  ;
-  loginfo("Running QC on ".$rs->{'MO.30'});
-  sysrun($cmd);
-  my $qc = _getQC($sumfile);
+  my $qc = _QC($rs);
   loginfo("$site-$year-$doy-$hour: QC: $qc");
-  sysrun("gzip -f $sumfile");
-  $sumfile .= ".gz";
 
   $dbh->do(qq{
 	delete from gpssums
@@ -639,7 +645,7 @@ sub process() {
       $crxfile =~ s/\.rnx$/.crx.gz/;
       if (! -f $crxfile || fileage($filetosend) > fileage($crxfile)) {
         loginfo("Compressing $filetosend");
-        sysrun("$RNX2CRX - < $filetosend | gzip > $crxfile");
+        sysrun("$RNX2CRX - < $filetosend | gzip > $crxfile", { log => $Debug });
       }
       syscp($crxfile, $destpath, { mkdir => 1, log => 1 } );
     }
@@ -648,6 +654,7 @@ sub process() {
     # Nav
     elsif ($r->{'filetype'} eq 'Nav') {
       my @copylist = ();
+      my $navfiles = $rs->getNavlist;
       foreach my $navfile (@$navfiles) {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile || fileage($navfile) > fileage($gzfile)) {
@@ -662,7 +669,7 @@ sub process() {
     ######
     # Sum
     elsif ($r->{'filetype'} eq 'Sum') {
-      syscp($sumfile, $destpath, { mkdir => 1, log => 1 });
+      syscp($rs->{'sumfile'}, $destpath, { mkdir => 1, log => 1 });
     }
 
     ######

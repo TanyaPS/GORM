@@ -71,12 +71,12 @@ sub getNavlist() {
 }
 
 # Defines $obj->{ftyp} if file exists.
-# ftyp is MO, CN, EN, GN, JN, RN or MN.
+# ftyp is MO.[interval] or [A-Z]N
 #
 sub checkfiles() {
   my $self = shift;
   my $w = $self->getWorkdir;
-  foreach my $ftyp (qw(MO.1 MO.15 MO.30 CN EN GN JN RN MN)) {
+  foreach my $ftyp (qw(MO.1 MO.15 MO.30 GN RN EN JN CN IN SN MN)) {
     delete $self->{$ftyp};
     my $fn = $self->getRinexFilename($ftyp);
     $self->{$ftyp} = $fn if -f "$w/$fn";

@@ -62,12 +62,11 @@ for i in gpspickup jobengine ftpuploader; do
   install -o root -g root -m 644 setup/$i.service /etc/systemd/system
 done
 
-echo "Restarting daemons"
-systemctl daemon-reload
-systemctl restart gpspickup jobengine ftpuploader
-
 for i in bnc gfzrnx rnx2crx crx2rnx sbf2rin; do
   test -x /usr/local/bin/$i || echo "You need to install /usr/local/bin/$i. See doc/INSTALL"
 done
 
-echo "Done"
+systemctl daemon-reload
+echo
+echo "You need to (re)start services using:"
+echo "systemctl restart gpspickup jobengine ftpuploader"
