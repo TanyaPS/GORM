@@ -6,6 +6,7 @@
 
 use strict;
 use warnings;
+use Utils;
 use GPSDB;
 
 sub readsection($$) {
@@ -55,7 +56,7 @@ my $sec = readsection($sitelog, "1.");
 $s{'site'} = uc($sec->{'Four Character ID'});
 die("$0: site not found in $sitelog") unless defined $s{'site'};
 
-$s{'site'} .= ($s{'site'} eq "ARGI" ? "00FRO":"00DNK");
+$s{'site'} = site42site($s{'site'});
 $s{'markernumber'} = $sec->{'IERS DOMES Number'};
 
 $sec = readsection($sitelog, "2.");

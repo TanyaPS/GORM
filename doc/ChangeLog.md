@@ -1,6 +1,9 @@
 # Changelog for GPSFTP5 scripts
 
-## 2019-11-29	sjm	gpspickup pending job logic updated.
+## 2019-11-29	sjm	Make ftpuploader compatible with gpsftp4
+- Backport of ftpuploader to gpsftp4.
+
+## 2019-11-29	sjm	Added support for Septentrio raw files
 - Added support for Septentrio raw files (SBF format). This is now the preferred
   format from Septentrio receivers.
 

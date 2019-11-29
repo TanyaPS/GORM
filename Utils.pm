@@ -38,7 +38,7 @@ BEGIN {
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter gm2str
 	basename dirname fileage dirlist round
-	loadJSON storeJSON parseFilename
+	loadJSON storeJSON site42site parseFilename
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
   $DMB = new Date::Manip::Base;
@@ -269,6 +269,15 @@ sub storeJSON($$) {
   open(my $fh, '>', $file) || die("cannot create $file: $!");
   print $fh to_json($ref, { utf8 => 1, pretty => 1, canonical => 0 });
   close($fh);
+}
+
+
+##########################################################################################
+# Returns 9-letter sitename of a 4-letter site
+#
+sub site42site($) {
+  my $site4 = shift;
+  return $site4 eq 'ARGI' ? $site4.'00FRO' : $site4.'00DNK';
 }
 
 

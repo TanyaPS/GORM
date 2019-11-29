@@ -77,10 +77,10 @@ The label name for this directory. This is a unique key.
 This is a foreign key in _uploaddest_ (localdir) and _rinexdist_ (localdir).
 ### path
 The full path for the directory. Following variables available:
-- %site%: 9-letter site name.
-- %site4%: 4-letter site name.
-- %year%: 4-digit year.
-- %doy%: Day of year
+- %site: 9-letter site name.
+- %site4: 4-letter site name.
+- %year: 4-digit year.
+- %doy: Day of year
 
 ## locations
 All the sites.
@@ -162,12 +162,12 @@ Full pathname for the SSH private key to use if using _sftp_.
 The name of the local directory (localdirs.name).
 ### remotedir
 Path on the remote server to store files in. Following variables available:
-- %site%: 9-letter sitename.
-- %site4%: 4-letter sitename.
-- %year%: Will be replaced with the file year.
-- %doy%: Day of year of the file.
-- %hour%: 1 letter hour (a-x, 0). 0 is a dayfile.
-- %hh24%: 2 letter hour (00-23, 24). 24 is is a dayfile.
+- %site: 9-letter sitename.
+- %site4: 4-letter sitename.
+- %year: Will be replaced with the file year.
+- %doy: Day of year of the file.
+- %hour: 1 letter hour (a-x, 0). 0 is a dayfile.
+- %hh24: 2 letter hour (00-23, 24). 24 is is a dayfile.
 Variables can only be used on files named ssss##ccc_R_yyyydddhh* (ex: TEJH00DNK_R_20171890000_01D_30S_MO.crx.gz).
 ### active
 Wether or not thils destination is active. Either _0_ (inactive) or _1_ (active).

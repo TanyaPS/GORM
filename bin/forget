@@ -10,6 +10,7 @@
 
 use strict;
 use warnings;
+use Utils;
 use GPSDB;
 
 if (scalar(@ARGV) != 3) {
@@ -17,9 +18,7 @@ if (scalar(@ARGV) != 3) {
   exit(2);
 }
 my $site = uc($ARGV[0]);
-if (length($site) == 4) {
-  $site .= ($site eq 'ARGI' ? '00FRO':'00DNK');
-}
+$site = site42site($site) if length($site) == 4;
 
 my $db = new GPSDB;
 $db->{'DBH'}->do(q{
