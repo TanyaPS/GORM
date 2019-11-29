@@ -125,11 +125,16 @@ sub runjob($) {
   loginfo("Run $ident");
 
   $Running{$ident} = $job;
-  $FM->start($ident) && return;  # start instance
+  $FM->start($ident) && return;  	# start instance
   setprogram("job");
   chdir($workdir);
-  $job->process();
-  $FM->finish(0);		# exit this instance
+  eval {
+    $job->process();
+    return 1;
+  } || do {
+    logerror("FATAL ERROR: $@");	# Serious program error occurred.
+  };
+  $FM->finish(0);			# exit this instance
 }
 
 #####################################
