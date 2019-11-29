@@ -20,6 +20,7 @@ use Utils;
 use Logger;
 use RinexSet;
 use GPSDB;
+use Carp qw(longmess);
 use Data::Dumper;
 
 my $Debug = 0;
@@ -41,6 +42,9 @@ sub new {
 
 sub getIdent() {
   my $self = shift;
+  foreach (qw(site year doy hour)) {
+    loginfo(longmess("$_ undefined")) unless defined $self->{$_};
+  }
   return $self->{'site'}.'-'.$self->{'year'}.'-'.$self->{'doy'}.'-'.$self->{'hour'};
 }
 
@@ -124,6 +128,22 @@ sub _splice($$$) {
     system($bnccmd);
   }
   $rsday->{'MO.'.$interval} = $outfile;
+  return $rsday;
+}
+
+###################################################################################
+# Merge hourly zipfiles into daily zipfile
+#
+sub _mergezips($$) {
+  my ($rsday, $rslist) = @_;
+
+  my $outfile = $rsday->getFilenamePrefix().'.zip';
+  loginfo("Creating $outfile");
+  my @infiles = ();
+  push(@infiles, $_->{'zipfile'}) foreach @$rslist;
+  return if scalar(@infiles) == 0;
+  sysrun("/usr/bin/zipmerge $outfile ".join(' ',@infiles), { log => $Debug });
+  $rsday->{'zipfile'} = $outfile;
   return $rsday;
 }
 
@@ -443,6 +463,13 @@ sub gendayfiles() {
   # create 30s dayfile as we know we need it for QC
   _splice($rsday, \@rslist, 30);
 
+  # create daily zip if we need it
+  $aref = $dbh->selectrow_arrayref(q{
+	select	count(*) from rinexdist
+	where	site = ? and freq = 'D' and filetype = 'Arc'
+  }, undef, $site);
+  _mergezips($rsday, \@rslist) if $aref->[0] ne '0';
+
   $rsday->store();
   return $rsday;
 }
@@ -530,14 +557,11 @@ sub save_originals($) {
 
   return if exists $rs->{'zipfile'};
 
-  # Check if we need a Arc. If not, don't bother creating one.
+  # Check if we need an Arc, either daily or hourly. If not, don't bother creating one.
   my $aref = $self->{'DB'}->{'DBH'}->selectrow_arrayref(q{
-	select	count(*)
-	from	rinexdist
-	where	site = ?
-	  and	freq = ?
-	  and	filetype = 'Arc'
-  }, undef, $rs->{'site'}, $rs->{'hour'} eq '0' ? 'D':'H');
+	select	count(*) from rinexdist
+	where	site = ? and filetype = 'Arc'
+  }, undef, $rs->{'site'});
   return if $aref->[0] eq '0';
 
   my @files = ();
