@@ -7,6 +7,7 @@ After=mariadb.service
 Type=simple
 Restart=on-failure
 ExecStart=/usr/local/sbin/gpspickup
+ExecStop=/bin/kill -TERM $MAINPID
 Environment="PERL5LIB=/usr/local/lib/gnss"
 
 [Install]

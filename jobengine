@@ -106,6 +106,13 @@ sub onfinish() {
 sub runjob($) {
   my $jobfile = shift;
 
+  if ($jobfile =~ /reload-ftpuploader$/) {
+    # message from admin.cgi
+    unlink($jobfile);
+    system("systemctl reload ftpuploader");
+    return;
+  }
+
   my $job = new Job(jobfile => $jobfile);
   unlink($jobfile);
 

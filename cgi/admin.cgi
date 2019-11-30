@@ -427,6 +427,7 @@ sub uploaddest() {
   }, { Slice => {} });
   my @uploadpaths = map { $_->{'name'} } @$aref;
 
+  my $changed = 0;
   if (defined $cgi->param('submit')) {
     $sql = $dbh->prepare(q{
 	update	uploaddest
@@ -450,14 +451,19 @@ sub uploaddest() {
       $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?,?)", undef, @vals);
     }
     print "<B style=\"color:red\">Values saved!</B><P>\n";
+    $changed = 1;
   } else {
     for (my $i = 1; defined $v{"id$i"}; $i++) {
       if (defined $v{"del$i"}) {
         $dbh->do("delete from uploaddest where id = ?", undef, $v{"id$i"});
         print "<B style=\"color:red\">Dest id ".$v{"id$i"}." deleted!</B><P>\n";
+        $changed = 1;
         last;
       }
     }
+  }
+  if ($changed) {
+    open(my $fd, ">$JOBQUEUE/reload-ftpuploader"); close($fd);
   }
 
   $aref = $dbh->selectall_arrayref(q{
