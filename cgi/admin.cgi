@@ -1,0 +1,679 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use CGI;
+use DBI;
+
+use lib '/usr/local/lib/gnss';
+use BaseConfig;
+use Utils;
+use GPSDB;
+
+my @GPSTYPES = qw(GEODETIC NON_GEODETIC NON_PHYSICAL SPACEBORNE GROUND_CRAFT WATER_CRAFT AIRBORNE FIXED_BUOY FLOATING_ICE GLACIER BALISTIC ANIMAL HUMAN);
+
+my $cgi = new CGI;
+print $cgi->header;
+
+my $DB = new GPSDB;
+my $dbh = $DB->DBH;
+if (!defined $dbh) {
+  print "MySQL connect error\n";
+  exit(0);
+}
+sub showheader($) {
+  my $title = shift;
+
+  print "<!DOCTYPE html>\n";
+  print "<html><head><title>$title</title></head>\n<body>\n";
+  print "<h1>$title</h1>\n";
+  # warningsToBrowser(1);
+}
+
+sub showbottom() {
+  print "<br><br><a href=\"?cmd=menu\">Goto Main Menu</a>\n";
+  print "</body></html>\n";
+}
+
+sub print_err($) {
+  my $txt = shift;
+
+  showheader("Error");
+  print "<b>$txt</b>\n";
+  showbottom();
+}
+
+sub gen_option_list($$) {
+  my ($default, $vals) = @_;
+  $default = "" unless defined $default;
+  my $str = "";
+  foreach my $p (@$vals) {
+    $str .= "<option name=\"$p\"".($p eq $default ? " selected":"").">$p</option>";
+  }
+  return $str;
+}
+
+##########################################################################
+# New site
+#
+sub newsite() {
+  showheader("New site");
+
+  if (defined $cgi->param('submit')) {
+    my %v = map { $_ => $cgi->param($_) } $cgi->param;
+    my $site = $v{'site'};
+    $v{'position'} = "0,0,0" unless defined $v{'position'} && index($v{'position'},',') > 0;
+    $v{'observer'} = 'SDFE' unless defined $v{'observer'};
+    $v{'agency'} = 'SDFE' unless defined $v{'agency'};
+    $v{'freq'} = (defined $v{'freq'} ? substr($v{'freq'},0,1) : 'D');
+    $v{'active'} = 0 unless defined $v{'active'};
+    if (!defined $site || length($site) != 9) {
+      print "<B style=\"color:red\">Site must be specified and must be 9 characters long (SSSS00DNK)</b><p>\n";
+    } elsif (!defined $v{'obsint'} || $v{'obsint'} <= 0) {
+      print "<B style=\"color:red\">Obsint must be specified and must be larger than 0</b><p>\n";
+    } else {
+      $site = uc($site);
+      my $res = $dbh->selectrow_arrayref("select 1 from locations where site=?", undef, $site);
+      if (defined $res && $res->[0] eq '1') {
+        print "<B style=\"color:red\">ERROR: $site already exists!</b><p>\n";
+      } else {
+        $dbh->do(q{
+	  insert into locations
+	  (site, freq, obsint, markernumber, markertype, position, observer, agency, active)
+	  values (?,?,?,?,?,?,?,?,?)
+        }, undef, $site, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
+           $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'});
+        print "<B style=\"color:red\">Site $site created</B><P>\n";
+      }
+    }
+  }
+
+  print qq{
+	<form name=newsite method=POST action="$ENV{'SCRIPT_NAME'}">
+	<input type=hidden name=cmd value=newsite>
+	<table border=1><tr><th>Parameter</th><th align=left>Value</th></tr>
+	<tr><td>Sitename</td><td><input type=text name=site size=9 maxlength=9></td></tr>
+	<tr><td>Markernumber</td><td><input type=text name=markernumber size=20 maxlength=20></td></tr>
+	<tr><td>Markertype</td><td><select name=markertype>}.gen_option_list("",\@GPSTYPES).qq{</select></td></tr>
+	<tr><td>Position (X,Y,Z)</td><td><input type=text name=position size=40 maxlength=40></td></tr>
+	<tr><td>Observer</td><td><input type=text name=observer size=20 maxlength=20></td></tr>
+	<tr><td>Agency</td><td><input type=text name=agency size=20 maxlength=20></td></tr>
+	<tr><td>Freq</td><td><select name=freq>}.gen_option_list("Hourly",['Hourly','Daily']).qq{</select></td></tr>
+	<tr><td>Interval</td><td><input type=number name=obsint value=1></td></tr>
+	<tr><td>Active</td><td><input type=checkbox name=active value=1 checked></td></tr>
+	<tr><td colspan=2><input type=submit name=submit value=Save></td></tr>
+	</table></form>
+	<p><table border=0><tr><th>New site<th align=left>Defaults</tr>
+	<tr><td align=left>Position</td><td>0.0000,0.0000,0.0000</td></tr>
+	<tr><td align=left>Observer</td><td>SDFE</td></tr>
+	<tr><td align=left>Agency</td><td>SDFE</td></tr>
+	<tr><td align=left>Frequency</td><td>D</td></tr>
+	<tr><td align=left>Active</td><td>0</td></tr>
+	</table>
+  };
+  showbottom();
+}
+
+##########################################################################
+# Show sitelist
+#
+sub showsitelist() {
+  showheader("Site list");
+
+  my %h = ();
+  my $aref = $dbh->selectall_arrayref("select site from locations where freq='H' order by site", { Slice => {} });
+  my $i = 0;
+  print "<b>Hourly sites</b><br>\n";
+  foreach my $r (@$aref) {
+    print "<br>\n" if $i++ % 20 == 0;
+    print "<a href=\"?cmd=editsite&site=$r->{site}\">$r->{site}</a>\n";
+  }
+  print "<br>\n";
+
+  $aref = $dbh->selectall_arrayref("select site from locations where freq='D' order by site", { Slice => {} });
+  $i = 0;
+  print "<p><B>Daily sites</B><br>\n";
+  foreach my $r (@$aref) {
+    print "<br>\n" if $i++ % 20 == 0;
+    print "<a href=\"?cmd=editsite&site=$r->{site}\">$r->{site}</a>\n";
+  }
+  print "<br>\n";
+
+  showbottom();
+}
+
+##########################################################################
+# Edit site parameters.
+#
+sub editsite() {
+  my $site = $cgi->param('site');
+
+  showheader("Edit site $site");
+
+  if (defined $cgi->param('submit')) {
+    my %v = map { $_ => $cgi->param($_) } $cgi->param;
+    $v{'active'} = 0 unless defined $v{'active'};
+    if (!defined $v{'obsint'} || $v{'obsint'} <= 0) {
+      print "<b>ERROR: Observation internval must be specified</b><p>\n";
+    } else {
+      $dbh->do(q{
+	update	locations
+	set	freq=?, obsint=?, markernumber=?, markertype=?, position=?, observer=?, agency=?, active=?
+	where	site = ?
+      }, undef, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
+                $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'}, $site);
+      print "<b>Values saved!</b><br>\n";
+    }
+  }
+
+  my $r = $dbh->selectrow_hashref(q{
+	select	freq, obsint, markernumber, markertype, position, observer, agency, active
+	from	locations
+	where	site = ?
+  }, undef, $site);
+
+  if (!defined $r) {
+    print "<b>ERROR: Site $site not found?!</b>\n";
+    showbottom();
+    return;
+  }
+
+  print qq{
+	<form name=editsite method=POST action=$ENV{'SCRIPT_NAME'}>
+	<input name=cmd type=hidden value=editsite>
+	<input name=site type=hidden value=$site>
+	<table border=1>
+	<tr><th align=left>Parameter</th><th align=left>Value</th></tr>
+	<tr><td>Site</td><td>$site</td></tr>
+	<tr><td title="Markernumer">Markernumber</td>
+	<td><input name=markernumber type=text value="$r->{markernumber}"></td></tr>
+	<tr><td title="Markertype">Markertype<td>
+	<select name=markertype>
+  };
+  print gen_option_list($r->{'markertype'}, \@GPSTYPES);
+  print "</select>\n";
+  print "<tr><td title=\"Daily for 24h files, Hourly for 1h-files\">Freq<td>";
+  print "<select name=freq>".
+	"  <option value=D".($r->{'freq'} eq 'D' ? ' selected':'').">Daily</option>".
+	"  <option value=H".($r->{'freq'} eq 'H' ? ' selected':'').">Hourly</option>".
+	"</select>\n";
+
+  print "<tr><td title=\"Obs interval in source file\">Interval<td>";
+  print "<input name=obsint type=number value=$r->{'obsint'}>\n";
+
+  print qq{
+    <tr><td title="Position (X,Y,Z)">Position (X,Y,Z)</td>
+        <td><input name=position type=text size=40 maxlength=40 value="$r->{position}"></td></tr>
+    <tr><td title="Observer">Observer</td>
+        <td><input name=observer type=text size=20 maxlength=20 value="$r->{observer}"></td></tr>
+    <tr><td title="Agency">Agency</td>
+        <td><input name=agency type=text size=20 maxlength=20 value="$r->{agency}"></td></tr>
+    <tr><td title="Check if site is active">Active</td>
+        <td><input type=checkbox name=active value=1}.($r->{'active'} ? " checked":"").qq{></td>
+    </table>
+
+    <br><input name=submit type=submit value=Save>
+    &nbsp;&nbsp;&nbsp;<a href="?cmd=editrinexdests&site=$site">Edit RINEX destinations for $site</a>
+    &nbsp;&nbsp;&nbsp;<a href="?cmd=sitelist">Back to sitelist</a>
+    </form>
+  };
+  print "</table>\n";
+
+  showbottom();
+}
+
+##########################################################################
+# Edit RINEX destinations
+#
+sub editrinexdests() {
+  my $site = $cgi->param('site');
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  my @filetypes = qw(Obs Nav Arc Sum);
+  my $sql;
+
+  showheader("RINEX distribution for $site");
+
+  if (defined $cgi->param('submit')) {
+    $sql = $dbh->prepare(q{
+		update	rinexdist
+		set	freq = ?, filetype = ?, obsint = ?, localdir = ?, active = ?
+		where	id = ?
+    });
+    for (my $i = 1; defined $v{"id$i"}; $i++) {
+      $v{"obsint$i"} = 0 unless defined $v{"obsint$i"};
+      $v{"active$i"} = 0 unless defined $v{"active$i"};
+      $sql->execute($v{"freq$i"}, $v{"filetype$i"}, $v{"obsint$i"}, $v{"localdir$i"}, $v{"active$i"}, $v{"id$i"});
+    }
+    $sql->finish();
+    if (defined $v{'freq'} && $v{'freq'} ne "") {
+      print "New value for $site!<br>\n";
+      $v{'obsint'} = '1' unless (defined $v{'obsint'} && $v{'obsint'} =~ /^(1|30)$/);
+      $v{'active'} = '0' unless (defined $v{'active'} && $v{'active'} =~ /^(0|1)$/);
+      $dbh->do(q{
+	insert into rinexdist (site, freq, filetype, obsint, localdir, active) values (?, ?, ?, ?, ?, ?)
+      }, undef, $site, $v{'freq'}, $v{'filetype'}, $v{'obsint'}, $v{'localdir'}, $v{'active'});
+    }
+    print "<B style=\"color:red\">Values saved!</B><P>\n";
+  } else {
+    for (my $i = 1; defined $v{"id$i"}; $i++) {
+      next unless defined $v{"del$i"};
+      $dbh->do("delete from rinexdist where id=?", undef, $v{"id$i"});
+      print "<B style=\"color:red\">Value id ".$v{"id$i"}." deleted!</B><P>\n";
+    }
+  }
+
+  my $aref = $dbh->selectall_arrayref("select name from localdirs order by name", { Slice => {} });
+  my @localdirs = map { $_->{'name'} } @$aref;
+
+  $sql = $dbh->prepare(q{
+	select	id, site, freq, filetype, obsint, localdir, active
+	from	rinexdist
+	where	site = ?
+	order by freq, localdir
+  });
+  $sql->execute($site);
+  print qq{
+	<script type="text/javascript"><!--
+	function chg(filetype,obsint) {
+          if (filetype.value != 'Obs') { obsint.value = 0; obsint.disabled = true; } else obsint.disabled = false;
+	}
+	--></script>
+	<table border=0 cellspacing=20>
+	<tr valign=top><td>
+	<form name="rinexdistform" method=POST action="$ENV{'SCRIPT_NAME'}">
+	<input type=hidden name=cmd value=editrinexdests>
+	<input type=hidden name=site value=$site>
+	<table border=1>
+	<tr><td>Freq<td>Filetype<td>Obsint<td>Localdir<td>Active<td>Action</tr>
+  };
+  my $i = 1;
+  while (my $r = $sql->fetchrow_hashref()) {
+    my $freqD = ($r->{'freq'} eq "D" ? "selected":"");
+    my $freqH = ($r->{'freq'} eq "H" ? "selected":"");
+    my $colcolor = ($r->{'active'} ? "#99E699":"#FFC0C0");
+    my $disabled = ($r->{'filetype'} eq "Obs" ? "" : "disabled");
+    print qq{
+        <tr style="background-color:$colcolor;">
+	  <input type=hidden name=id$i value=$r->{'id'}>
+	  <td><select name=freq$i><option value=D $freqD>Daily<option value=H $freqH>Hourly</select>
+	  <td><select name=filetype$i onchange=chg(this,obsint$i)>}.gen_option_list($r->{'filetype'},\@filetypes).qq{</select>
+	  <td><input type=number size=5 name=obsint$i value=$r->{'obsint'} $disabled>
+	  <td><select name=localdir$i>}.gen_option_list($r->{'localdir'},\@localdirs).qq{</select>
+	  <td><input type=checkbox name=active$i value=1}.($r->{'active'} ? " checked":"").qq{>
+	  <td><input type=submit name=del$i value=Delete>
+	</tr>
+    };
+    $i++;
+  }
+  $sql->finish();
+  print qq{
+	<tr>
+	  <td><select name=freq id=freq><option value=D>Daily<option value=H>Hourly</select>
+	  <td><select name=filetype id=filetype onchange=chg(this,obsint)>}.gen_option_list("",\@filetypes).qq{</select>
+	  <td><input type=number size=5 name=obsint disabled>
+	  <td><select name=localdir id=localdir>}.gen_option_list("",\@localdirs).qq{</select>
+	  <td><input type=checkbox name=active value=1>
+	</tr>
+	<tr>
+	  <td colspan=5><input type=submit name=submit Value=Save>
+	  &nbsp;&nbsp;<a href="?cmd=editrinexdests&site=$site">Refresh</a>
+          &nbsp;&nbsp;<a href="?cmd=editsite&site=$site">Edit $site</a>
+          &nbsp;&nbsp;<a href="?cmd=sitelist">Site list</a>
+	</tr>
+	</table></form>
+	</td>
+	<td valign=top>
+	  <b>Freq</b> can eighter be <i>Daily</i> or <i>Hourly</i>.<br>
+	  <b>Filetype</b> is one of:<br>
+	  &nbsp;&nbsp;<i>Obs</i>: Observation file in Hatanaka packed compressed format.<br>
+	  &nbsp;&nbsp;<i>Nav</i>: NAVSTAR GPS and GLONASS (if applicable) navigation files in compressed format.<br>
+	  &nbsp;&nbsp;<i>Arc</i>: ZIP file containing original unmodified files.<br>
+	  &nbsp;&nbsp;<i>Sum</i>: Sum file in gzipped format<br>
+          <b>Obsint</b>: Destination internval. If source is 1 sec interval, destination RINEX file
+		  will be decimated to this interval. Only relevant for observation file rules.<br>
+	  <b>Localdir</b>: Destination path. Must be pre-defined.<br>
+	  <b>Active</b>: Wether or not this distribution rule is active.<br>
+	  <b>Action</b>: Delete rule.
+        </td></tr>
+	</table>
+	<script type="text/javascript"><!--
+	  document.getElementById("freq").selectedIndex = -1;
+	  document.getElementById("filetype").selectedIndex = -1;
+	  document.getElementById("localdir").selectedIndex = -1;
+        --></script>
+  };
+
+  showbottom();
+}
+
+##########################################################################
+# Edit localdirs
+#
+sub editlocaldirs() {
+  showheader("Localdirs");
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+
+  if (defined $v{'submit'}) {
+    # Updates
+    my $sql = $dbh->prepare("update localdirs set path = ? where name = ?");
+    for (my $i = 0; defined $v{"name$i"}; $i++) {
+      $sql->execute($v{"name$i"}, $v{"path$i"});
+    }
+    # New value
+    if (defined $v{'name'} && defined $v{'path'}) {
+      $dbh->do("insert into localdirs (name,path) values (?,?)", undef, $v{'name'}, $v{'path'});
+    }
+  } else {
+    for (my $i = 0; defined $v{"name$i"}; $i++) {
+      my $n = $v{"name$i"};
+      if (defined $v{"del$i"}) {
+        $dbh->do("delete from localdirs where name=?", undef, $n);
+        $dbh->do("delete from rinexdist where localdir=?", undef, $n);
+        $dbh->do("delete from uploaddest where localdir=?", undef, $n);
+        print "<B style=\"color:red\">Localdir definition $n deleted!</B><P>\n";
+        last;
+      }
+    }
+  }
+
+  print qq{
+	<b style="color:red">WARNING! Deleting a localdir definition will also delete all RINEX destinations and/or FTP upload definitions for that path!</b><br>
+	<p>
+	<form name=pathform method=POST action=$ENV{'SCRIPT_NAME'}>
+	<input type=hidden name=cmd value=editlocaldirs>
+	<table border=1>
+	<tr><th>Name<th>Localdir<th>Action</tr>
+  };
+  my $aref = $dbh->selectall_arrayref("select name, path from localdirs order by name", { Slice => {} });
+  my $i = 0;
+  foreach my $r (@$aref) {
+    print qq{
+	<tr><td><input type=hidden name=name$i value="$r->{'name'}">$r->{'name'}</td>
+	<td><input type=text name=path$i size=120 value="$r->{'path'}"></td>
+	<td><input type=submit name=del$i value=Delete></td></tr>
+    };
+    $i++;
+  }
+  print q{
+	<tr><td><input type=text size=20 name=name></td>
+	<td><input type=text name=path size=120></td><td></td></tr>
+	<tr><td colspan=3><input type=submit name=submit value=Save></td></tr>
+	</table></form>
+  };
+  print "<br>Pathnames for paths to used by FTP Uploader <b>must</b> be prefixed with <i>ftp- or sftp-</i>\n";
+  showbottom();
+}
+
+##########################################################################
+# Edit FTP upload destinations.
+#
+sub uploaddest() {
+  showheader("FTP/SFTP Upload Destinations");
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+
+  print "Remember to create localdir before defining a FTP uploader.<p>\n";
+
+  my @collist = qw(name protocol host user pass privatekey localdir remotedir active);
+  my $sql;
+
+  my $aref = $dbh->selectall_arrayref(q{
+	select name from localdirs where name like 'ftp-%' or name like 'sftp-%' order by name
+  }, { Slice => {} });
+  my @uploadpaths = map { $_->{'name'} } @$aref;
+
+  if (defined $cgi->param('submit')) {
+    $sql = $dbh->prepare(q{
+	update	uploaddest
+	set	name=?, protocol=?, host=?, user=?, pass=?, privatekey=?, localdir=?, remotedir=?, active=?
+	where	id=?
+    });
+    for (my $i = 1; defined $v{"id$i"}; $i++) {
+      my @vals = ();
+      foreach (@collist) {
+        my $val = $v{"$_$i"};
+        $val = 0 if ($_ eq "active" && !defined $val);
+        push(@vals, $val);
+      }
+      $sql->execute(@vals, $v{"id$i"});
+    }
+    $sql->finish();
+    if (defined $v{'name'}) {
+      my @vals = ();
+      foreach (@collist) {
+        my $val = $cgi->param($_);
+        $val = 0 if ($_ eq "active" && !defined $val);
+        push(@vals, $val);
+      }
+      $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?,?)", undef, @vals);
+    }
+    print "<B style=\"color:red\">Values saved!</B><P>\n";
+  } else {
+    for (my $i = 1; defined $v{"id$i"}; $i++) {
+      if (defined $v{"del$i"}) {
+        $dbh->do("delete from uploaddest where id = ?", undef, $v{"del$i"});
+        print "<B style=\"color:red\">Dest id ".$v{"id$i"}." deleted!</B><P>\n";
+        last;
+      }
+    }
+  }
+
+  $sql = $dbh->prepare("select id,name,protocol,host,user,pass,privatekey,localdir,remotedir,active from uploaddest");
+  $sql->execute();
+  print qq{
+	<form name=uploaddestform method=POST action="$ENV{'SCRIPT_NAME'}">
+	<input type=hidden name=cmd value=uploaddest>
+	<table border=1>\n<tr><td>Name<td>Protocol<td>Host<td>User<td>Pass<td>Privatekey<td>Localdir<td>Remotedir<td>Active</tr>
+  };
+  my $i = 1;
+  while (my $r = $sql->fetchrow_hashref()) {
+    my $colcolor = ($r->{'active'} ? "#99E699":"#FFC0C0");
+    print qq{
+	<tr style="background-color:$colcolor;">
+	<input type=hidden name=id$i value=$r->{'id'}>
+	<td><input type=text name=name$i value="$r->{'name'}">
+	<td><input type=text name=protocol$i value="$r->{'protocol'}">
+	<td><input type=text name=host$i value="$r->{'host'}">
+	<td><input type=text name=user$i value="$r->{'user'}">
+	<td><input type=text name=pass$i value="$r->{'pass'}">
+	<td><input type=text name=privatekey$i value="$r->{'privatekey'}">
+        <td><select name=localdir$i>}.gen_option_list($r->{'localdir'},\@uploadpaths).qq{</select>
+	<td><input type=text name=remotedir$i value="$r->{'remotedir'}">
+	<td><input type=checkbox name=active$i value=1}.($r->{'active'} ? " checked":"").qq{>
+	<td><input type=submit name=del$i value=Delete></tr>
+    };
+    $i++;
+  }
+  $sql->finish();
+  print q{
+	<tr><td><input type=text name=name>
+	<td><input type=text name=protocol>
+	<td><input type=text name=host>
+	<td><input type=text name=user>
+	<td><input type=text name=pass>
+	<td><input type=text name=privatekey>
+	<td><select id=localdir name=localdir>}.gen_option_list("",\@uploadpaths).q{</select>
+	<td><input type=text name=remotedir>
+	<td><input type=checkbox name=active value=1>
+	<tr colspan=8><td><input type=submit name=submit value=Save>
+	<a href="?cmd=uploaddest">Reset</a>
+	</table>
+	</form>
+	<script>
+          document.getElementById("localdir").selectedIndex = -1;
+          document.getElementById("active").selectedIndex = -1;
+        </script>
+  };
+  showbottom();
+}
+
+##########################################################################
+# Forget DOYs.
+# Delete sums and datagaps for a given range of DOY's for a given SITE.
+#
+sub forget() {
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  showheader("Forget DOYs");
+
+  if (defined $v{'submit'}) {
+    my ($site, $year, $fromdoy, $todoy) = ($v{'site'}, $v{'year'}, $v{'fromdoy'}, $v{'todoy'});
+    if (defined $site && defined $year && defined $fromdoy) {
+      $site = uc($site);
+      $year = sy2year($year) if $year < 100;
+      $todoy = $fromdoy unless defined $todoy;
+      $todoy = $fromdoy if $todoy < $fromdoy;
+      print "Forgetting sums for $site/$year/$fromdoy-$todoy.<p>\n";
+      $dbh->do(q{ delete from gpssums where site=? and year=? and doy=>? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+      $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+    } else {
+      print "<b style=\"color:red\">Please specify all values</b><p>\n";
+    }
+  }
+
+  print qq{
+	<form name="forgetform" method=POST action="$ENV{'SCRIPT_NAME'}">
+	<input type=hidden name=cmd value=forget>
+	<table border=1>
+	<tr><td title="ssss00ccc"><b>Site:</b><td><input type=text name=site size=9></tr>
+	<tr><td title="yyyy"><b>Year:</b><td><input type=number name=year size=4></tr>
+	<tr><td title="ddd"><b>From DOY:</b><td><input type=number name=fromdoy size=3></tr>
+	<tr><td title="ddd"><b>To DOY:</b><td><input type=number name=todoy size=3></tr>
+	<tr><td colspan=2><input type=submit name=submit value=Forget></tr>
+	</table>
+	</form>
+	<p>
+	Forgetting a DOY will delete all QC's, Gaps and Sums for the given site from the database.<br>
+	It will NOT delete any files. You will need to reprocess data again.<br>
+  };
+
+  showbottom();
+}
+
+##########################################################################
+# Set 'force-complete' flag for selected site/year/doy's to force
+# jobengine to complete the day even if there are missing hours.
+#
+sub incompletes() {
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  showheader("Incomplete days");
+
+  my @now = gmtime(time());
+  my $year = 1900 + $now[5];
+  my $doy = Day_of_Year($year, $now[4]+1, $now[3]);
+
+  my $subcmd = $v{'c'};
+  if (defined $subcmd && $subcmd eq "complete") {
+    my $site = $v{'site'};
+    return unless defined $site;
+    $site = uc($site);
+    my $yd = $v{'yd'};
+    return unless defined $yd;
+    my ($year, $doy) = split(/:/, $yd);
+    my $fn = "$WORKDIR/$site/$year/$doy/force-complete";
+    open(my $fd, ">$fn"); close($fd);
+    chmod(0666, $fn);
+  }
+
+  my $nfound = 0;
+  my %sites = ();
+  open(my $pd, "-|", qq(/bin/find $WORKDIR -type f -print));
+  while (<$pd>) {
+    chomp();
+    $_ = substr($_, length($WORKDIR)+1);
+    my @a = split(/\//, $_);
+    next if ($a[1] == $year && $a[2] == $doy);	# Ignore today
+    my $site = $a[0];
+    if (defined $sites{$site}) {
+      next if index($sites{$site}, "$a[1]:$a[2]") >= 0;
+      $sites{$site} .= ",";
+    } else {
+      $sites{$site} = "";
+    }
+    $sites{$site} .= "$a[1]:$a[2]";
+    $nfound++;
+  }
+  close($pd);
+
+  if (defined $subcmd && $subcmd eq "all") {
+    foreach my $site (sort keys %sites) {
+      my @yds = split(/,/, $sites{$site});
+      foreach my $yd (sort @yds) {
+        my ($year, $doy) = split(/:/, $yd);
+        my $fn = "$WORKDIR/$site/$year/$doy/force-complete";
+        open(my $fd, ">$fn"); close($fd);
+        chmod(0666, $fn);
+      }
+    }
+    $cgi->redirect("http://".$cgi->server_name().$cgi->script_name()."?cmd=incompletes");
+  }
+
+  print "<a href=\"?cmd=incompletes\">Refresh</a>";
+  print "&nbsp; <a href=\"?cmd=incompletes&c=all\">Complete All</a>";
+  print "<p>\n";
+  if ($nfound == 0) {
+    print "No outstanding files found.<br>\n";
+  } else {
+    print "<table border=1>\n<tr><th>SITE<th>YEAR:DOY<th>Action</tr>\n";
+    foreach my $site (sort keys %sites) {
+      my @yds = split(/,/, $sites{$site});
+      foreach my $yd (sort @yds) {
+        print "<tr>\n";
+        print " <td>$site\n";
+        print " <td>$yd\n";
+        print " <td><a href=\"?cmd=incompletes&site=$site&yd=$yd&c=complete\">Complete</a>\n";
+        print "</tr>\n";
+      }
+    }
+    print "</table>\n";
+  }
+
+  showbottom();
+}
+
+##########################################################################
+# Main menu
+#
+sub menu() {
+  showheader("GPSFTP5 Administration");
+  print q{
+    <a href="?cmd=newsite">New site</a><br>
+    <a href="?cmd=sitelist">Edit sites</a><br>
+    <a href="?cmd=uploaddest">Edit FTP Upload Destinations</a><br>
+    <a href="?cmd=editlocaldirs">Edit Localdirs</a><br>
+    <a href="?cmd=forget">Forget DOYs</a><br>
+    <a href="?cmd=incompletes">Finish Incomplete DOYs</a><br>
+<!--
+    <a href="?cmd=editaliases">Edit Aliases</a><br>
+    <a href="?cmd=syslog">System log</a><br>
+    <a href="?cmd=reprocess">Reprocess DOY's</a><br>
+    <a href="?cmd=reproccurr">Reprocess current DOY for one site</a><br>
+    <a href="?cmd=mkincomplete">Make one DOY incomplete for one site</a><br>
+    <a href="?cmd=qcreport">Show Uptime report for hourly sites</a><br>
+-->
+    </body></html>
+  };
+}
+
+##########################################################################
+#  *** MAIN ***
+#
+
+my $cmd = $cgi->param('cmd');
+if (!defined $cmd || $cmd eq "menu") {
+  menu();
+} elsif ($cmd eq "sitelist") {
+  showsitelist();
+} elsif ($cmd eq "newsite") {
+  newsite();
+} elsif ($cmd eq "editsite") {
+  editsite();
+} elsif ($cmd eq "editlocaldirs") {
+  editlocaldirs();
+} elsif ($cmd eq "editrinexdests") {
+  editrinexdests();
+} elsif ($cmd eq "uploaddest") {
+  uploaddest();
+} elsif ($cmd eq "forget") {
+  forget();
+} elsif ($cmd eq "incompletes") {
+  incompletes();
+}

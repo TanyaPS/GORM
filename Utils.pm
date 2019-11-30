@@ -76,7 +76,10 @@ sub _eval_cp_args($$$$) {
 
   $srclist = join(' ', @$srclist) if ref($srclist) eq "ARRAY";
   loginfo("$cmd $srclist $dst") if $$opts{'log'};
-  make_path($dst) if $$opts{'mkdir'} && ! -d $dst;
+  if ($$opts{'mkdir'} && ! -d $dst) {
+    make_path($dst, { user=>'gpsuser', group=>'gnss' } );
+    chmod(0775, $dst);
+  }
   return system("/bin/$cmd $srclist $dst");
 }
 

@@ -55,16 +55,26 @@ Mount datastore:
 	Mount data disk on /data
 	mkdir /data/{ftp,upload,saved,queue,work}
 
-FTP users:
-	useradd -d /data/ftp -p gnss3 gnss3
+GNSS users:
+    /data/* is owned by gpsuser, except
+    FTP server owns the incoming directory /data/ftp.
+    Apache server needs write access to /data/queue.
+	groupadd gnss
+	useradd gpsuser
+	usermod -G gnss gpsuser apache
+	useradd -d /data/ftp gnss3
+	chown -R gpsuser:gpsuser /data
 	chown gnss3:gnss /data/ftp
-	chmod 775 /data/ftp
+	chgrp gnss /data/queue /data/work
+	chmod 775 /data/ftp /data/queue /data/work
+	passwd gnss3
+    Other users might want to be member of gnss:
+	usermod -G gnss usr1 usr2 ...
 
 mariadb:
 	Create /data/mysql
 		mkdir /data/mysql
 		chown mysql:mysql /data/mysql
-		chcon -u system_u -r object_r -t mysqld_db_t /data/mysql  (only if SElinux is not disabled)
 	Modify /etc/my.cnf.d/server.cnf
 		Add "datadir = /data/mysql" in [server] section
 	systemctl enable mariadb

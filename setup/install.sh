@@ -52,7 +52,7 @@ done
 
 echo "Installing CGI programs in /var/www/gnss-cgi"
 test -d /var/www/gnss-cgi || mkdir -m 755 /var/www/gnss-cgi
-install -o root -g root cgi/status.cgi /var/www/gnss-cgi
+install -o root -g root cgi/status.cgi cgi/admin.cgi /var/www/gnss-cgi
 install -o root -g root setup/gnss-cgi.conf /etc/httpd/conf.d
 apachectl restart
 

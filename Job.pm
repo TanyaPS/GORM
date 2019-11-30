@@ -13,6 +13,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 use Time::Local;
+use File::Path qw(make_path);
 use JSON;
 use Fcntl qw(:DEFAULT :flock);
 use BaseConfig;
@@ -61,7 +62,8 @@ sub getWorkdir() {
 sub mkWorkdir() {
   my $self = shift;
   my $dir = $self->getWorkdir();
-  system("/bin/mkdir -p -m 777 $dir") unless -d $dir;
+  make_path($dir, { user=>'gpsuser', group=>'gnss' }) unless -d $dir;
+  chmod(0775, $dir);  # make_path bug work-around
   return $dir;
 }
 
