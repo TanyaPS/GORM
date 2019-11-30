@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-11-30	sjm	Added partial port of admin.cgi
+- admin.cgi handles create/edit sites, destinations, localdirs. Also forget DOY and finish imcompletes.
+
 ## 2019-11-29	sjm	Make ftpuploader compatible with gpsftp4
 - Backport of ftpuploader to gpsftp4.
 
