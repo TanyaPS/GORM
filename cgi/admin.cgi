@@ -326,7 +326,7 @@ sub editrinexdests() {
 	  <b>Freq</b> can eighter be <i>Daily</i> or <i>Hourly</i>.<br>
 	  <b>Filetype</b> is one of:<br>
 	  &nbsp;&nbsp;<i>Obs</i>: Observation file in Hatanaka packed compressed format.<br>
-	  &nbsp;&nbsp;<i>Nav</i>: NAVSTAR GPS and GLONASS (if applicable) navigation files in compressed format.<br>
+	  &nbsp;&nbsp;<i>Nav</i>: Navigation files in compressed format.<br>
 	  &nbsp;&nbsp;<i>Arc</i>: ZIP file containing original unmodified files.<br>
 	  &nbsp;&nbsp;<i>Sum</i>: Sum file in gzipped format<br>
           <b>Obsint</b>: Destination internval. If source is 1 sec interval, destination RINEX file
@@ -355,18 +355,23 @@ sub editlocaldirs() {
 
   if (defined $v{'submit'}) {
     # Updates
+    my $href = $dbh->selectall_hashref(q{ select name, path from localdirs }, 'name');
     my $sql = $dbh->prepare("update localdirs set path = ? where name = ?");
     for (my $i = 0; defined $v{"name$i"}; $i++) {
-      $sql->execute($v{"name$i"}, $v{"path$i"});
+      next if $href->{$v{"name$i"}}->{'path'} eq $v{"path$i"};
+      $sql->execute($v{"path$i"}, $v{"name$i"});
+      print "<B style=\"color:red\">WARNING! Localdir $v{path} not found!!</B><P>\n" unless -d $v{"path$i"};
     }
     # New value
-    if (defined $v{'name'} && defined $v{'path'}) {
+    if (defined $v{'name'} && defined $v{'path'} && $v{'path'} !~ /^\s*$/) {
       $dbh->do("insert into localdirs (name,path) values (?,?)", undef, $v{'name'}, $v{'path'});
+      print "<B style=\"color:red\">WARNING! Localdir $v{path} not found!!</B><P>\n" unless -d $v{'path'};
     }
   } else {
+    # Check for deletes
     for (my $i = 0; defined $v{"name$i"}; $i++) {
-      my $n = $v{"name$i"};
       if (defined $v{"del$i"}) {
+        my $n = $v{"name$i"};
         $dbh->do("delete from localdirs where name=?", undef, $n);
         $dbh->do("delete from rinexdist where localdir=?", undef, $n);
         $dbh->do("delete from uploaddest where localdir=?", undef, $n);
@@ -410,6 +415,7 @@ sub editlocaldirs() {
 sub uploaddest() {
   showheader("FTP/SFTP Upload Destinations");
   my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  #print "<!-- "; print "v{$_}=$v{$_} " foreach keys %v; print "-->\n";
 
   print "Remember to create localdir before defining a FTP uploader.<p>\n";
 
@@ -437,35 +443,33 @@ sub uploaddest() {
       $sql->execute(@vals, $v{"id$i"});
     }
     $sql->finish();
-    if (defined $v{'name'}) {
+    if (defined $v{'name'} && $v{'name'} !~ /^\s*$/) {
+      $v{'active'} = 0 unless defined $v{'active'};
       my @vals = ();
-      foreach (@collist) {
-        my $val = $cgi->param($_);
-        $val = 0 if ($_ eq "active" && !defined $val);
-        push(@vals, $val);
-      }
+      push(@vals, $v{$_}) foreach @collist;
       $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?,?)", undef, @vals);
     }
     print "<B style=\"color:red\">Values saved!</B><P>\n";
   } else {
     for (my $i = 1; defined $v{"id$i"}; $i++) {
       if (defined $v{"del$i"}) {
-        $dbh->do("delete from uploaddest where id = ?", undef, $v{"del$i"});
+        $dbh->do("delete from uploaddest where id = ?", undef, $v{"id$i"});
         print "<B style=\"color:red\">Dest id ".$v{"id$i"}." deleted!</B><P>\n";
         last;
       }
     }
   }
 
-  $sql = $dbh->prepare("select id,name,protocol,host,user,pass,privatekey,localdir,remotedir,active from uploaddest");
-  $sql->execute();
+  $aref = $dbh->selectall_arrayref(q{
+	select id,name,protocol,host,user,pass,privatekey,localdir,remotedir,active from uploaddest order by name
+  }, { Slice=>{} });
   print qq{
 	<form name=uploaddestform method=POST action="$ENV{'SCRIPT_NAME'}">
 	<input type=hidden name=cmd value=uploaddest>
 	<table border=1>\n<tr><td>Name<td>Protocol<td>Host<td>User<td>Pass<td>Privatekey<td>Localdir<td>Remotedir<td>Active</tr>
   };
   my $i = 1;
-  while (my $r = $sql->fetchrow_hashref()) {
+  foreach my $r (@$aref) {
     my $colcolor = ($r->{'active'} ? "#99E699":"#FFC0C0");
     print qq{
 	<tr style="background-color:$colcolor;">
@@ -483,7 +487,6 @@ sub uploaddest() {
     };
     $i++;
   }
-  $sql->finish();
   print q{
 	<tr><td><input type=text name=name>
 	<td><input type=text name=protocol>
