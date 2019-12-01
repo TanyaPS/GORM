@@ -14,8 +14,9 @@ use strict;
 use warnings;
 use Carp;
 use Sys::Syslog qw(openlog syslog closelog);
+use BaseConfig;
 
-my $Channel = 'local1';
+my $Facility = $SYSLOG_FACILITY;
 my $Program;
 
 our (@ISA, @EXPORT);
@@ -38,31 +39,31 @@ sub setprogram($) {
   $Program = substr($Program, 0, $i) if $i > 0;
   $i = rindex($Program, '/');
   $Program = substr($Program, $i+1) if $i > 0;
-  openlog($Program, "nofatal,ndelay", $Channel);
+  openlog($Program, "nofatal,ndelay", $Facility);
 }
 
 sub logchannel($) {
-  $Channel = shift;
+  $Facility = shift;
 }
 
-sub logdebug(@) { syslog("debug|$Channel", "%s", join(' ',@_));   }
-sub loginfo(@)  { syslog("info|$Channel", "%s", join(' ',@_));    }
-sub logwarn(@)  { syslog("warning|$Channel", "%s", join(' ',@_)); }
-sub logerror(@) { syslog("err|$Channel", "%s", join(' ',@_));     }
+sub logdebug(@) { syslog("debug|$Facility", "%s", join(' ',@_));   }
+sub loginfo(@)  { syslog("info|$Facility", "%s", join(' ',@_));    }
+sub logwarn(@)  { syslog("warning|$Facility", "%s", join(' ',@_)); }
+sub logerror(@) { syslog("err|$Facility", "%s", join(' ',@_));     }
 
 sub logfatal(@) {
-  syslog("err|$Channel", "%s", join(' ',@_));
+  syslog("err|$Facility", "%s", join(' ',@_));
   carp localtime().": ".join(' ', @_);
 }
 
 sub errdie(@) {
-  syslog("err|$Channel", "%s", join(' ',@_));
+  syslog("err|$Facility", "%s", join(' ',@_));
   croak join(' ', @_);
 }
 
 sub logfmt(@) {
   my ($level, $fmt, @args) = @_;
-  syslog("$level|$Channel", $fmt, @args);
+  syslog("$level|$Facility", $fmt, @args);
 }
 
 1;

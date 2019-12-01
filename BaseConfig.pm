@@ -23,9 +23,15 @@ our $RNX2CRX  = '/usr/local/bin/rnx2crx';
 our $CRX2RNX  = '/usr/local/bin/crx2rnx';
 our $SBF2RIN  = '/usr/local/bin/sbf2rin';
 
+our $SYSLOG_FACILITY = 'local1';
+
 INIT {
+  # Check for default overrides
   if (-f '/usr/local/etc/gorm.conf') {
     my %vars = (
+	dbdsn => \$DBDSN,
+	dbuser => \$DBUSER,
+	dbpass => \$DBPASS,
 	dataroot => \$DATAROOT,
 	incoming => \$INCOMING,
 	workdir => \$WORKDIR,
@@ -37,7 +43,8 @@ INIT {
 	gfzrnx => \$GFZRNX,
 	rnx2crx => \$RNX2CRX,
 	crx2rnx => \$CRX2RNX,
-	sbf2bin => \$SBF2RIN
+	sbf2bin => \$SBF2RIN,
+	syslog_facility => \$SYSLOG_FACILITY
     );
     open(my $fd, '<', '/usr/local/etc/gorm.conf');
     while (<$fd>) {
@@ -63,6 +70,7 @@ BEGIN {
 	$DBDSN $DBUSER $DBPASS
 	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR $JOBQUEUE
 	$BNC $GFZRNX $RNX2CRX $CRX2RNX $SBF2RIN
+	$SYSLOG_FACILITY
   );
 }
 
