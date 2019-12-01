@@ -1,5 +1,11 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-01	sjm	Admin.cgi, commands and signals
+- Jobengine now able to perform custom commands via queue
+- Admin.cgi tells jobengine when to reload ftpuploader or force completion of a day.
+- Admin.cgi refuses to enable a ftpuploader rule if directory does not exist
+- Improved signal handling in ftpuploader
+
 ## 2019-11-30	sjm	Added partial port of admin.cgi
 - admin.cgi handles create/edit sites, destinations, localdirs. Also forget DOY and finish imcompletes.
 

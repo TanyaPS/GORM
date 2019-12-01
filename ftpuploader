@@ -252,22 +252,23 @@ sub reload() {
 
   # Start all in config not already running
   foreach my $conf (@$confs) {
-    next if exists $PIDS{$conf->{'name'}};
+    my $name = $conf->{'name'};
+    next if exists $PIDS{$name};
     if ($conf->{'protocol'} eq 'ftp' && (!exists $conf->{'pass'} || $conf->{'pass'} eq "")) {
-      logerror("ftp user without password ignored");
+      logerror("$name: ftp user without password ignored");
     }
     else {
       my $pid = fork();
       die("$0: cannot fork\n") unless defined $pid;
       if ($pid == 0) {
         # Child
-        $0 = "ftpuploader [$conf->{name}]";
+        $0 = "ftpuploader [$name]";
         ftpuploader($conf);
         exit(0);
       }
       # Parent
-      $PIDS{$conf->{'name'}} = $pid;
-      $TS{$conf->{'name'}} = $conf->{'ts'};
+      $PIDS{$name} = $pid;
+      $TS{$name} = $conf->{'ts'};
       $changed = 1;
     }
   }
@@ -284,18 +285,18 @@ $Debug = $opts{'d'} if defined $opts{'d'};
 setprogram("ftpuploader");
 $0 = "ftpuploader [master]";
 
-# Setup signal handling
-my $sig_received = 0;
-local $SIG{TERM} = sub { loginfo("SIGTERM"); $sig_received = 1; };
-local $SIG{INT} = sub { loginfo("SIGINT");   $sig_received = 1; };
-local $SIG{HUP} = sub { loginfo("SIGHUP"); };
-local $SIG{CHLD} = 'IGNORE';	# We dont care about return codes from childs
-
 reload();
 loginfo("ftpuploader [master] started (".(scalar(keys %PIDS))." instances)");
 
-while (!$sig_received) {
-  sleep(300);  # check for config change every 5min or if HUP'ed
+while (1) {
+  eval {
+    local $SIG{INT} = sub { loginfo("interrupted"); die("interrupted"); };
+    local $SIG{TERM} = sub { loginfo("terminated"); die("terminated"); };
+    local $SIG{HUP} = sub { die("SIGHUP") };
+    local $SIG{CHLD} = 'IGNORE';
+    sleep(300);  # check for config change every 5min or if HUP'ed
+  };
+  last if $@ && $@ !~ /^SIGHUP/;	# exit on anything not a HUP
   reload();
 }
 

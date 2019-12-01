@@ -21,7 +21,6 @@ my $DB;
 my %SCS;			# All sites defined
 my %Pending;			# Postponed jobs to be submitted
 my $Debug = 0;
-my $sig_received = "";		# Set on SIGINT and SIGTERM
 my $PollInterval = 16;		# Timeout for new files
 
 
@@ -266,7 +265,7 @@ loginfo("$0 started. Debug=$Debug");
 
 scan_incoming();
 
-while ($sig_received eq "") {
+while (1) {
   eval {
     local $SIG{ALRM} = sub { die("gpspickupalarm"); };
     local $SIG{INT} = sub { die("interrupted"); };

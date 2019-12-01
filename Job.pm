@@ -485,13 +485,13 @@ sub createWantedIntervals($) {
   my ($site, $srcinterval) = ($self->{'site'}, $self->{'interval'});
 
   my $aref = $self->{'DB'}->{'DBH'}->selectall_arrayref(q{
-	select distinct obsint from rinexdist where site = ? and active = 1
+	select distinct obsint from rinexdist where site = ? and filetype = 'Obs' and active = 1
   }, { Slice => {} }, $self->{'site'});
   my %intervals = map { $_->{'obsint'} => 1 } @$aref;
   $intervals{'30'} = 1;  # always need 30s files
 
   foreach my $interval (keys %intervals) {
-    next if $interval == $srcinterval || exists $rs->{'MO.'.$interval};
+    next if int($interval) == int($srcinterval) || exists $rs->{'MO.'.$interval};
     if ($interval < $srcinterval) {
       logerror("Cannot create ${interval}s RINEX based in ${srcinterval}s RINEX files");
       next;

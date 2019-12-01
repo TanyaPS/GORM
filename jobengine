@@ -101,15 +101,85 @@ sub onfinish() {
 }
 
 #####################################
+# Submit a dayjob on an incomplete day
+#
+sub force_completion($$$) {
+  my ($site, $year, $doy) = @_;
+
+  loginfo("Force completion of $site-$year-$doy");
+  my $dayjob = new Job(site => $site, year => $year, doy => $doy);
+  my $workdir = $dayjob->getWorkdir;
+  my $statusfile = "$workdir/status.json";
+  my $lock = lock($statusfile);
+  my $sta = statusdb($statusfile);
+  my $interval;
+  foreach my $hour (keys %$sta) {
+    next unless $sta->{$hour} eq 'processed';
+    my $rs = new RinexSet(rsfile => "$workdir/rs.$hour.json");
+    $interval = $rs->{'interval'};
+    last if defined $interval;
+  }
+  if (defined $interval) {
+    ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'incomplete'}) = ('0', $interval, 1);
+    $dayjob->submitjob('hour2daily');
+    statusdb($statusfile, '0', "queued");
+  } else {
+    logerror("Cannot force completion of $site-$year-$doy. No proccessed hours.");
+  }
+  unlock($lock);
+}
+
+
+#####################################
+# Look for forced incomplete days and submit them
+#
+sub scan_for_forced_incompletes() {
+  sub dirscan($) {
+    my $dir = shift;
+    opendir(my $dh, $dir);
+    my @dirs = grep { index($_,'.') != 0 && -d "$dir/$_" } readdir($dh);
+    closedir($dh);
+    return @dirs;
+  }
+  foreach my $site (dirscan($WORKDIR)) {
+    foreach my $year (dirscan("$WORKDIR/$site")) {
+      foreach my $doy (dirscan("$WORKDIR/$site/$year")) {
+        my $w = "$WORKDIR/$site/$year/$doy";
+        next unless -f "$w/force-complete" && -f "$w/status.json";
+        unlink("$w/force-complete");
+        force_completion($site, $year, $doy);
+      }
+    }
+  }
+}
+
+#####################################
+# Run command issued by someone like admin.cgi
+#
+sub runcommand($) {
+  my $file = shift;
+  open(my $fd, '<', $file);
+  my $cmd = <$fd>; chomp;
+  close($fd);
+
+  if ($cmd =~ /^reload ftpuploader/) {
+    sysrun("systemctl reload ftpuploader");
+  }
+  elsif ($cmd =~ /^force complete (\w+) (\d+) (\d+)/) {
+    force_completion($1, $2, $3);
+  }
+}
+
+#####################################
 # Spawn a job using ForkManager
 #
 sub runjob($) {
   my $jobfile = shift;
 
-  if ($jobfile =~ /reload-ftpuploader$/) {
+  if ($jobfile =~ /command$/) {
     # message from admin.cgi
+    runcommand($jobfile);
     unlink($jobfile);
-    system("systemctl reload ftpuploader");
     return;
   }
 
@@ -142,46 +212,6 @@ sub runjob($) {
     logerror("FATAL ERROR: $@");	# Serious program error occurred.
   };
   $FM->finish(0);			# exit this instance
-}
-
-#####################################
-# Look for forced incomplete days and submit them
-#
-sub scan_for_forced_incompletes() {
-  sub dirscan($) {
-    my $dir = shift;
-    opendir(my $dh, $dir);
-    my @dirs = grep { index($_,'.') != 0 && -d "$dir/$_" } readdir($dh);
-    closedir($dh);
-    return @dirs;
-  }
-  foreach my $site (dirscan($WORKDIR)) {
-    foreach my $year (dirscan("$WORKDIR/$site")) {
-      foreach my $doy (dirscan("$WORKDIR/$site/$year")) {
-        my $workdir = "$WORKDIR/$site/$year/$doy";
-        my $statusfile = "$workdir/status.json";
-        next unless -f "$workdir/force-complete" && -f $statusfile;
-        unlink("$workdir/force-complete");
-        my $lock = lock($statusfile);
-        my $sta = statusdb($statusfile);
-        my $interval;
-        foreach my $hour (keys %$sta) {
-          next unless $sta->{$hour} eq "processed";
-          my $rs = new RinexSet(rsfile => "$workdir/rs.$hour.json");
-          $interval = $rs->{'interval'};
-          last if defined $interval;
-        }
-        if (defined $interval) {
-          my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $interval, incomplete => 1);
-          $dayjob->submitjob('hour2daily');
-          statusdb($statusfile, '0', "queued");
-        } else {
-          logerror("Cannot force completion of $site-$year-$doy. No proccessed hours.");
-        }
-        unlock($lock);
-      }
-    }
-  }
 }
 
 #####################################

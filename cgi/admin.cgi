@@ -53,6 +53,16 @@ sub gen_option_list($$) {
   return $str;
 }
 
+# Send a command to jobengine
+sub sendcommand($) {
+  my $cmd = shift;
+
+  open(my $fd, '>', "$JOBQUEUE/command");
+  print $fd "$cmd\n";
+  chmod(0666, "$JOBQUEUE/command");
+  close($fd);
+}
+
 ##########################################################################
 # New site
 #
@@ -365,7 +375,6 @@ sub editlocaldirs() {
     # New value
     if (defined $v{'name'} && defined $v{'path'} && $v{'path'} !~ /^\s*$/) {
       $dbh->do("insert into localdirs (name,path) values (?,?)", undef, $v{'name'}, $v{'path'});
-      print "<B style=\"color:red\">WARNING! Localdir $v{path} not found!!</B><P>\n" unless -d $v{'path'};
     }
   } else {
     # Check for deletes
@@ -382,7 +391,7 @@ sub editlocaldirs() {
   }
 
   print qq{
-	<b style="color:red">WARNING! Deleting a localdir definition will also delete all RINEX destinations and/or FTP upload definitions for that path!</b><br>
+	<b style="color:blue">WARNING! Deleting a localdir definition will also delete all RINEX destinations and/or FTP upload definitions for that path!</b><br>
 	<p>
 	<form name=pathform method=POST action=$ENV{'SCRIPT_NAME'}>
 	<input type=hidden name=cmd value=editlocaldirs>
@@ -405,7 +414,8 @@ sub editlocaldirs() {
 	<tr><td colspan=3><input type=submit name=submit value=Save></td></tr>
 	</table></form>
   };
-  print "<br>Pathnames for paths to used by FTP Uploader <b>must</b> be prefixed with <i>ftp- or sftp-</i>\n";
+  print "Localdir definitions are used in Rinex distribution rules and in Uploader rules.<br>\n";
+  print "Localdir names for paths to used by Uploader <b>must</b> be prefixed with <i>ftp- or sftp-</i> and they <b>must</b> reside in /data/upload\n";
   showbottom();
 }
 
@@ -429,6 +439,16 @@ sub uploaddest() {
 
   my $changed = 0;
   if (defined $cgi->param('submit')) {
+    sub checkpath($) {	# Check if path exists. Disable rule if not.
+      my $localdir = shift;
+      my $href = $dbh->selectrow_hashref(q{ select path from localdirs where name = ? }, undef, $localdir);
+      unless (defined $href && -d $href->{'path'}) {
+        print "<b style=\"color:red\">Localdir ".$href->{'path'}." ($localdir) does not exist. Deactivating rule.</b><p>\n";
+        return 0;
+      }
+      return 1;
+    }
+    my $msg = "";
     $sql = $dbh->prepare(q{
 	update	uploaddest
 	set	name=?, protocol=?, host=?, user=?, pass=?, privatekey=?, localdir=?, remotedir=?, active=?
@@ -436,16 +456,15 @@ sub uploaddest() {
     });
     for (my $i = 1; defined $v{"id$i"}; $i++) {
       my @vals = ();
-      foreach (@collist) {
-        my $val = $v{"$_$i"};
-        $val = 0 if ($_ eq "active" && !defined $val);
-        push(@vals, $val);
-      }
+      $v{"active$i"} = 0 unless defined $v{"active$i"};
+      $v{"active$i"} = checkpath($v{"localdir$i"}) if $v{"active$i"};
+      push(@vals, $v{"$_$i"}) foreach @collist;
       $sql->execute(@vals, $v{"id$i"});
     }
     $sql->finish();
     if (defined $v{'name'} && $v{'name'} !~ /^\s*$/) {
       $v{'active'} = 0 unless defined $v{'active'};
+      $v{'active'} = checkpath($v{'localdir'}) if $v{'active'};
       my @vals = ();
       push(@vals, $v{$_}) foreach @collist;
       $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?,?)", undef, @vals);
@@ -462,9 +481,7 @@ sub uploaddest() {
       }
     }
   }
-  if ($changed) {
-    open(my $fd, ">$JOBQUEUE/reload-ftpuploader"); close($fd);
-  }
+  sendcommand("reload ftpuploader") if $changed;
 
   $aref = $dbh->selectall_arrayref(q{
 	select id,name,protocol,host,user,pass,privatekey,localdir,remotedir,active from uploaddest order by name
@@ -577,9 +594,7 @@ sub incompletes() {
     my $yd = $v{'yd'};
     return unless defined $yd;
     my ($year, $doy) = split(/:/, $yd);
-    my $fn = "$WORKDIR/$site/$year/$doy/force-complete";
-    open(my $fd, ">$fn"); close($fd);
-    chmod(0666, $fn);
+    sendcommand("force complete $site $year $doy");
   }
 
   my $nfound = 0;
@@ -607,9 +622,7 @@ sub incompletes() {
       my @yds = split(/,/, $sites{$site});
       foreach my $yd (sort @yds) {
         my ($year, $doy) = split(/:/, $yd);
-        my $fn = "$WORKDIR/$site/$year/$doy/force-complete";
-        open(my $fd, ">$fn"); close($fd);
-        chmod(0666, $fn);
+        sendcommand("force complete $site $year $doy");
       }
     }
     $cgi->redirect("http://".$cgi->server_name().$cgi->script_name()."?cmd=incompletes");
