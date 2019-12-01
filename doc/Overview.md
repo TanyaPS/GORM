@@ -1,7 +1,8 @@
 # System overview
 
 Paths are defined in BaseConfig.pm as variables. Paths mentioned below
-may be different.
+may be different.<br/>
+gpspickup, jobengine and ftpuploader are running as daemons managed by systemd.
 
 ## Overall Dataflow
 - gpspickup detect new file in /data/ftp (FTP server inbound)
@@ -73,6 +74,14 @@ Utilities and binaries are installed in /usr/local/bin.
 ### Utils.pm
   Utility functions used in all modules
 
+### cgi/status.cgi
+  Web page show the current status of processing.
+  Installed in /var/www/gnss-cgi and accessed  by http://host/status.cgi
+
+### cgi/admin.cgi
+  Administration of runtime configuration in the database.
+  Installed in /var/www/gnss-cgi and accessed by http://host/admin.cgi.
+  Requires username and password which is defined in /usr/local/etc/gnss-admin.psw (htpasswd file).
 
 ## Paths
 ### /data/ftp
