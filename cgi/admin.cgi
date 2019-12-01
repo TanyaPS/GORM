@@ -153,6 +153,210 @@ sub showsitelist() {
 }
 
 ##########################################################################
+# Edit antennas for site
+#
+sub editantennas() {
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  showheader("Edit ".$v{'site'}." antennas");
+
+  if (defined $v{'submit'}) {
+    sub checkantrow($$) {
+      my ($r,$x) = @_;
+      my $msg = "";
+      if (index($$r{"anttype$x"},',') < 0) {
+        $msg .= "Antenna type format: product,type<br>";
+      } elsif ($$r{"antdelta$x"} !~ /\d+,\d+,\d+/) {
+        $msg .= "Delta format: X,Y,Z<br>";
+      } elsif ($$r{"startdate$x"} !~ /[0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}/) {
+        $msg .= "Date format: YYYY-MM-DD HH:MI:SS";
+      } elsif (defined $$r{"enddate$x"} &&
+               $$r{"enddate$x"} !~ /[0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}/) {
+        $msg .= "Date format: YYYY-MM-DD HH:MI:SS" if $$r{"enddate$x"} !~ /^\s*$/;
+      }
+      return $msg;
+    }
+    my $sql = $dbh->prepare(q{
+	update antennas set anttype=?, antsn=?, antdelta=?, startdate=?, enddate=?
+	where	id=?
+    });
+    for (my $i = 0; defined $v{"id$i"}; $i++) {
+      $v{"enddate$i"} = undef if $v{"enddate$i"} =~ /^\s*$/;
+      my $msg = checkantrow(\%v,$i);
+      if (length($msg) > 0) {
+        print qq{<b style="color:red">$msg</b>}."\n";
+      } else {
+        $sql->execute($v{"anttype$i"}, $v{"antsn$i"}, $v{"antdelta$i"}, $v{"startdate$i"}, $v{"enddate$i"}, $v{"id$i"});
+      }
+    }
+    if (defined $v{'id'} && $v{'id'} eq 'new' && $v{'anttype'} !~ /^\s*$/) {
+      $v{"enddate"} = undef if $v{"enddate"} =~ /^\s*$/;
+      my $msg = checkantrow(\%v,"");
+      if (length($msg) > 0) {
+        print qq{<b style="color:red">$msg</b>}."\n";
+      } else {
+        $dbh->do(q{ insert into antennas (site, anttype, antsn, antdelta, startdate, enddate) values (?,?,?,?,?,?) },
+                 undef, $v{'site'}, $v{'anttype'},$v{'antsn'},$v{'antdelta'},$v{'startdate'},$v{'enddate'});
+        print q{<b style="color:blue">Values saved</b>}."\n";
+      }
+    }
+  } else {
+    for (my $i = 0; defined $v{"id$i"}; $i++) {
+      next unless defined $v{"del$i"};
+      $dbh->do(q{ delete from antennas where id=? }, undef, $v{"id$i"});
+      last;
+    }
+  }
+
+  my $aref = $dbh->selectall_arrayref(q{
+	select	id, anttype, antsn, antdelta, startdate, enddate
+	from	antennas
+	where	site = ?
+	order by site, startdate
+  }, { Slice => {} }, $v{'site'});
+
+  print qq{
+	<form name=editantennas method=POST action=$ENV{'SCRIPT_NAME'}>
+	<input name=cmd type=hidden value=editantennas>
+	<input name=site type=hidden value=$v{site}>
+	<table border=1>
+	<tr><th align=left>Antenna type</th><th>Antenna S/N</th><th>Delta</th><th>Startdate</th><th>Enddate</th><th>Action</th></tr>
+  };
+  sub printantrow(;$$) {
+    my ($r, $i) = @_;
+    if (!defined $r) {
+      $r = { id=>'new', anttype=>'', antsn=>'', antdelta=>'', startdate=>'', enddate=>'' };
+      $i = "";
+    } elsif (!defined $r->{'enddate'}) {
+      $r->{'enddate'} = '';
+    }
+    print qq{
+	<tr>
+        <td><input type=hidden name=id$i value=$r->{id}>
+	    <input type=text name=anttype$i value="$r->{anttype}" size=20></td>
+	<td><input type=text name=antsn$i value="$r->{antsn}" size=20></td>
+	<td><input type=text name=antdelta$i value="$r->{antdelta}" size=20></td>
+	<td><input type=text name=startdate$i value="$r->{startdate}" size=20></td>
+	<td><input type=text name=enddate$i value="$r->{enddate}" size=20></td>
+    };
+    print "<td><input type=submit name=del$i value=Delete></td>\n" if $r->{'anttype'} ne '';
+    print "</tr>\n";
+  }
+  my $i = 0;
+  printantrow($_, $i++) foreach @$aref;
+  printantrow();
+  print qq{
+	</table>
+	<input type=submit name=submit value=Save>
+	&nbsp;&nbsp;&nbsp;<a href="?cmd=menu">Main menu</a>
+	&nbsp;&nbsp;&nbsp;<a href="?cmd=editsite&site=$v{site}">Edit $v{site}</a>
+	</form>
+  };
+}
+
+##########################################################################
+# Edit receivers for site
+#
+sub editreceivers() {
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  showheader("Edit ".$v{'site'}." receivers");
+
+  if (defined $v{'submit'}) {
+    sub checkrcvrow($$) {
+      my ($r,$x) = @_;
+      my $msg = "";
+      if (!defined $$r{"recsn$x"} || $$r{"recsn$x"} =~ /^\s*$/) {
+        $msg .= "Receiver S/N is mandatory";
+      } elsif (index($$r{"rectype$x"},',') < 0) {
+        $msg .= "Receiver type format: product,type<br>";
+      } elsif (!defined $$r{"firmware$x"} || $$r{"firmware$x"} =~ /^\s*$/) {
+        $msg .= "Receiver firmware is mandatory";
+      } elsif ($$r{"startdate$x"} !~ /[0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}/) {
+        $msg .= "Date format: YYYY-MM-DD HH:MI:SS";
+      } elsif (defined $$r{"enddate$x"} &&
+               $$r{"enddate$x"} !~ /[0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}/) {
+        $msg .= "Date format: YYYY-MM-DD HH:MI:SS" if $$r{"enddate$x"} !~ /^\s*$/;
+      }
+      return $msg;
+    }
+    my $sql = $dbh->prepare(q{
+	update receivers set recsn=?, rectype=?, firmware=?, startdate=?, enddate=?
+	where	id=?
+    });
+    for (my $i = 0; defined $v{"id$i"}; $i++) {
+      $v{"enddate$i"} = undef if $v{"enddate$i"} =~ /^\s*$/;
+      my $msg = checkrcvrow(\%v,$i);
+      if (length($msg) > 0) {
+        print qq{<b style="color:red">$msg</b>}."\n";
+      } else {
+        $sql->execute($v{"recsn$i"}, $v{"rectype$i"}, $v{"firmware$i"}, $v{"startdate$i"}, $v{"enddate$i"}, $v{"id$i"});
+      }
+    }
+    if (defined $v{'id'} && $v{'id'} eq 'new' && $v{'recsn'} !~ /^\s*$/) {
+      $v{"enddate"} = undef if $v{"enddate"} =~ /^\s*$/;
+      my $msg = checkrcvrow(\%v,"");
+      if (length($msg) > 0) {
+        print qq{<b style="color:red">$msg</b>}."\n";
+      } else {
+        $dbh->do(q{ insert into receivers (site, recsn, rectype, firmware, startdate, enddate) values (?,?,?,?,?,?) },
+                 undef, $v{'site'}, $v{'recsn'},$v{'rectype'},$v{'firmware'},$v{'startdate'},$v{'enddate'});
+        print q{<b style="color:blue">Values saved</b>}."\n";
+      }
+    }
+  } else {
+    for (my $i = 0; defined $v{"id$i"}; $i++) {
+      next unless defined $v{"del$i"};
+      $dbh->do(q{ delete from receivers where id=? }, undef, $v{"id$i"});
+      last;
+    }
+  }
+
+  my $aref = $dbh->selectall_arrayref(q{
+	select	id, recsn, rectype, firmware, startdate, enddate
+	from	receivers
+	where	site = ?
+	order by site, startdate
+  }, { Slice => {} }, $v{'site'});
+
+  print qq{
+	<form name=editreceivers method=POST action=$ENV{'SCRIPT_NAME'}>
+	<input name=cmd type=hidden value=editreceivers>
+	<input name=site type=hidden value=$v{site}>
+	<table border=1>
+	<tr><th align=left>Receiver S/N</th><th>Receiver type</th><th>Firmware</th><th>Startdate</th><th>Enddate</th><th>Action</th></tr>
+  };
+  sub printrcvrow(;$$) {
+    my ($r, $i) = @_;
+    if (!defined $r) {
+      $r = { id=>'new', recsn=>'', rectype=>'', firmware=>'', startdate=>'', enddate=>'' };
+      $i = "";
+    } elsif (!defined $r->{'enddate'}) {
+      $r->{'enddate'} = '';
+    }
+    print qq{
+	<tr>
+        <td><input type=hidden name=id$i value=$r->{id}>
+	    <input type=text name=recsn$i value="$r->{recsn}" size=20></td>
+	<td><input type=text name=rectype$i value="$r->{rectype}" size=20></td>
+	<td><input type=text name=firmware$i value="$r->{firmware}" size=20></td>
+	<td><input type=text name=startdate$i value="$r->{startdate}" size=20></td>
+	<td><input type=text name=enddate$i value="$r->{enddate}" size=20></td>
+    };
+    print "<td><input type=submit name=del$i value=Delete></td>\n" if $r->{'recsn'} ne '';
+    print "</tr>\n";
+  }
+  my $i = 0;
+  printrcvrow($_, $i++) foreach @$aref;
+  printrcvrow();
+  print qq{
+	</table>
+	<input type=submit name=submit value=Save>
+	&nbsp;&nbsp;&nbsp;<a href="?cmd=menu">Main menu</a>
+	&nbsp;&nbsp;&nbsp;<a href="?cmd=editsite&site=$v{site}">Edit $v{site}</a>
+	</form>
+  };
+}
+
+##########################################################################
 # Edit site parameters.
 #
 sub editsite() {
@@ -223,8 +427,10 @@ sub editsite() {
     </table>
 
     <br><input name=submit type=submit value=Save>
-    &nbsp;&nbsp;&nbsp;<a href="?cmd=editrinexdests&site=$site">Edit RINEX destinations for $site</a>
     &nbsp;&nbsp;&nbsp;<a href="?cmd=sitelist">Back to sitelist</a>
+    &nbsp;&nbsp;&nbsp;<a href="?cmd=editrinexdests&site=$site">Edit destinations</a>
+    &nbsp;&nbsp;&nbsp;<a href="?cmd=editantennas&site=$site">Edit antennas</a>
+    &nbsp;&nbsp;&nbsp;<a href="?cmd=editreceivers&site=$site">Edit receivers</a>
     </form>
   };
   print "</table>\n";
@@ -548,7 +754,7 @@ sub forget() {
       $todoy = $fromdoy unless defined $todoy;
       $todoy = $fromdoy if $todoy < $fromdoy;
       print "Forgetting sums for $site/$year/$fromdoy-$todoy.<p>\n";
-      $dbh->do(q{ delete from gpssums where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+      $dbh->do(q{ delete from gpssums where site=? and year=? and doy=>? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
       $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
     } else {
       print "<b style=\"color:red\">Please specify all values</b><p>\n";
@@ -698,4 +904,8 @@ if (!defined $cmd || $cmd eq "menu") {
   forget();
 } elsif ($cmd eq "incompletes") {
   incompletes();
+} elsif ($cmd eq "editantennas") {
+  editantennas();
+} elsif ($cmd eq "editreceivers") {
+  editreceivers();
 }
