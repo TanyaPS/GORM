@@ -56,6 +56,13 @@ install -o root -g root cgi/status.cgi cgi/admin.cgi /var/www/gnss-cgi
 install -o root -g root setup/gnss-cgi.conf /etc/httpd/conf.d
 apachectl restart
 
+if [ ! -f /usr/local/etc/gnss-admin.psw ]; then
+  echo "Set password for admin.cgi user admin:"
+  htpasswd -c /usr/local/etc/gnss-admin.psw admin
+  chown apache:apache /usr/local/etc/gnss-admin.psw
+  chmod 644 /usr/local/etc/gnss-admin.psw
+fi
+
 echo "Installing daemons in /usr/local/sbin"
 for i in gpspickup jobengine ftpuploader; do
   install -o root -g daemon -m 755 $i /usr/local/sbin
