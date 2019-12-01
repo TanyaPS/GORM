@@ -754,7 +754,7 @@ sub forget() {
       $todoy = $fromdoy unless defined $todoy;
       $todoy = $fromdoy if $todoy < $fromdoy;
       print "Forgetting sums for $site/$year/$fromdoy-$todoy.<p>\n";
-      $dbh->do(q{ delete from gpssums where site=? and year=? and doy=>? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+      $dbh->do(q{ delete from gpssums where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
       $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
     } else {
       print "<b style=\"color:red\">Please specify all values</b><p>\n";
