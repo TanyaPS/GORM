@@ -62,6 +62,23 @@ for i in gpspickup jobengine ftpuploader; do
   install -o root -g root -m 644 setup/$i.service /etc/systemd/system
 done
 
+doinstall=1
+if [ -f /usr/local/etc/gorm.conf ]; then
+  if egrep -E -v -q '^[[:space:]]*#|^[[:space:]]*$' /usr/local/etc/gorm.conf; then
+    echo "Not installing /usr/local/etc/gorm.conf"
+    doinstall=0
+  fi
+fi
+if [ $doinstall = 1 ]; then
+  echo "Installing default /usr/local/etc/gorm.conf"
+  install -o root -g root -m 644 setup/gorm.conf /usr/local/etc
+fi
+
+echo "Installing utils in /usr/local/bin"
+for i in bin/*; do
+  install -o root -g bin -m 755 $i /usr/local/bin
+done
+
 for i in bnc gfzrnx rnx2crx crx2rnx sbf2rin; do
   test -x /usr/local/bin/$i || echo "You need to install /usr/local/bin/$i. See doc/INSTALL"
 done

@@ -23,9 +23,41 @@ our $RNX2CRX  = '/usr/local/bin/rnx2crx';
 our $CRX2RNX  = '/usr/local/bin/crx2rnx';
 our $SBF2RIN  = '/usr/local/bin/sbf2rin';
 
+INIT {
+  if (-f '/usr/local/etc/gorm.conf') {
+    my %vars = (
+	dataroot => \$DATAROOT,
+	incoming => \$INCOMING,
+	workdir => \$WORKDIR,
+	savedir => \$SAVEDIR,
+	staledir => \$STALEDIR,
+	tmpdir => \$TMPDIR,
+	jobqueue => \$JOBQUEUE,
+	bnc => \$BNC,
+	gfzrnx => \$GFZRNX,
+	rnx2crx => \$RNX2CRX,
+	crx2rnx => \$CRX2RNX,
+	sbf2bin => \$SBF2RIN
+    );
+    open(my $fd, '<', '/usr/local/etc/gorm.conf');
+    while (<$fd>) {
+      next if /^\s*#|^\s*$/;
+      chomp;
+      if (/\s*(\w+)\s*=\s*([^\s]+)/) {
+        if (exists $vars{$1}) {
+          my $ref = $vars{$1};
+          $$ref = $2;
+        }
+      }
+    }
+    close($fd);
+  }
+}
+
 our (@ISA, @EXPORT);
 BEGIN {
   require Exporter;
+
   @ISA = qw(Exporter);
   @EXPORT = qw(
 	$DBDSN $DBUSER $DBPASS

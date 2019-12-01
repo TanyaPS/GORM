@@ -75,13 +75,16 @@ Utilities and binaries are installed in /usr/local/bin.
   Utility functions used in all modules
 
 ### cgi/status.cgi
-  Web page show the current status of processing.
-  Installed in /var/www/gnss-cgi and accessed  by http://host/status.cgi
+  Web page show the current status of processing.<br/>
+  Installed in /var/www/gnss-cgi and accessed by http://host/status.cgi
 
 ### cgi/admin.cgi
-  Administration of runtime configuration in the database.
-  Installed in /var/www/gnss-cgi and accessed by http://host/admin.cgi.
+  Administration of runtime configuration in the database.<br/>
+  Installed in /var/www/gnss-cgi and accessed by http://host/admin.cgi.<br/>
   Requires username and password which is defined in /usr/local/etc/gnss-admin.psw (htpasswd file).
+
+### /usr/local/etc/gorm.conf
+  Overrides default global constants defined in BaseConfig.pm
 
 ## Paths
 ### /data/ftp
