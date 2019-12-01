@@ -18,7 +18,7 @@ use Logger;
 use RinexSet;
 use Job;
 
-my $PollInterval = 31;	# Poll timeout seconds
+my $PollInterval = 11;	# Poll timeout seconds
 my %Running;
 my $Debug = 1;  	# set with -d option
 my $FM;			# FormManager
@@ -262,6 +262,11 @@ runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
 my $inotify = new Linux::Inotify2;
 my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
 
+# Need a fast poll interval to reap finished childs quickly
+# But we do not need to scan files that frequently
+my $lastscan = time();
+my $scaninterval = 300;		# Scan for force-complete every 5 min
+
 # main loop
 while (1) {
   # ForkManager needs reaping of finished childs to force callback
@@ -279,7 +284,10 @@ while (1) {
     my $msg = $@;
     if ($msg =~ /^jobenginealarm/) {
       runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
-      scan_for_forced_incompletes();
+      if (time() > $lastscan + $scaninterval) {
+        scan_for_forced_incompletes();
+        $lastscan = time();
+      }
     } elsif ($msg =~ /^(\w+)/) {
       loginfo($1);
       last;
