@@ -6,6 +6,7 @@
 - Admin.cgi refuses to enable a ftpuploader rule if directory does not exist
 - Improved signal handling in ftpuploader
 - Make it possible to override default global contants (BaseConfig.pm) using /usr/local/etc/gorm.conf
+- Add edit of antennas and receivers to admin.cgi
 
 ## 2019-11-30	sjm	Added partial port of admin.cgi
 - admin.cgi handles create/edit sites, destinations, localdirs. Also forget DOY and finish imcompletes.
