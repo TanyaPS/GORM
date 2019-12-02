@@ -134,7 +134,7 @@ sub ftpuploader($) {
         my ($site, $site4, $year, $doy, $hour, $hh);
         # TEJH00DNK_R_20171890000_01D_30S_MO.rnx
         if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})/) {
-          ($site, $year, $doy, $hh) = ($1, $2, int($3), int($4));
+          ($site, $year, $doy, $hh) = ($1, $2, $3, $4);
           $site4 = substr($site, 0, 4);
           $hour = chr(ord('a')+$hh);
         }
