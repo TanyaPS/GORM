@@ -72,10 +72,10 @@ sub newsite() {
   if (defined $cgi->param('submit')) {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     my $site = $v{'site'};
-    $v{'position'} = "0,0,0" unless defined $v{'position'} && index($v{'position'},',') > 0;
-    $v{'observer'} = 'SDFE' unless defined $v{'observer'};
-    $v{'agency'} = 'SDFE' unless defined $v{'agency'};
-    $v{'freq'} = (defined $v{'freq'} ? substr($v{'freq'},0,1) : 'D');
+    $v{'position'} = "0,0,0" unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
+    $v{'observer'} = 'SDFE' unless defined $v{'observer'} && v{'observer'} !~ /^\s*$/;
+    $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
+    $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
     $v{'active'} = 0 unless defined $v{'active'};
     if (!defined $site || length($site) != 9) {
       print "<B style=\"color:red\">Site must be specified and must be 9 characters long (SSSS00DNK)</b><p>\n";
@@ -367,6 +367,10 @@ sub editsite() {
   if (defined $cgi->param('submit')) {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     $v{'active'} = 0 unless defined $v{'active'};
+    $v{'position'} = "0,0,0" unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
+    $v{'observer'} = 'SDFE' unless defined $v{'observer'} && v{'observer'} !~ /^\s*$/;
+    $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
+    $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
     if (!defined $v{'obsint'} || $v{'obsint'} <= 0) {
       print "<b>ERROR: Observation internval must be specified</b><p>\n";
     } else {
