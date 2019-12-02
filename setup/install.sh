@@ -27,6 +27,7 @@ perl-Time-Local
 perl-JSON
 perl-JSON-XS
 perl-DBI
+perl-DBD-MySQL
 perl-IO-Compress
 perl-Compress-Raw-Zlib
 perl-Archive-Zip
