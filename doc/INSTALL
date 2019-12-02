@@ -61,7 +61,8 @@ GNSS users:
     Apache server needs write access to /data/queue.
 	groupadd gnss
 	useradd gpsuser
-	usermod -G gnss gpsuser apache
+	usermod -G gnss gpsuser
+	usermod -G gnss apache
 	useradd -d /data/ftp gnss3
 	chown -R gpsuser:gpsuser /data
 	chown gnss3:gnss /data/ftp
@@ -69,7 +70,7 @@ GNSS users:
 	chmod 775 /data/ftp /data/queue /data/work
 	passwd gnss3
     Other users might want to be member of gnss:
-	usermod -G gnss usr1 usr2 ...
+	usermod -G gnss usr
 
 mariadb:
 	Create /data/mysql
@@ -104,3 +105,18 @@ mariadb:
 firewall:
 	If this host is exposed to the internet, then it should have a firewall install.
 	/usr/local/bin/fw is a tool to maintain iptables as firewall.
+
+
+Override default configation settings:
+	If you need to override the default location of someting, you can do so in
+	/usr/local/etc/gorm.conf. The values commented out are the defaults
+	from the installation.
+
+	If you, for example, want the scripts to use a database on another server
+	you could set 'dbdsn' in /usr/local/etc/gorm.conf like this:
+		dbdsn = DBI:mysql:database=gps;host=gpsftp5.prod.sitad.dk
+	You will then need to create an user in the database to allow this:
+		mysql -u root -p gps
+		create user gpsuser@myremotehost.domain.tld identified by 'gpsuser';
+		grant select,insert,delete,update on gps.* to gpsuser@myremotehost.domain.tld;
+		flush privileges;
