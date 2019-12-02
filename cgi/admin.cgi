@@ -115,7 +115,9 @@ sub newsite() {
 	<tr><td colspan=2><input type=submit name=submit value=Save></td></tr>
 	</table></form>
 	<p>
-	Marker number is deleted from headers if not specified.<br>
+	If Marker Number is blank and Marker Number is Unknown in original file, set Marker Number to short sitename.<br>
+	If Marker number is blank and Marker number is set in original file, do not change original.<br>
+	if Marker number is, always redefine Marker number in file.<br>
 	Position is only altered if specified.<br>
 	Observer and Agency defaults to <i>SDFE</i>.<br>
   };
@@ -436,7 +438,9 @@ sub editsite() {
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editreceivers&site=$site">Edit receivers</a>
     </form>
     <p>
-    Marker number is deleted from headers if not specified.<br>
+    If Marker Number is blank and Marker Number is Unknown in original file, set Marker Number to short sitename.<br>
+    If Marker number is blank and Marker number is set in original file, do not change original.<br>
+    if Marker number is, always redefine Marker number in file.<br>
     Position is only altered if specified.<br>
     Observer and Agency defaults to <i>SDFE</i>.<br>
   };

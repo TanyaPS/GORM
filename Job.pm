@@ -219,7 +219,10 @@ sub rewriteheaders($) {
       push(@hdr, sprintf "%-60sMARKER NAME\n", $sta->{'site'});
     }
     elsif (/MARKER NUMBER\s*$/) {
-      push(@hdr, sprintf "%-60sMARKER NUMBER\n", $sta->{'markernumber'}) if defined $sta->{'markernumber'};
+      if (!defined $sta->{'markernumber'} && /^Unknown/) {
+        $sta->{'markernumber'} = substr($sta->{'site'}, 0, 4);
+      }
+      push(@hdr, (defined $sta->{'markernumber'} ? sprintf("%-60sMARKER NUMBER\n", $sta->{'markernumber'}) : $_));
     }
     elsif (/MARKER TYPE\s*$/) {
       push(@hdr, sprintf "%-60sMARKER TYPE\n", $sta->{'markertype'}) if defined $sta->{'markertype'};
