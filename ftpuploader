@@ -279,8 +279,13 @@ sub reload() {
 # Main program
 #
 my %opts = ();
-getopts('d:', \%opts);
-$Debug = $opts{'d'} if defined $opts{'d'};
+getopts('v:d:l:', \%opts);
+$Debug = $opts{'v'} if defined $opts{'v'};
+
+my $errlog = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
+daemonize($errlog) if defined $opts{'d'};
+my $pidfile = (defined $opts{'p'} ? $opts{'p'} : "/var/run/ftpuploader/ftpuploader.pid");
+create_pid_file($pidfile);
 
 setprogram("ftpuploader");
 $0 = "ftpuploader [master]";

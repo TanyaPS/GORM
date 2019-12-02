@@ -11,7 +11,6 @@ use strict;
 use warnings;
 
 use POSIX qw(strftime);
-use IO::File;
 use File::stat;
 use File::Path qw(make_path);
 use Net::SMTP;
@@ -38,6 +37,7 @@ BEGIN {
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter gm2str
 	basename dirname fileage dirlist round
+	daemonize create_pid_file
 	loadJSON storeJSON site42site parseFilename
 	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
@@ -319,6 +319,43 @@ sub parseFilename($) {
 
   return { site => $site, site4 => $site4, year => $year, doy => $doy, yy => $yy, mm => $mm, dd => $dd,
            hour => $hour, hh => $hh, mi => $mi };
+}
+
+
+##########################################################################
+# Daemonize current process
+#
+sub daemonize(;$) {
+  my $log = shift;
+
+  chdir("/var/run");
+  exit if fork();
+  setsid();
+  exit if fork();
+  open(STDIN, "</dev/null");
+  open(STDOUT, ">>$log") if defined $log;
+  open(STDERR, ">&STDOUT");
+  sleep 1 until getppid() == 1;
+}
+
+
+##########################################################################
+# Create a file with the PID of this process in it
+#
+sub create_pid_file(;$) {
+  my $pidfile = shift;
+  my $path;
+  if (!defined $pidfile || $pidfile eq '') {
+    $path = '/var/run/'.basename($0);
+    $pidfile = "$path/".basename($0);
+  } else {
+    $path = dirname($pidfile);
+  }
+  make_path($path) unless -d $path;
+  open(my $fd, '>', $pidfile);
+  print $fd "$$\n";
+  close($fd);
+  return $pidfile;
 }
 
 1;
