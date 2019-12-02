@@ -1,4 +1,4 @@
--- Generation Time: Nov 26, 2019 at 05:00 PM
+-- Generation Time: Dec 02, 2019 at 07:50 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS `locations` (
   `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
   `markernumber` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
   `markertype` enum('GEODETIC','NON_GEODETIC','NON_PHYSICAL','SPACEBORNE','GROUND_CRAFT','WATER_CRAFT','AIRBORNE','FIXED_BUOY','FLOATING_BUOY','FLOATING_ICE','GLACIER','BALLISTIC','ANIMAL','HUMAN') COLLATE utf8_unicode_ci DEFAULT 'GEODETIC',
-  `position` varchar(40) COLLATE utf8_unicode_ci NOT NULL,
+  `position` varchar(40) COLLATE utf8_unicode_ci DEFAULT NULL,
   `observer` varchar(20) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
   `agency` varchar(24) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
   `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
