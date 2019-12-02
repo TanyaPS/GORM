@@ -1,5 +1,9 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-02	sjm	Location position may be unspecified.
+If not specifying the location position, the APPROX POSITION header
+will be left untouched.
+
 ## 2019-12-01	sjm	Admin.cgi, commands and signals
 - Jobengine now able to perform custom commands via queue
 - Admin.cgi tells jobengine when to reload ftpuploader or force completion of a day.

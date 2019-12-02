@@ -73,7 +73,7 @@ sub newsite() {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     my $site = $v{'site'};
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
-    $v{'position'} = "0,0,0" unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
+    $v{'position'} = undef unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
@@ -114,13 +114,10 @@ sub newsite() {
 	<tr><td>Active</td><td><input type=checkbox name=active value=1 checked></td></tr>
 	<tr><td colspan=2><input type=submit name=submit value=Save></td></tr>
 	</table></form>
-	<p><table border=0><tr><th>New site<th align=left>Defaults</tr>
-	<tr><td align=left>Position</td><td>0.0000,0.0000,0.0000</td></tr>
-	<tr><td align=left>Observer</td><td>SDFE</td></tr>
-	<tr><td align=left>Agency</td><td>SDFE</td></tr>
-	<tr><td align=left>Frequency</td><td>D</td></tr>
-	<tr><td align=left>Active</td><td>0</td></tr>
-	</table>
+	<p>
+	Marker number is deleted from headers if not specified.<br>
+	Position is only altered if specified.<br>
+	Observer and Agency defaults to <i>SDFE</i>.<br>
   };
   showbottom();
 }
@@ -369,7 +366,7 @@ sub editsite() {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     $v{'active'} = 0 unless defined $v{'active'};
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
-    $v{'position'} = "0,0,0" unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
+    $v{'position'} = undef unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
@@ -406,20 +403,20 @@ sub editsite() {
 	<tr><th align=left>Parameter</th><th align=left>Value</th></tr>
 	<tr><td>Site</td><td>$site</td></tr>
 	<tr><td title="Markernumer">Markernumber</td>
-	<td><input name=markernumber type=text value="$r->{markernumber}"></td></tr>
-	<tr><td title="Markertype">Markertype<td>
-	<select name=markertype>
+	     <td><input name=markernumber type=text value="$r->{markernumber}"></td></tr>
+	<tr><td title="Markertype">Markertype</td>
+	    <td><select name=markertype>
   };
   print gen_option_list($r->{'markertype'}, \@GPSTYPES);
-  print "</select>\n";
-  print "<tr><td title=\"Daily for 24h files, Hourly for 1h-files\">Freq<td>";
-  print "<select name=freq>".
+  print "</select></td></tr>\n";
+  print "<tr><td title=\"Daily for 24h files, Hourly for 1h-files\">Freq</td>";
+  print "    <td><select name=freq>".
 	"  <option value=D".($r->{'freq'} eq 'D' ? ' selected':'').">Daily</option>".
 	"  <option value=H".($r->{'freq'} eq 'H' ? ' selected':'').">Hourly</option>".
-	"</select>\n";
+	"</select></td></tr>\n";
 
-  print "<tr><td title=\"Obs interval in source file\">Interval<td>";
-  print "<input name=obsint type=number value=$r->{'obsint'}>\n";
+  print "<tr><td title=\"Obs interval in source file\">Interval</td>";
+  print "    <td><input name=obsint type=number value=$r->{'obsint'}></td></tr>\n";
 
   print qq{
     <tr><td title="Position (X,Y,Z)">Position (X,Y,Z)</td>
@@ -429,7 +426,7 @@ sub editsite() {
     <tr><td title="Agency">Agency</td>
         <td><input name=agency type=text size=20 maxlength=20 value="$r->{agency}"></td></tr>
     <tr><td title="Check if site is active">Active</td>
-        <td><input type=checkbox name=active value=1}.($r->{'active'} ? " checked":"").qq{></td>
+        <td><input type=checkbox name=active value=1}.($r->{'active'} ? " checked":"").qq{></td></tr>
     </table>
 
     <br><input name=submit type=submit value=Save>
@@ -438,8 +435,11 @@ sub editsite() {
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editantennas&site=$site">Edit antennas</a>
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editreceivers&site=$site">Edit receivers</a>
     </form>
+    <p>
+    Marker number is deleted from headers if not specified.<br>
+    Position is only altered if specified.<br>
+    Observer and Agency defaults to <i>SDFE</i>.<br>
   };
-  print "</table>\n";
 
   showbottom();
 }

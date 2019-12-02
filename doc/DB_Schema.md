@@ -91,15 +91,17 @@ How often the site sends data. Either _H_ (hourly) or _D_ (daily).
 ### obsint
 The observation interval. Usually 1 or 30.
 ### markernumber
-Markenumber to put in the RINEX header. Ex: 
+Markenumber to put in the RINEX header.</br>
+If not specified, marker number will be deleted from RINEX headers.
 ### markertype
 The marker type. Usually GEODETIC.
 ### position
-The approximate position of the site as X,Y,Z.
+The approximate position of the site as X,Y,Z.</br>
+If not specified, position will not be altered in original file.
 ### observer
-Name of observer.
+Name of observer. Defaults to _SDFE_.
 ### agency
-Name of agency.
+Name of agency. Defaults to _SDFE_.
 ### ts
 Date and time of last received data from that site.
 ### active

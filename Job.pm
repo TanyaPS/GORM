@@ -234,8 +234,12 @@ sub rewriteheaders($) {
       push(@hdr, sprintf "%-20s%-40sANT # / TYPE\n", $sta->{'antsn'}, $sta->{'anttype'});
     }
     elsif (/APPROX POSITION XYZ\s*$/) {
-      my ($x, $y, $z) = split(/,/, $sta->{'position'});
-      push(@hdr, sprintf "%14.4f%14.4f%14.4f%18sAPPROX POSITION XYZ\n",$x,$y,$z,' ');
+      # if specified in DB, use that value
+      if (defined $sta->{'position'} && $sta->{'position'} =~ /(\d+),(\d+),(\d+)/) {
+        push(@hdr, sprintf "%14.4f%14.4f%14.4f%18sAPPROX POSITION XYZ\n",$1,$2,$3,' ');
+      } else {
+        push(@hdr, $_);		# else use original from file
+      }
     }
     elsif (/DELTA H\/E\/N\s*$/) {
       my ($x, $y, $z) = split(/,/, $sta->{'antdelta'});
