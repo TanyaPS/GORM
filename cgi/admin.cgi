@@ -72,8 +72,9 @@ sub newsite() {
   if (defined $cgi->param('submit')) {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     my $site = $v{'site'};
+    $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
     $v{'position'} = "0,0,0" unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
-    $v{'observer'} = 'SDFE' unless defined $v{'observer'} && v{'observer'} !~ /^\s*$/;
+    $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
     $v{'active'} = 0 unless defined $v{'active'};
@@ -266,7 +267,7 @@ sub editreceivers() {
       my $msg = "";
       if (!defined $$r{"recsn$x"} || $$r{"recsn$x"} =~ /^\s*$/) {
         $msg .= "Receiver S/N is mandatory";
-      } elsif (index($$r{"rectype$x"},',') < 0) {
+      } elsif (!defined $$r{"rectype$x"} || $$r{"rectype$x"} =~ /^\s*$/) {
         $msg .= "Receiver type format: product,type<br>";
       } elsif (!defined $$r{"firmware$x"} || $$r{"firmware$x"} =~ /^\s*$/) {
         $msg .= "Receiver firmware is mandatory";
@@ -367,8 +368,9 @@ sub editsite() {
   if (defined $cgi->param('submit')) {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     $v{'active'} = 0 unless defined $v{'active'};
+    $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
     $v{'position'} = "0,0,0" unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
-    $v{'observer'} = 'SDFE' unless defined $v{'observer'} && v{'observer'} !~ /^\s*$/;
+    $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
     if (!defined $v{'obsint'} || $v{'obsint'} <= 0) {
