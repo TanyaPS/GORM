@@ -19,6 +19,8 @@ use Logger;
 use GPSDB;
 
 my $PLATFORM = 'gpsftp5';	# Set to gpsftp4 if running on gpsftp4
+my $Privatekey = $ENV{'HOME'}.'/.ssh/gnss-uploader';	# only used by gpsftp4
+
 my $Debug = 0;	# set with -d option
 
 ###################################################
@@ -219,7 +221,7 @@ sub reload() {
       $conf->{'ts'} = 0;  # not supported by gpsftp4
       if ($conf->{'localdir'} =~ /sftp-/) {
         $conf->{'protocol'} = 'sftp';
-        $conf->{'privatekey'} = '/home/gpsuser/.ssh/gnss-uploader@gpsftp5';
+        $conf->{'privatekey'} = $Privatekey;
       } else {
         $conf->{'protocol'} = 'ftp';
       }
@@ -279,13 +281,15 @@ sub reload() {
 # Main program
 #
 my %opts = ();
-getopts('v:d:l:', \%opts);
+getopts('v:d:l:k:', \%opts);
 $Debug = $opts{'v'} if defined $opts{'v'};
 
-my $errlog = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
+my $errlog = (defined $opts{'l'} ? $opts{'l'} : '/dev/null');
 daemonize($errlog) if defined $opts{'d'};
-my $pidfile = (defined $opts{'p'} ? $opts{'p'} : "/var/run/ftpuploader/ftpuploader.pid");
+my $pidfile = (defined $opts{'p'} ? $opts{'p'} : '/var/run/ftpuploader/ftpuploader.pid');
 create_pid_file($pidfile);
+
+$Privatekey = $opts{'k'} if defined $opts{'k'};
 
 setprogram("ftpuploader");
 $0 = "ftpuploader [master]";
