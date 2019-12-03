@@ -17,6 +17,8 @@ our $STALEDIR = "$SAVEDIR/stale";
 our $TMPDIR   = "$DATAROOT/tmp";
 our $JOBQUEUE = "$DATAROOT/queue";
 
+our $JOBINSTANCES = 4;		# Number of parallel job instances
+
 our $BNC      = '/usr/local/bin/bnc';
 our $GFZRNX   = '/usr/local/bin/gfzrnx';
 our $RNX2CRX  = '/usr/local/bin/rnx2crx';
@@ -39,6 +41,7 @@ INIT {
 	staledir => \$STALEDIR,
 	tmpdir => \$TMPDIR,
 	jobqueue => \$JOBQUEUE,
+	jobinstances => \$JOBINSTANCES,
 	bnc => \$BNC,
 	gfzrnx => \$GFZRNX,
 	rnx2crx => \$RNX2CRX,
@@ -69,6 +72,7 @@ BEGIN {
   @EXPORT = qw(
 	$DBDSN $DBUSER $DBPASS
 	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR $JOBQUEUE
+	$JOBINSTANCES
 	$BNC $GFZRNX $RNX2CRX $CRX2RNX $SBF2RIN
 	$SYSLOG_FACILITY
   );

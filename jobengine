@@ -240,7 +240,7 @@ my %opts = ();
 getopts('di:l:', \%opts);
 my $log = (defined $opts{'l'} ? $opts{'l'} : "/dev/null");
 $Debug = 1 if defined $opts{'d'};
-my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : 4);
+my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : $JOBINSTANCES);
 
 setprogram($0);
 $0 = basename($0)." ".join(' ',@ARGV);
