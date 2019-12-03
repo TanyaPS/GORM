@@ -276,7 +276,7 @@ while (1) {
     local $SIG{ALRM} = sub { die("jobenginealarm") };
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
-    local $SIG{HUP} = sub ( die("SIGHUP") };
+    local $SIG{HUP} = sub { die("SIGHUP") };
     alarm $PollInterval;
     $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
