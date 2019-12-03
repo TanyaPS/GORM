@@ -8,6 +8,7 @@ Type=simple
 Restart=on-failure
 ExecStart=/usr/local/sbin/gpspickup
 ExecStop=/bin/kill -TERM $MAINPID
+ExecReload=/bin/kill -HUP $MAINPID
 Environment="PERL5LIB=/usr/local/lib/gnss"
 
 [Install]
