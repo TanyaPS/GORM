@@ -244,7 +244,9 @@ setprogram(basename($0));
 $0 = basename($0)." ".join(' ',@ARGV);
 
 my %opts = ();
-getopts('dl:', \%opts);
+getopts('c:dl:', \%opts);
+
+BaseConfig::init($opts{'c'}) if defined $opts{'c'};
 
 $Debug = 1 if defined $opts{'d'};
 logchannel($opts{'l'}) if defined $opts{'l'};

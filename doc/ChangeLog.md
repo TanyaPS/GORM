@@ -3,6 +3,7 @@
 ## 2019-12-03	sjm	Config parameter jobinstances added.
 - Add config parameter jobinstances. Default is 4 instances.
 - Optimized scan loop in gpspickup and jobengine.
+- Add -c file.conf option to gpspickup, jobengine and ftpuploader to specify alternate configuration.
 
 ## 2019-12-02	sjm	Location position and marker number may be unspecified.
 - If not specifying the location position, the APPROX POSITION header will be left untouched.

@@ -281,8 +281,10 @@ sub reload() {
 # Main program
 #
 my %opts = ();
-getopts('v:d:l:k:', \%opts);
+getopts('v:d:l:k:c:', \%opts);
 $Debug = $opts{'v'} if defined $opts{'v'};
+
+BaseConfig::init($opts{'c'}) if defined $opts{'c'};
 
 my $errlog = (defined $opts{'l'} ? $opts{'l'} : '/dev/null');
 daemonize($errlog) if defined $opts{'d'};

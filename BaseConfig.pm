@@ -27,9 +27,10 @@ our $SBF2RIN  = '/usr/local/bin/sbf2rin';
 
 our $SYSLOG_FACILITY = 'local1';
 
-INIT {
-  # Check for default overrides
-  if (-f '/usr/local/etc/gorm.conf') {
+sub init($) {
+  my $conf = shift;
+
+  if (-f $conf) {
     my %vars = (
 	dbdsn => \$DBDSN,
 	dbuser => \$DBUSER,
@@ -49,7 +50,7 @@ INIT {
 	sbf2bin => \$SBF2RIN,
 	syslog_facility => \$SYSLOG_FACILITY
     );
-    open(my $fd, '<', '/usr/local/etc/gorm.conf');
+    open(my $fd, '<', $conf);
     while (<$fd>) {
       next if /^\s*#|^\s*$/;
       chomp;
@@ -62,6 +63,10 @@ INIT {
     }
     close($fd);
   }
+}
+
+INIT {
+  init('/usr/local/etc/gorm.conf');
 }
 
 our (@ISA, @EXPORT);
