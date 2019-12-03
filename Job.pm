@@ -90,7 +90,7 @@ sub _decimate($$$$$) {
 
   if ($src_interval < $dst_interval) {
     my $cmd =
-	"$BNC -nw -conf /dev/null --key reqcAction Edit/Concatenate ".
+	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
 	"--key reqcRunBy SDFE ".
 	"--key reqcObsFile $obsinfile ".
 	"--key reqcOutObsFile $obsoutfile ".
@@ -113,7 +113,7 @@ sub _splice($$$) {
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
   my $conv = 'GFZ';	# gfzrnx is memory hungry, but twice as fast
   my $bnccmd =
-	"$BNC -nw --conf /dev/null --key reqcAction Edit/Concatenate ".
+	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
 	"--key reqcRunBy SDFE ".
 	"--key reqcRnxVersion 3 ".
 	"--key reqcObsFile \"".join(',',@infiles)."\" ".

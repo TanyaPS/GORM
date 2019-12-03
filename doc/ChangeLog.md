@@ -1,5 +1,9 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-03	sjm	Config parameter jobinstances added.
+- Add config parameter jobinstances. Default is 4 instances.
+- Optimized scan loop in gpspickup and jobengine.
+
 ## 2019-12-02	sjm	Location position and marker number may be unspecified.
 - If not specifying the location position, the APPROX POSITION header will be left untouched.
 - If markernumber is null, set to site if Unknown else leave original.

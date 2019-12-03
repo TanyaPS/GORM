@@ -245,8 +245,6 @@ my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : $JOBINSTANCES);
 setprogram($0);
 $0 = basename($0)." ".join(' ',@ARGV);
 
-local $SIG{HUP} = 'IGNORE';
-
 select(STDERR); $| = 1;         # Unbuffered output
 select(STDOUT); $| = 1;         # Unbuffered output
 
@@ -254,6 +252,8 @@ select(STDOUT); $| = 1;         # Unbuffered output
 $FM = new Parallel::ForkManager($Ninstances);
 $FM->run_on_start(\&onstart);
 $FM->run_on_finish(\&onfinish);
+
+loginfo("jobengine started with $Ninstances instances");
 
 # Run jobs in queue already
 runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
@@ -273,16 +273,17 @@ while (1) {
   $FM->reap_finished_children;
 
   eval {
-    local $SIG{ALRM} = sub { die("jobenginealarm"); };
-    local $SIG{INT} = sub { die("interrupted"); };
-    local $SIG{TERM} = sub { die("terminated"); };
+    local $SIG{ALRM} = sub { die("jobenginealarm") };
+    local $SIG{INT} = sub { die("interrupted") };
+    local $SIG{TERM} = sub { die("terminated") };
+    local $SIG{HUP} = sub ( die("SIGHUP") };
     alarm $PollInterval;
     $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
   };
   if ($@) {
     my $msg = $@;
-    if ($msg =~ /^jobenginealarm/) {
+    if ($msg =~ /^jobenginealarm|^SIGHUP/) {
       runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
       if (time() > $lastscan + $scaninterval) {
         scan_for_forced_incompletes();
