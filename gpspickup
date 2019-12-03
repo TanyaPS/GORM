@@ -21,7 +21,7 @@ my $DB;
 my %SCS;			# All sites defined
 my %Pending;			# Postponed jobs to be submitted
 my $Debug = 0;
-my $PollInterval = 61;		# Timeout for new files
+my $PollInterval = 11;		# Timeout for new files
 
 
 #############################################################################################
@@ -225,12 +225,7 @@ sub inotify_callback() {
 #############################################################################################
 # Load all sites from locations table into %SCS
 #
-my $Lastconfigload = 0;
 sub load_sites() {
-  # Only load every 15min
-  return if time() < $Lastconfigload + 900;
-  $Lastconfigload = time();
-
   # Get the complete list of defined sites from DB
   # We only use the short version of sitename here.
   my $aref = $DB->{'DBH'}->selectall_arrayref(q{
@@ -269,21 +264,24 @@ loginfo("$0 started. Debug=$Debug");
 
 scan_incoming();
 
+my $lastscan = time();
 while (1) {
   eval {
     local $SIG{ALRM} = sub { die("gpspickupalarm") };
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm $PollInterval;
-    $inotify->poll;	# wait for new file in $INCOMING
+    alarm $PollInterval;	# less than 15s
+    $inotify->poll;
     alarm 0;
   };
   if ($@) {
     last unless $@ =~ /^gpspickupalarm|^SIGHUP/;
-    scan_incoming();
     submit_pending();
+    next if time() < $lastscan + 600;	# do not need to do below as often
+    scan_incoming();
     load_sites();
+    $lastscan = time();
   }
 }
 
