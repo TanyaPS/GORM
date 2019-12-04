@@ -194,6 +194,12 @@ sub runjob($) {
   my $job = new Job(jobfile => $jobfile);
   unlink($jobfile);
 
+  unless (defined $job && defined $job->{'site'} && defined $job->{'year'} &&
+                          defined $job->{'doy'}  && defined $job->{'hour'}) {
+    logerror("invalid jobfile $jobfile");
+    return;
+  }
+
   my $ident = $job->getIdent;
   my $workdir = $job->getWorkdir;
   my $statusfile = "$workdir/status.json";

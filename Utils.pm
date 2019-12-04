@@ -19,12 +19,6 @@ use JSON;
 use BaseConfig;
 use Logger;
 
-our $CRX2RNX = '/usr/local/bin/crx2rnx';
-our $RNX2CRX = '/usr/local/bin/rnx2crx';
-our $TEQC = '/usr/local/bin/teqc';
-our $CONVERT = '/usr/local/bin/convert';
-our $RUNPKR = '/usr/bin/runpkr00';
-
 our $DMB;
 
 # Export subs and symbols to other modules.
@@ -39,7 +33,6 @@ BEGIN {
 	basename dirname fileage dirlist round
 	daemonize create_pid_file
 	loadJSON storeJSON site42site parseFilename
-	$CRX2RNX $RNX2CRX $TEQC $CONVERT $RUNPKR
   );
   $DMB = new Date::Manip::Base;
 }
