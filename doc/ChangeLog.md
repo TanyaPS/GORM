@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-05	sjm	Use G-Nut/Anubis instead of BNC for QC
+- G-Nut/Anubis is much faster compared to BNC and the QC is more like TEQC QC
+
 ## 2019-12-03	sjm	Config parameter jobinstances added.
 - Add config parameter jobinstances. Default is 4 instances.
 - Optimized scan loop in gpspickup and jobengine.

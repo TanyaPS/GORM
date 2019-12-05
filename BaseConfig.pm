@@ -26,6 +26,7 @@ our $JOBQUEUE = "$DATAROOT/queue";
 
 our $JOBINSTANCES = 4;		# Number of parallel job instances
 
+our $ANUBIS   = '/usr/local/bin/anubis';
 our $BNC      = '/usr/local/bin/bnc';
 our $GFZRNX   = '/usr/local/bin/gfzrnx';
 our $RNX2CRX  = '/usr/local/bin/rnx2crx';
@@ -50,6 +51,7 @@ sub init($) {
 	tmpdir => \$TMPDIR,
 	jobqueue => \$JOBQUEUE,
 	jobinstances => \$JOBINSTANCES,
+	anubis => \$ANUBIS,
 	bnc => \$BNC,
 	gfzrnx => \$GFZRNX,
 	rnx2crx => \$RNX2CRX,
@@ -87,7 +89,7 @@ BEGIN {
 	$DBDSN $DBUSER $DBPASS
 	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR $JOBQUEUE
 	$JOBINSTANCES
-	$BNC $GFZRNX $RNX2CRX $CRX2RNX $SBF2RIN
+	$ANUBIS $BNC $GFZRNX $RNX2CRX $CRX2RNX $SBF2RIN
 	$SYSLOG_FACILITY
   );
 }

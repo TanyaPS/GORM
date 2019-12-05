@@ -39,6 +39,7 @@ zip
 unzip
 mariadb
 mariadb-server
+automake
 gcc
 gcc-c++
 qt
@@ -87,7 +88,7 @@ for i in bin/*; do
   install -o root -g bin -m 755 $i /usr/local/bin
 done
 
-for i in bnc gfzrnx rnx2crx crx2rnx sbf2rin; do
+for i in anubis bnc gfzrnx rnx2crx crx2rnx sbf2rin; do
   test -x /usr/local/bin/$i || echo "You need to install /usr/local/bin/$i. See doc/INSTALL"
 done
 

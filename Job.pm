@@ -520,36 +520,21 @@ sub _QC($) {
 
   my $sumfile = $rs->getFilenamePrefix().'.sum';
   my $navfiles = $rs->getNavlist();
-  my $cmd =
-	"$BNC --nw --conf /dev/null --key reqcAction Analyze ".
-	"--key reqcObsFile ".$rs->{'MO.30'}." ".
-	"--key reqcNavFile \"".join(',',@$navfiles)."\" ".
-	"--key reqcLogSummaryOnly 2 ".
-	"--key reqcOutLogFile $sumfile"
-  ;
+  my $cmd = "$ANUBIS :inputs:rinexo ".$rs->{'MO.30'}." :inputs:rinexn \"".join(' ',@$navfiles)."\" :outputs:xtr $sumfile :outputs:verb=1";
   loginfo("Running QC on ".$rs->{'MO.30'});
   sysrun($cmd, { log => $Debug});
 
+  # =TOTSUM 2018-11-16 00:00:00 2018-11-16 00:59:30   1.00  30.00   0.10   4623   4457  96.41     31    722   3467   3467 100.00
+  my $qc = 0;
   open(my $fd, '<', $sumfile) || return 0;
-  my @qcs = ();
-  my %got;
   while (<$fd>) {
-    chomp;
-    # G:   1?: Observations      :  33065 (   34634)    95.47 %
-    # G:   1?: Gaps              :       55
-    if (/^\s+([A-Z]):\s+\d[A-Z\?]: Observations.*\s([\d\.]+) %$/) {
-      next if $1 eq 'S' || exists $got{$1};  # ignore SBAS
-      $got{$1} = 1;
-      push(@qcs, $2 > 100 ? 100 : $2);
+    if (/^=TOTSUM /) {
+      my @a = split(/\s+/, $_);
+      $qc = round($a[15]);
+      last;
     }
   }
   close($fd);
-
-  my $qc = 0;
-  if (scalar(@qcs) > 0) {
-    $qc += $_ foreach @qcs;
-    $qc /= scalar(@qcs);
-  }
 
   sysrun("gzip -f $sumfile");
   $rs->{'sumfile'} = $sumfile.'.gz';
