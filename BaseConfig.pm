@@ -1,4 +1,11 @@
 #!/usr/bin/perl
+#
+# BaseConfig.pm - Global common variables used throughout the scriipts.
+#
+# These defaults can be overridden in '/usr/local/etc/gorm.conf', which is loaded automatically during startup (if exists).
+# The globals can then be overridden again by using BaseConfig::init($conffile) inside the main program.
+#
+# Soren Juul Moller, Nov 2019
 
 package BaseConfig;
 
@@ -65,10 +72,12 @@ sub init($) {
   }
 }
 
+# Executed just before main program starts.
 INIT {
   init('/usr/local/etc/gorm.conf');
 }
 
+# Executed at compile time.
 our (@ISA, @EXPORT);
 BEGIN {
   require Exporter;

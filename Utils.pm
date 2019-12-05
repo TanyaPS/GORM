@@ -16,7 +16,6 @@ use File::Path qw(make_path);
 use Net::SMTP;
 use Date::Manip::Base;
 use JSON;
-use BaseConfig;
 use Logger;
 
 our $DMB;
@@ -34,6 +33,9 @@ BEGIN {
 	daemonize create_pid_file
 	loadJSON storeJSON site42site parseFilename
   );
+}
+
+INIT {
   $DMB = new Date::Manip::Base;
 }
 
