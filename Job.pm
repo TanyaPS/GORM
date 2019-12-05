@@ -461,7 +461,7 @@ sub gendayfiles() {
   my $interval = 30;
   my $aref = $dbh->selectrow_arrayref(q{
 	select count(*) from rinexdist
-	where  site = ? and freq = 'D' and filetype = 'Obs' and obsint = 1
+	where  site = ? and freq = 'D' and filetype = 'Obs' and obsint = 1 and active = 1
   }, undef, $site);
   if ($aref->[0] ne '0') {
     $interval = 1;
@@ -475,7 +475,7 @@ sub gendayfiles() {
   # create daily zip if we need it
   $aref = $dbh->selectrow_arrayref(q{
 	select	count(*) from rinexdist
-	where	site = ? and freq = 'D' and filetype = 'Arc'
+	where	site = ? and freq = 'D' and filetype = 'Arc' and active = 1
   }, undef, $site);
   _mergezips($rsday, \@rslist) if $aref->[0] ne '0';
 
