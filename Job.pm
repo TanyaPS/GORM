@@ -89,14 +89,16 @@ sub _decimate($$$$$) {
   my ($obsinfile, $obsoutfile, $src_interval, $dst_interval, $logfile) = @_;
 
   if ($src_interval < $dst_interval) {
+#    my $cmd =
+#	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
+#	"--key reqcRunBy SDFE ".
+#	"--key reqcObsFile $obsinfile ".
+#	"--key reqcOutObsFile $obsoutfile ".
+#	"--key reqcOutLogFile $logfile ".
+#	"--key reqcRnxVersion 3 ".
+#	"--key reqcSampling $dst_interval";
     my $cmd =
-	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
-	"--key reqcRunBy SDFE ".
-	"--key reqcObsFile $obsinfile ".
-	"--key reqcOutObsFile $obsoutfile ".
-	"--key reqcOutLogFile $logfile ".
-	"--key reqcRnxVersion 3 ".
-	"--key reqcSampling $dst_interval";
+	"$GFZRNX -finp $obsinfile -fout $obsoutfile -smp $dst_interval >$logfile 2>&1";
     loginfo("Decimate $obsinfile to $obsoutfile");
     sysrun($cmd, { log => $Debug });
   }
