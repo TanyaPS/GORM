@@ -1,47 +1,66 @@
+Installation of GORM and utilities needed for processing.
+=========================================================
 
 Install CentOS 7, minimal installation
 - Disable SELinux in /etc/sysconfig/selinux
 - Reboot
 
+
 Install all required packages. Run
 	sudo setup/install.sh
 
-Download latest released BNC source code from https://igs.bkg.bund.de/ntrip/bnc
-Compile BNC:
-	unzip bnc-x.x.x-source.zip
-	cd bnc-x.x.x-source
-	/usr/lib64/qt4/bin/qmake bnc.pro
-	make
-	sudo install -o root -g bin -m 755 bnc /usr/local/bin
 
-Download latest gfzrnx Linux x64 binary from
-	http://semisys.gfz-potsdam.de/semisys/scripts/download/index.php
-(GFZ Software tab)
-Install using
-	sudo install -o root -g bin -m 755 gfzrnx_lx /usr/local/bin/gfzrnx
+BNC:
+	Download latest released BNC source code from https://igs.bkg.bund.de/ntrip/bnc
+	Compile BNC:
+		unzip bnc-x.x.x-source.zip
+		cd bnc-x.x.x-source
+		/usr/lib64/qt4/bin/qmake bnc.pro
+		make
+		sudo install -o root -g bin -m 755 bnc /usr/local/bin
 
-Download latest Hatanaka compression software (RNXCMP) from:
-	https://terras.gsi.go.jp/ja/crx2rnx.html
-Unpack, compile and install with
-	tar xzf RNXCMP_4.0.8_src.tar.gz
-	cd RNXCMP_4.0.8_src/source
-	gcc -O2 crx2rnx.c -o crx2rnx
-	gcc -O2 rnx2crx.c -o rnx2crx
-	install -o root -g bin -m 755 crx2rnx rnx2crx /usr/local/bin
+gfzrnx:
+	Download latest gfzrnx Linux x64 binary from
+		http://semisys.gfz-potsdam.de/semisys/scripts/download/index.php
+	(GFZ Software tab)
+	Install using
+		sudo install -o root -g bin -m 755 gfzrnx_lx /usr/local/bin/gfzrnx
 
-Download lastest version of Septentrio RxTools from:
-	https://www.septentrio.com/en/support/software/rxtools
-Download rxtools_19_0_0_installer_x64.bin
-Upload the file to an RHEL with X11 interface.
-Login using the X11 interface login.
-Using a terminal shell session, do:
+rnx2crx/crx2rnx:
+	Download latest Hatanaka compression software (RNXCMP) from:
+		https://terras.gsi.go.jp/ja/crx2rnx.html
+	Unpack, compile and install with
+		tar xzf RNXCMP_4.0.8_src.tar.gz
+		cd RNXCMP_4.0.8_src/source
+		gcc -O2 crx2rnx.c -o crx2rnx
+		gcc -O2 rnx2crx.c -o rnx2crx
+		sudo install -o root -g bin -m 755 crx2rnx rnx2crx /usr/local/bin
+
+sbf2rin:
+	Download lastest version of Septentrio RxTools from:
+		https://www.septentrio.com/en/support/software/rxtools
+	Download rxtools_19_0_0_installer_x64.bin
+	Upload the file to an RHEL with X11 interface.
+	Login using the X11 interface login.
+	Using a terminal shell session, do:
 		chmod 755 rxtools_*
 		mkdir -m 700 xdg
 		XDG_RUNTIME=`pwd`/xdg ./rxtools_19_0_0_installer_x64.bin
 			(follow the install instructions. install everything).
-The sbf2rin can now be found in $HOME/RxTools/bin
-Transfer sbf2bin to the host you are installing and install using
-	install -o root -g bin -m 755 sbf2rin /usr/local/bin
+	The sbf2rin can now be found in $HOME/RxTools/bin
+	Transfer sbf2bin to the host you are installing and install using
+		sudo install -o root -g bin -m 755 sbf2rin /usr/local/bin
+
+G-Nut/Anubis:
+	Download latest version of G-Nut/Anubis:
+	https://www.pecny.cz/GOP/index.php/gnss/sw/anubis
+	Goto download: https://www.pecny.cz/sw/anubis/
+	Download anubis-x.x.x-date.tgz
+		tar xzf anubis-x.x.x-date.tgz
+		cd anubis
+		./autogen.sh
+		sudo install -u root -g bin -m 755 app/anubis /usr/local/bin
+
 
 Configure:
 
