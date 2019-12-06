@@ -614,6 +614,12 @@ sub process() {
   # QC on 30s file
   my $qc = _QC($rs);
   loginfo("$site-$year-$doy-$hour: QC: $qc");
+  my $sumfileblob = "";
+  if (defined $rs->{'sumfile'}) {
+    if (open(my $fd, $rs->{'sumfile'})) {
+      read($fd, $sumfileblob, -s $rs->{'sumfile'});
+    }
+  }
 
   $dbh->do(qq{
 	delete from gpssums
@@ -624,9 +630,9 @@ sub process() {
   }, undef, $site, $year, $doy, $hour);
   $dbh->do(qq{
 	insert into gpssums
-	(site, year, doy, hour, jday, quality, ngaps)
-	values (?, ?, ?, ?, ?, ?, ?)
-  }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $qc, $ngaps);
+	(site, year, doy, hour, jday, quality, ngaps, sumfile)
+	values (?, ?, ?, ?, ?, ?, ?, ?)
+  }, undef, $site, $year, $doy, $hour, Doy_to_Days($year,$doy), $qc, $ngaps, $sumfileblob);
 
   $dbh->do(q{
 	update	locations

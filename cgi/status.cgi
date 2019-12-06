@@ -126,7 +126,7 @@ sub showheader {
 	<script language="Javascript">
 	<!--
 	function s(site,year,doy,hour) {
-	  // window.open('$ENV{'SCRIPT_NAME'}?fnc=showsum&site='+site+'&year='+year+'&doy='+doy+'&hour='+hour);
+	  window.open('$ENV{'SCRIPT_NAME'}?fnc=showsum&site='+site+'&year='+year+'&doy='+doy+'&hour='+hour);
 	}
 	//-->
 	</script>
@@ -336,39 +336,27 @@ sub showdoy($$$$$) {
 
   print $str;
 }
-# 
-# sub showsum($$$$$) {
-#   my ($dbh, $site, $year, $doy, $hour) = @_;
-# 
-#   my $blob = $dbh->selectrow_array(q{
-# 	select converrs from converrs where site=? and year=? and doy=? and hour=?
-#   }, undef, $site, $year, $doy, $hour);
-# 
-#   if (defined $blob && length($blob) > 0) {
-#     print "<h1>Conversion errors</h1>\n";
-#     print "<pre>$blob</pre>\n";
-#   }
-# 
-#   $blob = $dbh->selectrow_array(q{
-# 	select sumfile from gpsdata.sumfiles where site=? and year=? and doy=? and hour=?
-#   }, undef, $site, $year, $doy, $hour);
-# 
-#   my $txt = "";
-#   if (defined $blob && length($blob) > 0) {
-#     gunzip \$blob => \$txt;
-#   }
-# 
-#   my $ts = $dbh->selectrow_array(q{
-# 	select ts from gpssums where site=? and year=? and doy=? and hour=?
-#   }, undef, $site, $year, $doy, $hour);
-# 
-#   print "<html><head><title>Sumfile $site $year:$doy:$hour</title></head><body>\n";
-#   print "<h1>Sumfile for $site $year/$doy/$hour</h1>\n";
-#   print "Date processed: $ts<br>\n";
-#   print "<pre>$txt</pre>\n";
-# 
-#   print "</body></html>\n";
-# }
+
+sub showsum($$$$$) {
+  my ($dbh, $site, $year, $doy, $hour) = @_;
+
+  my $aref = $dbh->selectrow_arrayref(q{
+	select ts, sumfile from gpssums where site=? and year=? and doy=? and hour=?
+  }, undef, $site, $year, $doy, $hour);
+  my ($ts, $blob) = ($$aref[0], $$aref[1]);
+
+  my $txt = "";
+  if (defined $blob && length($blob) > 0) {
+    gunzip \$blob => \$txt;
+  }
+
+  print "<html><head><title>Sumfile $site $year:$doy:$hour</title></head><body>\n";
+  print "<h1>Sumfile for $site $year/$doy/$hour</h1>\n";
+  print "Date processed: $ts<br>\n";
+  print "<pre>$txt</pre>\n";
+
+  print "</body></html>\n";
+}
 
 sub show24h($$) {
   my ($dbh, $dayReqd) = @_;
@@ -596,10 +584,10 @@ if (defined $year && $year ne "" && defined $doy && $doy ne "") {
 }
 my $nextDay = ($dayReqd == $DAYnow ? 0 : $dayReqd + 1);
 
-#if ($fnc eq "showsum" && defined $site && defined $year && defined $doy && defined $hour) {
-#  showsum($dbh, $site, $year, $doy, $hour);
-#}
-if ($fnc eq "24h" && defined $site) {
+if ($fnc eq "showsum" && defined $site && defined $year && defined $doy && defined $hour) {
+  showsum($dbh, $site, $year, $doy, $hour);
+}
+elsif ($fnc eq "24h" && defined $site) {
   showheader(0);
   showsite_24h($dbh, $site, $dayReqd);
   showbottom(1, $site, $year, $doy);

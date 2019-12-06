@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-06	sjm	Enable sumfile in DB and access via status.cgi
+- Enable load of gzipped sumfile into DB and view of sumfile in QC (click on sumfield)
+
 ## 2019-12-05	sjm	Use G-Nut/Anubis instead of BNC for QC
 - G-Nut/Anubis is much faster compared to BNC and the QC is more like TEQC QC
 - Use gfzrnx to do the decimate from 1s to 30s. It is much faster than BNC.
