@@ -532,13 +532,13 @@ sub _QC($) {
   while (<$fd>) {
     if (/^=TOTSUM /) {
       my @a = split(/\s+/, $_);
-      $qc = round($a[15]);
+      $qc = round($a[10]);
       last;
     }
   }
   close($fd);
 
-  sysrun("gzip -f $sumfile");
+  sysrun("gzip -9f $sumfile");
   $rs->{'sumfile'} = $sumfile.'.gz';
 
   return round($qc);
@@ -614,7 +614,7 @@ sub process() {
   # QC on 30s file
   my $qc = _QC($rs);
   loginfo("$site-$year-$doy-$hour: QC: $qc");
-  my $sumfileblob = "";
+  my $sumfileblob;  # NULL in DB allowed
   if (defined $rs->{'sumfile'}) {
     if (open(my $fd, $rs->{'sumfile'})) {
       read($fd, $sumfileblob, -s $rs->{'sumfile'});

@@ -1,4 +1,4 @@
--- Generation Time: Dec 02, 2019 at 07:50 PM
+-- Generation Time: Dec 06, 2019 at 01:31 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.12
 
@@ -62,9 +62,10 @@ CREATE TABLE IF NOT EXISTS `gpssums` (
   `doy` smallint(3) NOT NULL,
   `hour` char(1) COLLATE utf8_unicode_ci NOT NULL,
   `jday` mediumint(7) unsigned NOT NULL DEFAULT '0',
-  `quality` tinyint(3) unsigned NOT NULL DEFAULT '0',
+  `quality` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT 'QC',
   `ngaps` mediumint(5) unsigned NOT NULL DEFAULT '0',
-  `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP
+  `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `sumfile` blob
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 -- --------------------------------------------------------
