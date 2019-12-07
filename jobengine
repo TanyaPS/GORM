@@ -239,7 +239,6 @@ sub inotify_callback() {
   my $event = shift;
   alarm 0;
   runjob($event->fullname);
-  alarm $PollInterval;
 }
 
 ########################################################################################################
