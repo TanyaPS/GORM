@@ -200,7 +200,10 @@ sub runjob($) {
     return;
   }
 
+  # Duplicate event check
   my $ident = $job->getIdent;
+  return if exists $Running{$ident};
+
   my $workdir = $job->getWorkdir;
   my $statusfile = "$workdir/status.json";
   my $lockfd = lock($statusfile);

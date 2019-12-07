@@ -218,7 +218,6 @@ sub inotify_callback() {
   my $event = shift;
   alarm 0;		# disable timer while processing
   process($event->fullname, $event->name);
-  alarm $PollInterval;	# rearm timer
 }
 
 

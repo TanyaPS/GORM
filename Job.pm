@@ -523,9 +523,9 @@ sub _QC($) {
   my $sumfile = $rs->getFilenamePrefix().'.sum';
   my $logfile = 'anubis.'.$rs->{'hour'}.'.log';
   my $cmd = "$ANUBIS".
-	" :gen:int 30".
 	" :inputs:rinexo ".$rs->{'MO.30'}.
 	" :inputs:rinexn \"".join(' ',$rs->getNavlist())."\"".
+	" :gen:int 30".
 	" :qc:ele_cut=0".
 	" :outputs:xtr $sumfile".
 	" :outputs:log $logfile".
