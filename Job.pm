@@ -673,16 +673,16 @@ sub process() {
     # Obs
     if ($r->{'filetype'} eq 'Obs') {
       my $filetosend = $rs->{'MO.'.$r->{'obsint'}};
+      my $crxfile = $filetosend;
+      $crxfile =~ s/\.rnx$/.crx.gz/;
       if (!-f $filetosend) {
         logerror("Cannot distribute $filetosend. Does not exist?!");
         next;
       }
       # Compress and upload
-      my $crxfile = $filetosend;
-      $crxfile =~ s/\.rnx$/.crx.gz/;
-      if (! -f $crxfile || fileage($filetosend) > fileage($crxfile)) {
+      if (! -f $crxfile) {
         loginfo("Compressing $filetosend");
-        sysrun("$RNX2CRX - < $filetosend | gzip > $crxfile", { log => $Debug });
+        sysrun("$RNX2CRX $filetosend - | gzip > $crxfile", { log => $Debug });
       }
       syscp($crxfile, $destpath, { mkdir => 1, log => 1 } );
     }
@@ -693,7 +693,7 @@ sub process() {
       my @copylist = ();
       foreach my $navfile ($rs->getNavlist()) {
         my $gzfile = "$navfile.gz";
-        if (! -f $gzfile || fileage($navfile) > fileage($gzfile)) {
+        if (! -f $gzfile) {
           loginfo("Compressing $navfile");
           system("gzip < $navfile > $gzfile");
         }
