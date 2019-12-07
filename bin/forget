@@ -26,6 +26,6 @@ $db->{'DBH'}->do(q{
 	delete from gpssums where site=? and year=? and doy=?
 }, undef, uc($ARGV[0]), int($ARGV[1]), int($ARGV[2]));
 
-system("rm -r $WORKDIR/".sprintf("%s/%4d/%03d",$site,$year,$doy));
+system("rm -rf $WORKDIR/".sprintf("%s/%4d/%03d",$site,$year,$doy));
 
 print "done\n";
