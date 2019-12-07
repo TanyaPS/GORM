@@ -440,8 +440,7 @@ sub gendayfiles() {
   # Splice navigation files
   my %navbytyp;
   foreach my $rs (@rslist) {
-    my $navlist = $rs->getNavlist;
-    foreach (@$navlist) {
+    foreach ($rs->getNavlist()) {
       if (/_([A-Z]N)\./) {
         my $navtyp = $1;
         $navbytyp{$navtyp} = [] unless exists $navbytyp{$navtyp};
@@ -520,25 +519,33 @@ sub createWantedIntervals($) {
 sub _QC($) {
   my $rs = shift;
 
+  loginfo('Running QC on '.$rs->{'MO.30'});
   my $sumfile = $rs->getFilenamePrefix().'.sum';
-  my $navfiles = $rs->getNavlist();
-  my $cmd = "$ANUBIS :inputs:rinexo ".$rs->{'MO.30'}." :inputs:rinexn \"".join(' ',@$navfiles)."\" :outputs:xtr $sumfile :outputs:verb=1";
-  loginfo("Running QC on ".$rs->{'MO.30'});
+  my $logfile = 'anubis.'.$rs->{'hour'}.'.log';
+  my $cmd = "$ANUBIS".
+	" :gen:int 30".
+	" :inputs:rinexo ".$rs->{'MO.30'}.
+	" :inputs:rinexn \"".join(' ',$rs->getNavlist())."\"".
+	" :qc:ele_cut=0".
+	" :outputs:xtr $sumfile".
+	" :outputs:log $logfile".
+	" :outputs:verb=0";
   sysrun($cmd, { log => $Debug});
 
-  # =TOTSUM 2018-11-16 00:00:00 2018-11-16 00:59:30   1.00  30.00   0.10   4623   4457  96.41     31    722   3467   3467 100.00
+  # #TOTSUM First_Epoch________ Last_Epoch_________ Hours_ Sample MinEle #_Expt #_Have %Ratio o/slps woElev Exp>00 Hav>00 %Rt>00
+  # =TOTSUM 2019-01-15 00:00:00 2019-01-15 23:59:30  24.00  30.00   0.00 144235 128435  89.05     35  50420 136654 128435  93.99
   my $qc = 0;
   open(my $fd, '<', $sumfile) || return 0;
   while (<$fd>) {
     if (/^=TOTSUM /) {
       my @a = split(/\s+/, $_);
-      $qc = round($a[10]);
+      $qc = round($a[15]);
       last;
     }
   }
   close($fd);
 
-  sysrun("gzip -9f $sumfile");
+  sysrun("/usr/bin/gzip -9f $sumfile");
   $rs->{'sumfile'} = $sumfile.'.gz';
 
   return round($qc);
@@ -684,8 +691,7 @@ sub process() {
     # Nav
     elsif ($r->{'filetype'} eq 'Nav') {
       my @copylist = ();
-      my $navfiles = $rs->getNavlist;
-      foreach my $navfile (@$navfiles) {
+      foreach my $navfile ($rs->getNavlist()) {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile || fileage($navfile) > fileage($gzfile)) {
           loginfo("Compressing $navfile");

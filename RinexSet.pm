@@ -25,11 +25,17 @@ sub new {
   bless $self, $class;
 }
 
+#################################
+# Get working dir of this RINEX set
+#
 sub getWorkdir() {
   my $self = shift;
   return sprintf "%s/%s/%d/%03d", $WORKDIR, $self->{site}, $self->{year}, $self->{doy};
 }
 
+#################################
+# Get the object file name
+#
 sub getRsFile() {
   my $self = shift;
   return $self->getWorkdir().'/rs.'.$self->{hour}.'.json';
@@ -46,12 +52,19 @@ sub getRsFile() {
 #TEJH189a.17o.zip
 #TEJH00DNK_R_20171891600_01H_01S_MO.rnx
 #
+#################################
+# Get common filename prefix
+#
 sub getFilenamePrefix() {
   my $self = shift;
   return sprintf "%s_R_%d%03d%02d00_01%s",
 	$self->{site}, $self->{year}, $self->{doy}, letter2hour($self->{hour}), $self->{hour} eq '0' ? 'D':'H';
 }
 
+#################################
+# Get RINEXv3 filename of specified type
+# Type: MO.# or aN
+#
 sub getRinexFilename($) {
   my ($self, $ftyp) = @_;
   if ($ftyp =~ /^MO\.(\d+)/) {
@@ -61,15 +74,19 @@ sub getRinexFilename($) {
   return $self->getFilenamePrefix."_".$ftyp.".rnx";
 }
 
+#################################
+# Returns array of nav files
+#
 sub getNavlist() {
   my $self = shift;
   my @fa = ();
   foreach my $k (keys %$self) {
     push(@fa, $self->{$k}) if $k =~ /[A-Z]N/;
   }
-  return \@fa;
+  return @fa;
 }
 
+#################################
 # Defines $obj->{ftyp} if file exists.
 # ftyp is MO.[interval] or [A-Z]N
 #
@@ -83,7 +100,7 @@ sub checkfiles() {
   }
 }
 
-#
+#################################
 # Unzip into $self->getWorkdir using RINEXv3 filenames
 #
 sub unzip($$) {
@@ -96,7 +113,6 @@ sub unzip($$) {
     logwarn("unable to read zipfile $zipfile");
     return undef;
   }
-  my @navfiles = ();
   foreach my $zm ($zip->members()) {
     my $zmfn = $zm->fileName();
     my $ofn;
@@ -135,6 +151,9 @@ sub unzip($$) {
   return $self;
 }
 
+#################################
+# Load rs JSON file into self
+#
 sub load(;$) {
   my ($self, $file) = @_;
   $file = $self->getRsFile() unless defined $file;
@@ -142,6 +161,9 @@ sub load(;$) {
   $self->{$_} = $json->{$_} foreach keys %$json;
 }
 
+#################################
+# Store self into rs JSON file
+#
 sub store(;$) {
   my ($self, $file) = @_;
   $file = $self->getRsFile() unless defined $file;
@@ -154,12 +176,13 @@ package testRinexSet;
 use Utils;
 
 sub dotest() {
-  my $rs = new RinexSet(site => 'TEJH00DNK', year => 2017, doy => 189, hour => 'q', arr1 => [0,1,2] );
+  # TA0200DNK_R_20190150000
+  my $rs = new RinexSet(site => 'TA0200DNK', year => 2019, doy => 15, hour => '0', arr1 => [0,1,2] );
   $rs->store("/tmp/rs.json");
 
   $rs = new RinexSet(rsfile => "/tmp/rs.json");
-  print "Test site ", ($rs->{site} eq "TEJH00DNK") ? "ok" : "NOT ok", "\n";
-  print "Test year: ", ($rs->{year} == 2017) ? "ok" : "NOT ok", "\n";
+  print "Test site ", ($rs->{site} eq "TA0200DNK") ? "ok" : "NOT ok", "\n";
+  print "Test year: ", ($rs->{year} == 2019) ? "ok" : "NOT ok", "\n";
   my $ok = 1;
   for (my $i = 0; $i <= 2; $i++) {
     $ok &= (${$rs->{arr1}}[$i] == $i);
@@ -168,19 +191,18 @@ sub dotest() {
 
   $rs->store("/tmp/rs.json");
   $rs = new RinexSet;
-  print "Test no site: ", ($rs->{site} eq "TEJH00DNK") ? "NOT ok" : "ok", "\n";
+  print "Test no site: ", ($rs->{site} eq "TA0200DNK") ? "NOT ok" : "ok", "\n";
   $rs->load("/tmp/rs.json");
-  print "Test site: ", ($rs->{site} eq "TEJH00DNK") ? "ok" : "NOT ok", "\n";
+  print "Test site: ", ($rs->{site} eq "TA0200DNK") ? "ok" : "NOT ok", "\n";
 
   print "workdir: ", $rs->getWorkdir, "\n";
   my $ofn = $rs->getRinexFilename('MO.1');
-  print "obsFilename: $ofn: ", ($ofn eq "TEJH00DNK_R_20171891600_01H_01S_MO.rnx") ? "ok":"NOT ok", "\n";
+  print "obsFilename: $ofn: ", ($ofn eq "TA0200DNK_R_20190150000_01D_01S_MO.rnx") ? "ok":"NOT ok", "\n";
 
   $rs->checkfiles;
   $rs->store("/tmp/rs.json");
 
-  my $a = $rs->getNavlist;
-  foreach (@$a) { print "$_\n"; }
+  foreach ($rs->getNavlist()) { print "$_\n"; }
   print "GN navfn: ", $rs->getRinexFilename('GN'), "\n";
 }
 
