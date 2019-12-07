@@ -19,7 +19,6 @@ if (scalar(@ARGV) != 3) {
   exit(2);
 }
 my ($site, $year, $doy) = (uc($ARGV[0]), $ARGV[1], $ARGV[2]);
-my $site = uc($ARGV[0]);
 $site = site42site($site) if length($site) == 4;
 
 my $db = new GPSDB;
