@@ -10,6 +10,7 @@
 
 use strict;
 use warnings;
+use BaseConfig;
 use Utils;
 use GPSDB;
 
@@ -17,6 +18,7 @@ if (scalar(@ARGV) != 3) {
   print STDERR "Usage: $0 site year doy\n";
   exit(2);
 }
+my ($site, $year, $doy) = (uc($ARGV[0]), $ARGV[1], $ARGV[2]);
 my $site = uc($ARGV[0]);
 $site = site42site($site) if length($site) == 4;
 
@@ -24,5 +26,7 @@ my $db = new GPSDB;
 $db->{'DBH'}->do(q{
 	delete from gpssums where site=? and year=? and doy=?
 }, undef, uc($ARGV[0]), int($ARGV[1]), int($ARGV[2]));
+
+system("rm -r $WORKDIR/".sprintf("%s/%4d/%03d",$site,$year,$doy));
 
 print "done\n";
