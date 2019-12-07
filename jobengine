@@ -18,7 +18,7 @@ use Logger;
 use RinexSet;
 use Job;
 
-my $PollInterval = 11;	# Poll timeout seconds
+my %Pending;
 my %Running;
 my $Debug = 1;  	# set with -d option
 my $FM;			# FormManager
@@ -182,6 +182,8 @@ sub runcommand($) {
 sub runjob($) {
   my $jobfile = shift;
 
+  return unless -f $jobfile;
+
   # If filename ends with 'command', then assume it is a command file
   if ($jobfile =~ /command$/) {
     # message from admin.cgi
@@ -289,13 +291,14 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm $PollInterval;
+    alarm 31;
     $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
   };
   if ($@) {
     my $msg = $@;
     if ($msg =~ /^jobenginealarm|^SIGHUP/) {
+      next if $FM->running_procs > 0;
       runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
       if (time() > $lastscan + $scaninterval) {
         scan_for_forced_incompletes();

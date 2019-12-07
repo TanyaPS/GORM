@@ -21,7 +21,6 @@ my $DB;
 my %SCS;			# All sites defined
 my %Pending;			# Postponed jobs to be submitted
 my $Debug = 0;
-my $PollInterval = 11;		# Timeout for new files
 
 
 #############################################################################################
@@ -272,7 +271,7 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm $PollInterval;	# less than 15s
+    alarm 11;
     $inotify->poll;
     alarm 0;
   };
