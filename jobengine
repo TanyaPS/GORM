@@ -283,9 +283,6 @@ my $scaninterval = 300;		# Scan for force-complete every 5 min
 
 # main loop
 while (1) {
-  # ForkManager needs reaping of finished childs to force callback
-  $FM->reap_finished_children;
-
   eval {
     local $SIG{ALRM} = sub { die("jobenginealarm") };
     local $SIG{INT} = sub { die("interrupted") };
@@ -298,8 +295,14 @@ while (1) {
   if ($@) {
     my $msg = $@;
     if ($msg =~ /^jobenginealarm|^SIGHUP/) {
+      # ForkManager needs reaping of finished childs to force callback
+      $FM->reap_finished_children;
       next if $FM->running_procs > 0;
+
+      # No jobs in queue or running, check for leftovers.
       runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
+
+      # Scan for manually forced incompletes.
       if (time() > $lastscan + $scaninterval) {
         scan_for_forced_incompletes();
         $lastscan = time();
