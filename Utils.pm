@@ -275,6 +275,7 @@ sub storeJSON($$) {
 #
 sub site42site($) {
   my $site4 = shift;
+  $site4 = uc($site4);
   return $site4 eq 'ARGI' ? $site4.'00FRO' : $site4.'00DNK';
 }
 

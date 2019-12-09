@@ -121,14 +121,14 @@ sub unzip($$) {
     if ($zmfn =~ /\.\d\dd$/) {
       $ofn = $zmfn;
       $ofn =~ s/d$/o/;
-      system("$CRX2RNX - < $workdir/$zmfn > $workdir/$ofn");
+      system("$CRX2RNX $workdir/$zmfn - > $workdir/$ofn");
       unlink("$workdir/$zmfn");
       $zmfn = $ofn;
     }
     elsif ($zmfn =~ /\.crx$/) {
       $ofn = $zmfn;
       $ofn =~ s/\.crx$/.rnx/;
-      system("$CRX2RNX - < $workdir/$zmfn > $workdir/$ofn");
+      system("$CRX2RNX $workdir/$zmfn - > $workdir/$ofn");
       unlink("$workdir/$zmfn");
       $zmfn = $ofn;
     }
@@ -170,42 +170,5 @@ sub store(;$) {
   my %h = map { $_ => $self->{$_} } keys %$self;
   storeJSON($file, \%h);
 }
-
-package testRinexSet;
-
-use Utils;
-
-sub dotest() {
-  # TA0200DNK_R_20190150000
-  my $rs = new RinexSet(site => 'TA0200DNK', year => 2019, doy => 15, hour => '0', arr1 => [0,1,2] );
-  $rs->store("/tmp/rs.json");
-
-  $rs = new RinexSet(rsfile => "/tmp/rs.json");
-  print "Test site ", ($rs->{site} eq "TA0200DNK") ? "ok" : "NOT ok", "\n";
-  print "Test year: ", ($rs->{year} == 2019) ? "ok" : "NOT ok", "\n";
-  my $ok = 1;
-  for (my $i = 0; $i <= 2; $i++) {
-    $ok &= (${$rs->{arr1}}[$i] == $i);
-  }
-  print "arr1: ", $ok ? "ok":"NOT ok", "\n";
-
-  $rs->store("/tmp/rs.json");
-  $rs = new RinexSet;
-  print "Test no site: ", ($rs->{site} eq "TA0200DNK") ? "NOT ok" : "ok", "\n";
-  $rs->load("/tmp/rs.json");
-  print "Test site: ", ($rs->{site} eq "TA0200DNK") ? "ok" : "NOT ok", "\n";
-
-  print "workdir: ", $rs->getWorkdir, "\n";
-  my $ofn = $rs->getRinexFilename('MO.1');
-  print "obsFilename: $ofn: ", ($ofn eq "TA0200DNK_R_20190150000_01D_01S_MO.rnx") ? "ok":"NOT ok", "\n";
-
-  $rs->checkfiles;
-  $rs->store("/tmp/rs.json");
-
-  foreach ($rs->getNavlist()) { print "$_\n"; }
-  print "GN navfn: ", $rs->getRinexFilename('GN'), "\n";
-}
-
-# dotest();
  
 1;

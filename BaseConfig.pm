@@ -64,7 +64,7 @@ sub init($) {
       next if /^\s*#|^\s*$/;
       chomp;
       if (/\s*(\w+)\s*=\s*([^\s]+)/) {
-        if (exists $vars{$1}) {
+        if (exists $vars{lc($1)}) {
           my $ref = $vars{$1};
           $$ref = $2;
         }
