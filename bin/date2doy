@@ -1,0 +1,14 @@
+#!/usr/bin/perl
+
+use Utils;
+
+my ($year, $mon, $day) = @ARGV;
+
+if (!defined $year || $year < 1990 ||
+    !defined $mon || $mon < 1 || $mon > 12 ||
+    !defined $day || $day < 1 || $day > 31) {
+  print STDERR "Usage: $0 yyyy mm dd\n";
+  exit(2);
+}
+
+print "$year-$mon-$day DOY: $year-", Day_of_Year($year, $mon, $day), "\n";

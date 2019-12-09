@@ -288,7 +288,7 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 31;
+    alarm 10;		# Use a short timeout to allow fast reaping
     $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
   };
@@ -299,11 +299,11 @@ while (1) {
       $FM->reap_finished_children;
       next if $FM->running_procs > 0;
 
-      # No jobs in queue or running, check for leftovers.
-      runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
-
-      # Scan for manually forced incompletes.
       if (time() > $lastscan + $scaninterval) {
+        # No jobs in queue or running, check for leftovers.
+        runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
+
+        # Scan for manually forced incompletes.
         scan_for_forced_incompletes();
         $lastscan = time();
       }
