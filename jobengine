@@ -9,11 +9,11 @@
 use strict;
 use warnings;
 use Getopt::Std;
-use Fcntl qw(:DEFAULT :flock);
 use Parallel::ForkManager;
 use Linux::Inotify2;
 use BaseConfig;
 use Utils;
+use StatusDB;
 use Logger;
 use RinexSet;
 use Job;
@@ -22,42 +22,6 @@ my %Pending;
 my %Running;
 my $Debug = 1;  	# set with -d option
 my $FM;			# FormManager
-
-# Lock a named file
-sub lock($) {
-  my $fn = shift;
-  my $fd;
-  return 0 unless sysopen($fd, $fn, O_CREAT|O_RDWR);
-  flock($fd, LOCK_EX);
-  return $fd;
-}
-
-# Unlcok file descriptor
-sub unlock($) {
-  my $fd = shift;
-  return if $fd == 0; # if lock failed
-  flock($fd, LOCK_UN);
-  close($fd);
-}
-
-########################################
-# Manipulate $workdir/status.json.
-# Requires exclusive access
-#
-sub statusdb($;$$) {
-  my ($jsonfile, $hour, $status) = @_;
-  my $json = loadJSON($jsonfile);
-  $json = {} unless defined $json;
-  if (!defined $status && !defined $hour) {
-    $status = $json;
-  } elsif (!defined $status) {
-    $status = defined $json->{$hour} ? $json->{$hour} : "";
-  } else {
-    $json->{$hour} = $status;
-    storeJSON($jsonfile, $json);
-  }
-  return $status;
-}
 
 ##########################################
 # Callback called when a child starts
@@ -75,31 +39,31 @@ sub onfinish() {
   my ($site, $year, $doy, $hour) = split(/-/, $ident);
   my $job = $Running{$ident};
   my $workdir = $job->getWorkdir;
-  my $statusfile = "$workdir/status.json";
 
   loginfo("$ident finished");
   delete $Running{$ident};
 
   return unless -d $workdir;  # may have been removed
-  my $lockfd = lock($statusfile);
-  statusdb($statusfile, $hour, "processed");
 
-  # check if day is complete (status.json still locked)
+  # Load and lock status.json
+  my $statusdb = StatusDB->new("$workdir/status.json");
+  $statusdb->{$hour} = 'processed';
+
+  # check if day is complete
   if ($hour ne '0') {
-    my $status = statusdb($statusfile);
-    if (!exists $status->{'0'}) {
+    if (!exists $statusdb->{'0'}) {
       my $complete = 1;
       foreach my $h ('a'..'x') {
-        $complete = 0 unless exists $status->{$h} && $status->{$h} eq "processed";
+        $complete = 0 unless exists $statusdb->{$h} && $statusdb->{$h} eq "processed";
       }
       if ($complete) {
         my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $job->{'interval'});
         $dayjob->submitjob('hour2daily');
-        statusdb($statusfile, '0', "queued");  # make sure nobody else do the same
+        $statusdb->{'0'} = 'queued';		# make sure nobody else do the same
       }
     }
   }
-  unlock($lockfd);
+  $statusdb->save();
 }
 
 #####################################
@@ -111,14 +75,13 @@ sub force_completion($$$) {
   loginfo("Force completion of $site-$year-$doy");
   my $dayjob = new Job(site => $site, year => $year, doy => $doy);
   my $workdir = $dayjob->getWorkdir;
-  my $statusfile = "$workdir/status.json";
-  my $lock = lock($statusfile);
-  my $sta = statusdb($statusfile);
+
+  my $statusdb = StatusDB->new("$workdir/status.json");
 
   # Find interval
   my $interval;
-  foreach my $hour (keys %$sta) {
-    next unless $sta->{$hour} eq 'processed';
+  foreach my $hour (keys %$statusdb) {
+    next unless $statusdb->{$hour} eq 'processed';
     my $rs = new RinexSet(rsfile => "$workdir/rs.$hour.json");
     $interval = $rs->{'interval'};
     last if defined $interval;
@@ -128,11 +91,11 @@ sub force_completion($$$) {
   if (defined $interval) {
     ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'incomplete'}) = ('0', $interval, 1);
     $dayjob->submitjob('hour2daily');
-    statusdb($statusfile, '0', "queued");
+    $statusdb->{'0'} = 'queued';
   } else {
     logerror("Cannot force completion of $site-$year-$doy. No proccessed hours.");
   }
-  unlock($lock);
+  $statusdb->save();
 }
 
 
@@ -207,17 +170,18 @@ sub runjob($) {
   return if exists $Running{$ident};
 
   my $workdir = $job->getWorkdir;
-  my $statusfile = "$workdir/status.json";
-  my $lockfd = lock($statusfile);
-  my $status = statusdb($statusfile, $job->{'hour'});
+  my $statusdb = StatusDB->new("$workdir/status.json");
+  my $status = $statusdb->{$job->{'hour'}};
+  $status = "" unless defined $status;
   if ($status eq "running" || $status eq "processed") {
-    unlock($lockfd);
+    $statusdb->unlock();
     loginfo("Duplicate job $ident");
     return;
   } else {
-    statusdb($statusfile, $job->{'hour'}, "running");
-    unlock($lockfd);
+    $statusdb->{$job->{'hour'}} = 'running';
+    $statusdb->save();
   }
+  undef $statusdb;
   loginfo("Run $ident");
 
   $Running{$ident} = $job;		# need this in onfinish()

@@ -587,11 +587,8 @@ sub save_originals($) {
 sub process() {
   my $self = shift;
 
-  return unless sysopen(LOCK, $self->{'hour'}.'.lock', O_CREAT|O_EXCL);  # safety lock
-  close(LOCK);
-
-  $self->{DB} = new GPSDB;
-  my $dbh = $self->{DB}->{DBH};
+  $self->{'DB'} = new GPSDB;
+  my $dbh = $self->{'DB'}->{'DBH'};
 
   my $rs;
   if ($self->{'source'} eq 'hour2daily') {
@@ -717,7 +714,6 @@ sub process() {
   }
 
   delete $self->{'DB'};
-  unlink("$hour.lock");
 
   if (-f 'debug') {
     open(my $fd, ">jobdump.$hour");
@@ -734,7 +730,7 @@ sub process() {
     system("rm -rf ".$self->getWorkdir);
   }
 
-  return 0;
+  return 'processed';
 }
 
 1;
