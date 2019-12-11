@@ -167,15 +167,18 @@ sub runjob($) {
 
   # Duplicate event check
   my $ident = $job->getIdent;
-  return if exists $Running{$ident};
+  if (exists $Running{$ident}) {
+    logerror("Duplicate job $ident");
+    return;
+  }
 
   my $workdir = $job->getWorkdir;
   my $statusdb = StatusDB->new("$workdir/status.json");
   my $status = $statusdb->{$job->{'hour'}};
   $status = "" unless defined $status;
-  if ($status eq "running" || $status eq "processed") {
+  if ($status eq "running") {
     $statusdb->unlock();
-    loginfo("Duplicate job $ident");
+    logerror("Duplicate job $ident");
     return;
   } else {
     $statusdb->{$job->{'hour'}} = 'running';
@@ -252,7 +255,7 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 10;		# Use a short timeout to allow fast reaping
+    alarm 5;		# Use a short timeout to allow fast reaping
     $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
   };

@@ -26,15 +26,19 @@ my $Debug = 0;
 #############################################################################################
 # Lookup site in gpssums. Returns true if current year-doy exists, false if not.
 #
-sub check_existing($$$$) {
-  my ($site, $year, $doy, $hour) = @_;
+sub dailysum_exists($$$) {
+  my ($site, $year, $doy) = @_;
 
   my $href = $DB->{'DBH'}->selectrow_hashref(q{
 	select count(site) cnt
 	from gpssums
-	where site = ? and year = ? and doy = ? and hour = ?
-  }, undef, $site, $year, $doy, $hour);
-  return (defined $href && $href->{'cnt'});
+	where site = ? and year = ? and doy = ? and hour = '0'
+  }, undef, $site, $year, $doy);
+  if (defined $href && $href->{'cnt'}) {
+    logerror("$site-$year-$doy already processed. Forget DOY $site-$year-$doy first.");
+    return 1;
+  }
+  return 0;
 }
 
 
@@ -67,12 +71,12 @@ sub process($$) {
     my $hour = hour2letter($hh);
     sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
     $ifn = "$SAVEDIR/$site/$fn";
-    if (check_existing($site, $year, $doy, $hour)) {
-      logerror("$fn processed already. Forget it before reprocessing");
-      return;
-    }
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->mkWorkdir();
+    my $workdir = $job->getWOrkdir();
+    if (! -d $workdir) {
+      return if dailysum_exists($site, $year, $doy);
+      $job->mkWorkdir();
+    }
     my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, zipfile => $ifn);
     loginfo("Unzipping $fn to ".$rs->getWorkdir);
     $rs->unzip($ifn, $sc->{'obsint'});
@@ -87,12 +91,12 @@ sub process($$) {
     my ($doy, $hour, $year) = ($1, $2, sy2year($3));
     sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
     $ifn = "$SAVEDIR/$site/$fn";
-    if (check_existing($site, $year, $doy, $hour)) {
-      logerror("$fn processed already. Forget it before reprocessing");
-      return;
-    }
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->mkWorkdir();
+    my $workdir = $job->getWorkdir();
+    if (! -d $workdir) {
+      return if dailysum_exists($site, $year, $doy);
+      $job->mkWorkdir();
+    }
     my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, zipfile => $ifn);
     loginfo("Unzipping $fn to ".$rs->getWorkdir);
     $rs->unzip($ifn, $sc->{obsint});
@@ -108,7 +112,11 @@ sub process($$) {
     sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
     $ifn = "$SAVEDIR/$site/$fn";
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->mkWorkdir();
+    my $workdir = $job->getWorkdir();
+    if (! -d $workdir) {
+      return if dailysum_exists($site, $year, $doy);
+      $job->mkWorkdir();
+    }
     my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     chdir($workdir);
@@ -135,7 +143,12 @@ sub process($$) {
     sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
     $ifn = "$savedir/$fn";
 
-    my $workdir = $job->mkWorkdir();
+    my $workdir = $job->getWorkdir();
+    if (! -d $workdir) {
+      return if dailysum_exists($site, $year, $doy);
+      $job->mkWorkdir();
+    }
+
     my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     $job->{'rsfile'} = $rs->getRsFile();
     $rs->load() if -f $job->{'rsfile'};
@@ -271,7 +284,7 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 11;
+    alarm 5;
     $inotify->poll;
     alarm 0;
   };

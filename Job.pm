@@ -11,6 +11,7 @@ package Job;
 
 use strict;
 use warnings;
+use Carp qw(longmess);
 use Data::Dumper;
 use Time::Local;
 use File::Path qw(make_path);
@@ -21,8 +22,6 @@ use Utils;
 use Logger;
 use RinexSet;
 use GPSDB;
-use Carp qw(longmess);
-use Data::Dumper;
 
 my $Debug = 0;
 

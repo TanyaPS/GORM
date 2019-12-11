@@ -1,5 +1,12 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-11	sjm	Check if doy already processed on all inbound data.
+- Renamed check_existing to dailysum_exists. Check only if day is complete.
+- Added dailysum_check on Septentrio files as well.
+
+## 2019-12-10	sjm	Added StatusDB.pm
+- StatusDB package to handle manipulation of workdir/status.json file in exclusive mode.
+
 ## 2019-12-06	sjm	Enable sumfile in DB and access via status.cgi
 - Enable load of gzipped sumfile into DB and view of sumfile in QC (click on sumfield)
 
