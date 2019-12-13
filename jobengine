@@ -159,8 +159,7 @@ sub runjob($) {
   my $job = new Job(jobfile => $jobfile);
   unlink($jobfile);
 
-  unless (defined $job && defined $job->{'site'} && defined $job->{'year'} &&
-                          defined $job->{'doy'}  && defined $job->{'hour'}) {
+  unless (defined $job && $job->verifyobj()) {
     logerror("invalid jobfile $jobfile");
     return;
   }

@@ -15,8 +15,6 @@ use Carp qw(longmess);
 use Data::Dumper;
 use Time::Local;
 use File::Path qw(make_path);
-use JSON;
-use Fcntl qw(:DEFAULT :flock);
 use BaseConfig;
 use Utils;
 use Logger;
@@ -40,21 +38,33 @@ sub new {
   return $self;
 }
 
+sub verifyobj() {
+  my $self = shift;
+  my $ok = 1;
+  foreach (qw(site year doy hour)) {
+    if (!defined $self->{$_}) {
+      logdebug(longmess("$_ undefined"));
+      $ok = 0;
+    }
+  }
+  return $ok;
+}
+
 sub getIdent() {
   my $self = shift;
-  foreach (qw(site year doy hour)) {
-    loginfo(longmess("$_ undefined")) unless defined $self->{$_};
-  }
+  $self->verifyobj() if $Debug;
   return $self->{'site'}.'-'.$self->{'year'}.'-'.$self->{'doy'}.'-'.$self->{'hour'};
 }
 
 sub jobfile() {
   my $self = shift;
+  $self->verifyobj() if $Debug;
   return "$JOBQUEUE/".$self->{'site'}.$self->{'year'}.$self->{'doy'}.$self->{'hour'};
 }
 
 sub getWorkdir() {
   my $self = shift;
+  $self->verifyobj() if $Debug;
   return sprintf("%s/%s/%d/%03d", $WORKDIR, $self->{'site'}, $self->{'year'}, $self->{'doy'});
 }
 
@@ -70,6 +80,7 @@ sub mkWorkdir() {
 sub submitjob($) {
   my $self = shift;
   my $source = shift;
+  $self->verifyobj() if $Debug;
   my %h = map { $_ => $self->{$_} } keys %$self;
   $h{'source'} = $source;
   storeJSON($self->jobfile(), \%h);
