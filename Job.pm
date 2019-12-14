@@ -18,6 +18,7 @@ use File::Path qw(make_path);
 use BaseConfig;
 use Utils;
 use Logger;
+use StatusDB;
 use RinexSet;
 use GPSDB;
 
@@ -195,7 +196,7 @@ sub getStationInfo() {
 	limit	1
   }, undef, $self->{'site'}, $startdate);
 
-  $ant->{'anttype'} = sprintf("%-16s%4s", $1, $2) if $ant->{'anttype'} =~ /^(.+),(.+)$/;
+  $ant->{'anttype'} = sprintf("%-16s%4s", $1, $2) if defined $ant->{'anttype'} && $ant->{'anttype'} =~ /^(.+),(.+)$/;
 
   my $sta = { site => $self->{'site'} };
   $sta->{$_} = $loc->{$_} foreach keys %$loc;
@@ -242,10 +243,12 @@ sub rewriteheaders($) {
     elsif (/AGENCY\s*$/) {
       push(@hdr, sprintf "%-20s%-40sOBSERVER / AGENCY\n", $sta->{'observer'}, $sta->{'agency'});
     }
-    elsif (/REC # \/ TYPE \/ VERS\s*$/) {
+    elsif (/REC # \/ TYPE \/ VERS\s*$/ &&
+	   defined $sta->{'recsn'} && defined $sta->{'rectype'} && defined $sta->{'firmware'}) {
       push(@hdr, sprintf "%-20s%-20s%-20sREC # / TYPE / VERS\n", $sta->{'recsn'}, $sta->{'rectype'}, $sta->{'firmware'});
     }
-    elsif (/ANT # \/ TYPE\s*$/) {
+    elsif (/ANT # \/ TYPE\s*$/ &&
+	   defined $sta->{'antsn'} && defined $sta->{'anttype'}) {
       push(@hdr, sprintf "%-20s%-40sANT # / TYPE\n", $sta->{'antsn'}, $sta->{'anttype'});
     }
     elsif (/APPROX POSITION XYZ\s*$/) {
@@ -256,7 +259,8 @@ sub rewriteheaders($) {
         push(@hdr, $_);		# else use original from file
       }
     }
-    elsif (/DELTA H\/E\/N\s*$/) {
+    elsif (/DELTA H\/E\/N\s*$/ &&
+	   defined $sta->{'antdelta'}) {
       my ($x, $y, $z) = split(/,/, $sta->{'antdelta'});
       push(@hdr, sprintf "%14.4f%14.4f%14.4f%18sANTENNA: DELTA H/E/N\n",$x,$y,$z,' ');
     }
@@ -597,6 +601,8 @@ sub save_originals($) {
 sub process() {
   my $self = shift;
 
+  loginfo($self->getIdent()." starting");
+
   $self->{'DB'} = new GPSDB;
   my $dbh = $self->{'DB'}->{'DBH'};
 
@@ -734,12 +740,38 @@ sub process() {
   $rs->{'processed'} = 1;
   $rs->store($self->{'rsfile'});
 
+  #
+  # If DOY is complete, erase workdir.
+  # If not, mark this hour complete and check if DOY is complete.
+  # If DOY complete, submit dayjob
+  #
   if ($hour eq '0' && !-f 'debug') {
     # This is a dayfile and is now processed. We are done and delete the workdir.
     chdir("..");
     system("rm -rf ".$self->getWorkdir);
+  } else {
+    # Check if doy is complete, and if it is, submit a day job
+    my $statusdb = StatusDB->new("status.json");
+    if (!defined $statusdb) {
+      logerror("Cannot lock status.json: ".longmess());
+      return 'error';
+    }
+    $statusdb->{$hour} = 'processed';
+    if (!exists $statusdb->{'0'}) {
+      my $complete = 1;
+      foreach my $h ('a'..'x') {
+        $complete = 0 unless exists $statusdb->{$h} && $statusdb->{$h} eq "processed";
+      }
+      if ($complete) {
+        my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
+        $dayjob->submitjob('hour2daily');
+        $statusdb->{'0'} = 'queued';		# make sure nobody else do the same
+      }
+    }
+    $statusdb->save();
   }
 
+  loginfo($self->getIdent()." finished");
   return 'processed';
 }
 

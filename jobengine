@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 #
 # Simple job scheduler.
-# Monitor $JOBQUEUE for new job files. Each jobfile spawns a process that do the
-# conversion and distribution. The scheduler defaults to 4 concurrent processes.
+# Monitor $JOBQUEUE for new job files. Each jobfile spawns a process that runs
+# Job->process(). The scheduler defaults to 4 concurrent processes.
 #
 # Soren Juul Moller, Nov 2019
 
@@ -23,48 +23,6 @@ my %Running;
 my $Debug = 1;  	# set with -d option
 my $FM;			# FormManager
 
-##########################################
-# Callback called when a child starts
-#
-sub onstart() {
-  my ($pid, $ident) = @_;
-  loginfo("$ident starting");
-}
-
-##########################################
-# Callback called when a child finishes
-#
-sub onfinish() {
-  my ($pid, $exitcode, $ident) = @_;
-  my ($site, $year, $doy, $hour) = split(/-/, $ident);
-  my $job = $Running{$ident};
-  my $workdir = $job->getWorkdir;
-
-  loginfo("$ident finished");
-  delete $Running{$ident};
-
-  return unless -d $workdir;  # may have been removed
-
-  # Load and lock status.json
-  my $statusdb = StatusDB->new("$workdir/status.json");
-  $statusdb->{$hour} = 'processed';
-
-  # check if day is complete
-  if ($hour ne '0') {
-    if (!exists $statusdb->{'0'}) {
-      my $complete = 1;
-      foreach my $h ('a'..'x') {
-        $complete = 0 unless exists $statusdb->{$h} && $statusdb->{$h} eq "processed";
-      }
-      if ($complete) {
-        my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $job->{'interval'});
-        $dayjob->submitjob('hour2daily');
-        $statusdb->{'0'} = 'queued';		# make sure nobody else do the same
-      }
-    }
-  }
-  $statusdb->save();
-}
 
 #####################################
 # Submit a dayjob on an incomplete day
@@ -122,6 +80,7 @@ sub scan_for_forced_incompletes() {
   }
 }
 
+
 #####################################
 # Run command issued by someone like admin.cgi
 #
@@ -138,6 +97,7 @@ sub runcommand($) {
     force_completion($1, $2, $3);
   }
 }
+
 
 #####################################
 # Spawn a job using ForkManager
@@ -183,9 +143,9 @@ sub runjob($) {
     $statusdb->{$job->{'hour'}} = 'running';
     $statusdb->save();
   }
-  undef $statusdb;
-  loginfo("Run $ident");
+  undef $statusdb;   # unlcok before spawn
 
+  loginfo("Run $ident");
   $Running{$ident} = $job;		# need this in onfinish()
   $FM->start($ident) && return;  	# start instance
   setprogram("job");
@@ -199,6 +159,17 @@ sub runjob($) {
   $FM->finish(0);			# exit this instance
 }
 
+
+##########################################
+# Callback called when a child finishes
+# Might be delayed since it called upon process being reaped.
+#
+sub onfinish() {
+  my ($pid, $exitcode, $ident) = @_;
+  delete $Running{$ident};
+}
+
+
 #####################################
 # Inotify2 callback
 # Called for each new file arrived in queue
@@ -208,6 +179,7 @@ sub inotify_callback() {
   alarm 0;
   runjob($event->fullname);
 }
+
 
 ########################################################################################################
 # Main program
@@ -230,7 +202,6 @@ select(STDOUT); $| = 1;         # Unbuffered output
 
 # Initialize ForkManager
 $FM = new Parallel::ForkManager($Ninstances);
-$FM->run_on_start(\&onstart);
 $FM->run_on_finish(\&onfinish);
 
 loginfo("jobengine started with $Ninstances instances");
@@ -254,7 +225,7 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 5;		# Use a short timeout to allow fast reaping
+    alarm 15;		# Use a short timeout to allow fast reaping
     $inotify->poll;	# wait for new file in $INCOMING
     alarm 0;
   };

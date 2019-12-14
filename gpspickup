@@ -56,7 +56,7 @@ sub process($$) {
   if (!defined $sc) {
     sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug });
     logwarn("No such site: $site4");
-    next;
+    return;
   }
   my $site = $sc->{'site'};
 
@@ -72,7 +72,7 @@ sub process($$) {
     sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
     $ifn = "$SAVEDIR/$site/$fn";
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->getWOrkdir();
+    my $workdir = $job->getWorkdir();
     if (! -d $workdir) {
       return if dailysum_exists($site, $year, $doy);
       $job->mkWorkdir();
@@ -133,9 +133,9 @@ sub process($$) {
   # Strategy is to submit job until the newest file is at least XXs old. Then its safe to assume all files have arrived
   # TA0200DNK_R_20190161900_01H_01S_MO.rnx
   # TA0200DNK_R_20190161800_01H_RN.rnx
-  elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_.*_(MO|[A-Z]N)\.rnx/) {
-    my ($year, $doy, $hh, $mi, $ftyp) = ($1, $2, $3, $4, $5);
-    my $hour = hour2letter($hh);
+  elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_\d\d(H|D).*_(MO|[A-Z]N)\.rnx/) {
+    my ($year, $doy, $hh, $mi, $hd, $ftyp) = ($1, $2, $3, $4, $5, $6);
+    my $hour = ($hd eq 'H') ? hour2letter($hh) : '0';
     my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
     my $ident = $job->getIdent();
 
@@ -239,7 +239,8 @@ sub inotify_callback() {
 sub load_sites() {
   # Get the complete list of defined sites from DB
   # We only use the short version of sitename here.
-  my $aref = $DB->{'DBH'}->selectall_arrayref(q{
+  my $dbh = $DB->{'DBH'};
+  my $aref = $dbh->selectall_arrayref(q{
 	select	site, freq, obsint
 	from	locations
   }, { Slice => {} });
@@ -284,7 +285,7 @@ while (1) {
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 5;
+    alarm 8;
     $inotify->poll;
     alarm 0;
   };

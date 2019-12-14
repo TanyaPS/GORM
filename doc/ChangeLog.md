@@ -1,5 +1,10 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-14	sjm	Move DOY complete check to Job.pm
+- Moved check of DOY complete to Job.pm to make it independent of process reaping interval.
+- Handle sites with no antannes or receivers defined.
+- Fix bug processing inbound daily files.
+
 ## 2019-12-11	sjm	Check if doy already processed on all inbound data.
 - Renamed check_existing to dailysum_exists. Check only if day is complete.
 - Added dailysum_check on Septentrio files as well.
