@@ -13,18 +13,21 @@ gpspickup, jobengine and ftpuploader are running as daemons managed by systemd.
   - if job is a command
     - do commmand and return to listen
   - read job and spawn a process (Job.pm)
-  - if hourly file and day is complete
-    - create day files
-    - create day job in /data/queue
   - return to listen
 - Job.pm workdir (child process)
+  - if hour2daily job
+    - create day from hours and continue as a daily file
   - rewrite RINEX headers
   - create required intervals
   - Gapanalyze
   - QC
-  - copy to /data/upload
+  - copy to /data/upload (distribute)
   - if daily file
     - remove workdir
+    - exit
+  - if hourly file
+    - if day is complete
+      - submit hour2daily job
   - exit
 - ftpuploader
   - spawn a process per destination
@@ -73,6 +76,11 @@ Utilities and binaries are installed in /usr/local/bin.
 
 ### Utils.pm
   Utility functions used in all modules
+
+### StatusDB.pm
+  Manipulate status.json in workdir in exclusive mode.
+  Both jobengine and parallel Job objects needs to manipulate status.json. This object
+  ensures exclusive access to status.json.
 
 ### cgi/status.cgi
   Web page show the current status of processing.<br/>
