@@ -225,7 +225,7 @@ sub rewriteheaders($) {
   }
   unlink("$obs.tmp");
   if (!open($ofd, '>', "$obs.tmp")) {
-    logerror("Cannot open $obs.tmp for write: $!");
+    logerror("1:Cannot open $obs.tmp for write: $!");
     return;
   }
   loginfo("Rewrite $obs headers");
@@ -449,7 +449,7 @@ sub gendayfiles() {
     }
   }
   if (scalar(@rslist) != 24 && !exists $self->{'incomplete'}) {
-    logerror("Cannot splice incomplete day");
+    logerror("2:Cannot splice incomplete day");
     return;
   }
   loginfo("$site-$year-$doy: finishing incomplete day.") if exists $self->{'incomplete'};
@@ -519,7 +519,7 @@ sub createWantedIntervals($) {
   foreach my $interval (keys %intervals) {
     next if int($interval) == int($srcinterval) || exists $rs->{'MO.'.$interval};
     if ($interval < $srcinterval) {
-      logerror("Cannot create ${interval}s RINEX based in ${srcinterval}s RINEX files");
+      logerror("3:Cannot create ${interval}s RINEX based in ${srcinterval}s RINEX files");
       next;
     }
     # decimate this into requested interval
@@ -693,7 +693,7 @@ sub process() {
       my $crxfile = $filetosend;
       $crxfile =~ s/\.rnx$/.crx.gz/;
       if (!-f $filetosend) {
-        logerror("Cannot distribute $filetosend. Does not exist?!");
+        logerror("4:Cannot distribute $filetosend. Does not exist?!");
         next;
       }
       # Compress and upload
@@ -757,7 +757,7 @@ sub process() {
     # Check if doy is complete, and if it is, submit a day job
     my $statusdb = StatusDB->new("status.json");
     if (!defined $statusdb) {
-      logerror("Cannot lock status.json: ".longmess());
+      logerror("5:Cannot lock status.json: ".longmess());
       return 'error';
     }
     $statusdb->{$hour} = 'processed';

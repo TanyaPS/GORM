@@ -13,6 +13,7 @@ use Carp;
 use Fcntl qw(:DEFAULT :flock);
 use Utils;
 
+my $lockfile;
 my $lockfd;
 my $statusfile;
 
@@ -20,11 +21,12 @@ my $statusfile;
 # Open and lock a status.json in exclusive mode
 #
 sub new {
-  my ($class, $_statusfile) = @_;
-  $statusfile = $_statusfile;
+  my ($class, $fn) = @_;
+  $statusfile = $fn;
+  $lockfile = "$fn.lck";
   carp("status file not specified") unless defined $statusfile;
-  return undef unless sysopen($lockfd, $statusfile, O_CREAT|O_RDWR);
-  return undef unless flock($lockfd, LOCK_EX);
+  return undef if !open($lockfd, '>', $lockfile);
+  return undef if !flock($lockfd, LOCK_EX);
   my $self = loadJSON($statusfile);
   $self = {} unless defined $self;
   bless $self, $class;
@@ -35,7 +37,7 @@ DESTROY {
   if (defined $lockfd) {
     flock($lockfd, LOCK_UN);
     close($lockfd);
-    undef $lockfd;
+    unlink($lockfile);
   }
 }
 
@@ -44,8 +46,8 @@ DESTROY {
 #
 sub lock() {
   my $self = shift;
-  return if defined $lockfd;
-  return 0 unless sysopen($lockfd, $statusfile, O_CREAT|O_RDWR);
+  return 1 if defined $lockfd;
+  return 0 unless open($lockfd, '>', $lockfile);
   return flock($lockfd, LOCK_EX);
 }
 
@@ -58,6 +60,8 @@ sub unlock() {
   my $rc = flock($lockfd, LOCK_UN);
   close($lockfd);
   undef $lockfd;
+  unlink($lockfile);
+  undef $lockfile;
   return $rc;
 }
 
@@ -66,7 +70,7 @@ sub unlock() {
 #
 sub load() {
   my $self = shift;
-  $self->lock() if $lockfd == 0;
+  $self->lock();
   $self = loadJSON($statusfile);
   $self = {} unless defined $self;
   return $self;

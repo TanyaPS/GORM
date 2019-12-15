@@ -51,7 +51,7 @@ sub force_completion($$$) {
     $dayjob->submitjob('hour2daily');
     $statusdb->{'0'} = 'queued';
   } else {
-    logerror("Cannot force completion of $site-$year-$doy. No proccessed hours.");
+    logerror("6:Cannot force completion of $site-$year-$doy. No proccessed hours.");
   }
   $statusdb->save();
 }
