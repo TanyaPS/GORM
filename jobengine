@@ -211,39 +211,40 @@ runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
 
 # Setup queue event handler
 my $inotify = new Linux::Inotify2;
+$inotify->blocking(0);
 my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
 
 # main loop
+my $signal_received = '';
+$SIG{INT} = sub { $signal_received = 'interrupt' };
+$SIG{TERM} = sub { $signal_received = 'terminated' };
+$SIG{HUP} = sub { $signal_received = 'SIGHUP' };
+
+my $lastreap = time();
+my $lastscan = time();
 while (1) {
-  eval {
-    local $SIG{ALRM} = sub { die("jobenginealarm") };
-    local $SIG{INT} = sub { die("interrupted") };
-    local $SIG{TERM} = sub { die("terminated") };
-    local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 600;		# Timeout if no new files within 10min
-    eval {
-      $inotify->poll;	# wait for new file in $INCOMING
-    };
-    alarm 0;
-  };
-  alarm 0;
-  if ($@) {
-    my $msg = $@;
-    if ($msg =~ /^jobenginealarm|^SIGHUP/) {
+  my $v = '';
+  vec($v, $inotify->fileno, 1) = 1;
+  select($v, undef, undef, 1);		# wait 1s for inotify has something
+  if (vec($v, $inotify->fileno, 1)) {
+    $inotify->poll;
+  } else {
+    last if $signal_received && $signal_received ne 'SIGHUP';
+    if (time() > $lastreap + 7) {
       # ForkManager needs reaping of finished childs to force callback
       $FM->reap_finished_children;
-      if ($FM->running_procs == 0) {
-        # No jobs running, check for leftovers in $JOBQUEUE.
-        runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
-        # Scan for manually forced incompletes.
-        scan_for_forced_incompletes();
-      }
-    } elsif ($msg =~ /^(\w+)/) {
-      loginfo($1);
-      last;
+      $lastreap = time();
+    }
+    if (time() > $lastscan + 600 && $FM->running_procs == 0) {
+      # No jobs running, check for leftovers in $JOBQUEUE.
+      runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
+      # Scan for manually forced incompletes.
+      scan_for_forced_incompletes();
+      $lastscan = time();
     }
   }
 }
+loginfo($signal_received) if $signal_received;
 
 $watcher->cancel;
 $FM->wait_all_children;

@@ -5,6 +5,7 @@
 - Increased the wait time for multi-file incoming file sets.
 - Improve RinexSet->checkfiles
 - Job can now be instantiated using a RinexSet as argument
+- Use select() instead of alarm() for timeout on Inotify poll
 
 ## 2019-12-14	sjm	Move DOY complete check to Job.pm
 - Moved check of DOY complete to Job.pm to make it independent of process reaping interval.
