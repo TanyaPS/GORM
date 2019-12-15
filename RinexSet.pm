@@ -6,6 +6,7 @@
 
 package RinexSet;
 
+use Carp;
 use JSON;
 use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use BaseConfig;
@@ -19,6 +20,10 @@ sub new {
 
   if (exists $args{rsfile}) {
     $self = loadJSON($args{rsfile});
+    if (!defined $self) {
+      carp("load error $args{rsfile}");
+      $self = {};
+    }
   } else {
     $self->{$_} = $args{$_} foreach keys %args;
   }

@@ -144,7 +144,7 @@ sub runjob($) {
   eval {
     $job->process(); 1;
   } || do {
-    logerror("FATAL ERROR: $@\n".longmess());	# Serious program error occurred.
+    logerror("FATAL ERROR: ".longmess($ident));	# Serious program error occurred.
   };
   $FM->finish(0);			# exit this instance
 }

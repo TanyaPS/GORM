@@ -160,7 +160,7 @@ sub unpack_thread() {
       unpack_file($parm);
       return 1;
     } || do {
-      logerror("FATAL: $@");
+      logerror("FATAL ERROR: ".longmess($parm->{'site'}.'-'.$parm->{'year'}.'-'.$parm->{'doy'}.'-'.$parm->{'hour'}));
       last;
     }
   }
