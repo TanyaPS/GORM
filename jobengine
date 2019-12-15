@@ -9,6 +9,7 @@
 use strict;
 use warnings;
 use Getopt::Std;
+use Carp qw(longmess);
 use Parallel::ForkManager;
 use Linux::Inotify2;
 use BaseConfig;
@@ -154,7 +155,7 @@ sub runjob($) {
     $job->process();
     return 1;
   } || do {
-    logerror("FATAL ERROR: $@");	# Serious program error occurred.
+    logerror("FATAL ERROR: $@\n".longmess());	# Serious program error occurred.
   };
   $FM->finish(0);			# exit this instance
 }
@@ -220,27 +221,20 @@ $SIG{INT} = sub { $signal_received = 'interrupt' };
 $SIG{TERM} = sub { $signal_received = 'terminated' };
 $SIG{HUP} = sub { $signal_received = 'SIGHUP' };
 
-my $lastreap = time();
-my $lastscan = time();
+my $ntimeouts = 0;
 while (1) {
   my $v = '';
   vec($v, $inotify->fileno, 1) = 1;
   select($v, undef, undef, 1);		# wait 1s for inotify has something
   if (vec($v, $inotify->fileno, 1)) {
+    $ntimeouts = 0;
     $inotify->poll;
   } else {
     last if $signal_received && $signal_received ne 'SIGHUP';
-    if (time() > $lastreap + 7) {
+    $ntimeouts++;
+    if ($ntimeouts % 7 == 0) {
       # ForkManager needs reaping of finished childs to force callback
-      $FM->reap_finished_children;
-      $lastreap = time();
-    }
-    if (time() > $lastscan + 600 && $FM->running_procs == 0) {
-      # No jobs running, check for leftovers in $JOBQUEUE.
-      runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
-      # Scan for manually forced incompletes.
-      scan_for_forced_incompletes();
-      $lastscan = time();
+      $FM->reap_finished_children if $FM->running_procs > 0;
     }
   }
 }
