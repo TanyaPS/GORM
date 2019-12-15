@@ -26,7 +26,7 @@ BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	sysrun syscp sysmv
+	sysrun syscp sysmv readfile writefile
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter gm2str
 	basename dirname fileage dirlist round
@@ -90,6 +90,22 @@ sub sysmv($$;$) {
   return _eval_cp_args('mv', $srclist, $dst, $opts);
 }
 
+sub readfile($) {
+  my $file = shift;
+  open(my $fd, '<', $file) || return;
+  local $/ = undef;
+  my $data = <$fd>;
+  close($fd);
+  chomp($data);
+  return $data;
+}
+
+sub writefile($$) {
+  my ($file, $data) = @_;
+  open(my $fd, '>', $file) || return;
+  print $fd "$data\n";
+  close($fd);
+}
 
 ##########################################################################
 # Convert (year, mon, day) to DOY

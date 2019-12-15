@@ -15,10 +15,10 @@ use Carp qw(longmess);
 use Data::Dumper;
 use Time::Local;
 use File::Path qw(make_path);
+use Fcntl qw(:DEFAULT :flock);
 use BaseConfig;
 use Utils;
 use Logger;
-use StatusDB;
 use RinexSet;
 use GPSDB;
 
@@ -754,26 +754,36 @@ sub process() {
     chdir("..");
     system("rm -rf ".$self->getWorkdir);
   } else {
+    writefile("status.$hour", 'processed');
+
     # Check if doy is complete, and if it is, submit a day job
-    my $statusdb = StatusDB->new("status.json");
-    if (!defined $statusdb) {
-      logerror("5:Cannot lock status.json: ".longmess());
-      return 'error';
+    # Manipulate status.0 in exclusive mode since all processes tries to update this.
+    sysopen(my $lockfd, 'status.0', O_RDWR|O_CREAT);
+    flock($lockfd, LOCK_EX);
+    my $status = <$lockfd>;
+    if (defined $status) {
+      chomp($status);
+    } else {
+      $status = 'incomplete';
     }
-    $statusdb->{$hour} = 'processed';
-    if (!exists $statusdb->{'0'}) {
+    if ($status eq 'incomplete') {
       my $complete = 1;
       foreach my $h ('a'..'x') {
-        $complete = 0 unless exists $statusdb->{$h} && $statusdb->{$h} eq "processed";
+	$complete = 0 unless -f "status.$h"  && readfile("status.$h") =~ /^processed/;
       }
       if ($complete) {
-        loginfo("$site-$year-$doy: all hours present. Submitting hour2daily job.");
-        my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
-        $dayjob->submitjob('hour2daily');
-        $statusdb->{'0'} = 'queued';		# make sure nobody else do the same
+	loginfo("$site-$year-$doy: all hours present. Submitting hour2daily job.");
+	my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
+	$dayjob->submitjob('hour2daily');
+        $status = 'queued';
+      } else {
+        $status = 'incomplete';
       }
+      seek($lockfd, 0, 0);
+      truncate($lockfd, 0);
+      print $lockfd "$status\n";
     }
-    $statusdb->save();
+    close($lockfd);
   }
 
   loginfo($self->getIdent()." finished");

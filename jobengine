@@ -14,7 +14,6 @@ use Parallel::ForkManager;
 use Linux::Inotify2;
 use BaseConfig;
 use Utils;
-use StatusDB;
 use Logger;
 use RinexSet;
 use Job;
@@ -35,12 +34,10 @@ sub force_completion($$$) {
   my $dayjob = new Job(site => $site, year => $year, doy => $doy);
   my $workdir = $dayjob->getWorkdir;
 
-  my $statusdb = StatusDB->new("$workdir/status.json");
-
   # Find interval
   my $interval;
-  foreach my $hour (keys %$statusdb) {
-    next unless $statusdb->{$hour} eq 'processed';
+  foreach my $hour ('a'..'x') {
+    next unless -f "$workdir/rs.$hour.json";
     my $rs = new RinexSet(rsfile => "$workdir/rs.$hour.json");
     $interval = $rs->{'interval'};
     last if defined $interval;
@@ -50,11 +47,10 @@ sub force_completion($$$) {
   if (defined $interval) {
     ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'incomplete'}) = ('0', $interval, 1);
     $dayjob->submitjob('hour2daily');
-    $statusdb->{'0'} = 'queued';
+    writefile("$workdir/status.0", "queued");
   } else {
     logerror("6:Cannot force completion of $site-$year-$doy. No proccessed hours.");
   }
-  $statusdb->save();
 }
 
 
@@ -73,7 +69,7 @@ sub scan_for_forced_incompletes() {
     foreach my $year (dirscan("$WORKDIR/$site")) {
       foreach my $doy (dirscan("$WORKDIR/$site/$year")) {
         my $w = "$WORKDIR/$site/$year/$doy";
-        next unless -f "$w/force-complete" && -f "$w/status.json";
+        next unless -f "$w/force-complete";
         unlink("$w/force-complete");
         force_completion($site, $year, $doy);
       }
@@ -133,18 +129,12 @@ sub runjob($) {
   }
 
   my $workdir = $job->getWorkdir;
-  my $statusdb = StatusDB->new("$workdir/status.json");
-  my $status = $statusdb->{$job->{'hour'}};
-  $status = "" unless defined $status;
-  if ($status eq "running") {
-    $statusdb->unlock();
-    logerror("Duplicate job $ident");
+  my $statusfile = "$workdir/status.".$job->{'hour'};
+  if (-f $statusfile && readfile($statusfile) =~ /^running/) {
+    logerror("Duplicate job");
     return;
-  } else {
-    $statusdb->{$job->{'hour'}} = 'running';
-    $statusdb->save();
   }
-  undef $statusdb;   # unlcok before spawn
+  writefile($statusfile, "running");
 
   loginfo("Run $ident");
   $Running{$ident} = $job;		# need this in onfinish()
@@ -152,8 +142,7 @@ sub runjob($) {
   setprogram("job");
   chdir($workdir);
   eval {
-    $job->process();
-    return 1;
+    $job->process(); 1;
   } || do {
     logerror("FATAL ERROR: $@\n".longmess());	# Serious program error occurred.
   };

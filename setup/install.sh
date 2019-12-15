@@ -48,7 +48,7 @@ qt-devel
 
 echo "Installing GNSS perl library in /usr/local/lib/gnss"
 test -d /usr/local/lib/gnss || mkdir -m 755 /usr/local/lib/gnss
-for pm in BaseConfig.pm GPSDB.pm Job.pm Logger.pm RinexSet.pm StatusDB.pm Utils.pm; do
+for pm in BaseConfig.pm GPSDB.pm Job.pm Logger.pm RinexSet.pm Utils.pm; do
   install -o root -g root -m 644 $pm /usr/local/lib/gnss
 done
 

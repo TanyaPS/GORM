@@ -77,11 +77,6 @@ Utilities and binaries are installed in /usr/local/bin.
 ### Utils.pm
   Utility functions used in all modules
 
-### StatusDB.pm
-  Manipulate status.json in workdir in exclusive mode.
-  Both jobengine and parallel Job objects needs to manipulate status.json. This object
-  ensures exclusive access to status.json.
-
 ### cgi/status.cgi
   Web page show the current status of processing.<br/>
   Installed in /var/www/gnss-cgi and accessed by http://host/status.cgi
