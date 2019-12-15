@@ -15,7 +15,7 @@ use Logger;
 use Utils;
 use Job;
 
-my $Debug = 1;
+my $Debug = 0;
 
 my $UQ = Thread::Queue->new;	# Unpack queue
 my $PQ = Thread::Queue->new;	# Pending queue
