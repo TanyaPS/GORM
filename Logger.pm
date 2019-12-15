@@ -24,7 +24,7 @@ BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	setprogram logchannel
+	setprogram logchannel logclose
 	logdebug loginfo logwarn logerror logfatal errdie logfmt
   );
 }
@@ -42,9 +42,8 @@ sub setprogram($) {
   openlog($Program, "nofatal,ndelay", $Facility);
 }
 
-sub logchannel($) {
-  $Facility = shift;
-}
+sub logchannel($) { $Facility = shift; }
+sub logclose() { closelog(); }
 
 sub logdebug(@) { syslog("debug|$Facility", "%s", join(' ',@_));   }
 sub loginfo(@)  { syslog("info|$Facility", "%s", join(' ',@_));    }

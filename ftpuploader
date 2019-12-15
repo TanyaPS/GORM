@@ -315,4 +315,5 @@ kill(15, $_) foreach values %PIDS;	# Kill all childs
 wait;
 
 loginfo("ftpuploader [master] stopped");
+logclose();
 exit(0);
