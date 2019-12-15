@@ -21,7 +21,6 @@ our $INCOMING = "$DATAROOT/ftp";
 our $WORKDIR  = "$DATAROOT/work";
 our $SAVEDIR  = "$DATAROOT/saved";
 our $STALEDIR = "$SAVEDIR/stale";
-our $TMPDIR   = "$DATAROOT/tmp";
 our $JOBQUEUE = "$DATAROOT/queue";
 
 our $JOBINSTANCES = 4;		# Number of parallel job instances
@@ -48,7 +47,6 @@ sub init($) {
 	workdir => \$WORKDIR,
 	savedir => \$SAVEDIR,
 	staledir => \$STALEDIR,
-	tmpdir => \$TMPDIR,
 	jobqueue => \$JOBQUEUE,
 	jobinstances => \$JOBINSTANCES,
 	anubis => \$ANUBIS,
@@ -87,7 +85,7 @@ BEGIN {
   @ISA = qw(Exporter);
   @EXPORT = qw(
 	$DBDSN $DBUSER $DBPASS
-	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $TMPDIR $JOBQUEUE
+	$INCOMING $WORKDIR $SAVEDIR $STALEDIR $JOBQUEUE
 	$JOBINSTANCES
 	$ANUBIS $BNC $GFZRNX $RNX2CRX $CRX2RNX $SBF2RIN
 	$SYSLOG_FACILITY

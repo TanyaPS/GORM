@@ -452,7 +452,7 @@ sub gendayfiles() {
     logerror("Cannot splice incomplete day");
     return;
   }
-  loginfo("$site-$year-$doy: ".(exists $self->{'incomplete'} ? 'processing incomplete day':'all hours present'));
+  loginfo("$site-$year-$doy: finishing incomplete day.") if exists $self->{'incomplete'};
 
   loginfo("Generating daily files for $site-$year-$doy");
   # Splice navigation files
@@ -767,6 +767,7 @@ sub process() {
         $complete = 0 unless exists $statusdb->{$h} && $statusdb->{$h} eq "processed";
       }
       if ($complete) {
+        loginfo("$site-$year-$doy: all hours present. Submitting hour2daily job.");
         my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
         $dayjob->submitjob('hour2daily');
         $statusdb->{'0'} = 'queued';		# make sure nobody else do the same

@@ -72,7 +72,7 @@ Utilities and binaries are installed in /usr/local/bin.
   Global variables - mostly file paths
 
 ### GPSDB.pm
-  Interface to the MariaDB on local
+  Interface to the MariaDB.
 
 ### Utils.pm
   Utility functions used in all modules
@@ -95,18 +95,39 @@ Utilities and binaries are installed in /usr/local/bin.
   Overrides default global constants defined in BaseConfig.pm
 
 ## Paths
-### /data/ftp
-  Home directory for vsFTPd.
-  This is where inbound data arrives.
-  Monitored by gpspickup
+Override defaults by modifing /usr/local/etc/gorm.conf.
 
-### /data/work
+### $INCOMING
+  Defaults to /data/ftp.<br/>
+  Home directory for vsFTPd. This is where inbound data arrives. Monitored by gpspickup
+
+### $WORKDIR
+  Defaults to /data/work.<br/>
   Temporary files. All processing happens here.
 
-### /data/queue
-  Job spool directory.
-  Monitored by jobengine.
+### $JOBQUEUE
+  Default: /data/queue<br/>
+  Job spool directory. Monitored by jobengine.
 
-### /data/upload
-  ftpuploader home directory
-  Subdirectories monitored by ftpuploader (configured in DB)
+### $SAVEDIR
+  Default: /data/saved<br/>
+  All files arriving in $INCOMING will be move to here. If it is a known site,
+  the files will be moved to $SAVEDIR/sitename. If it an unknown file type,
+  it will be moved to $SAVEDIR/stale ($STALEDIR).<br/>
+  Files will be removed from $SAVEDIR when they become older than 60 days.
+
+### ftpuploader
+  ftpuploader do not have a specific home dir or paths. It is configured in DB.
+
+## Global variables
+Override defaults by modifying /usr/local/etc/gorm.conf.
+
+### $JOBINSTANCES
+  The number of processors.<br/>
+  jobengine and gpspickup will start this number of processors. Set to 2 x number of CPU's.
+
+### $ANUBIS, $BNC, $GFZRNX, $RNX2CRX, $CRX2RNX, $SBF2BIN
+  The full path names of external programs needed by these scripts. See INSTALL.
+
+### $SYSLOG_FACILITY
+  The syslog(3) facility name to use. Default is local1.

@@ -77,10 +77,11 @@ sub parseFilename($) {
 #############################################################################################
 #############################################################################################
 # Unpack thread(s)
+# Unpack one file into its workdir. There will be Nthreads number of instances of this function.
 
 sub unpack_file($) {
-  my $jqparm = shift;
-  my ($ifn, $site, $obsint) = ($jqparm->{'ifn'}, $jqparm->{'site'}, $jqparm->{'obsint'});
+  my $parm = shift;
+  my ($ifn, $site, $obsint) = ($parm->{'ifn'}, $parm->{'site'}, $parm->{'obsint'});
   my $fn = basename($ifn);
 
   my $fd = parseFilename($fn);
@@ -154,9 +155,9 @@ sub unpack_file($) {
 # Loop ends when main thread calls $UQ->end()
 #
 sub unpack_thread() {
-  while (my $jqparm = $UQ->dequeue()) {
+  while (my $parm = $UQ->dequeue()) {
     eval {
-      unpack_file($jqparm);
+      unpack_file($parm);
       return 1;
     } || do {
       logerror("FATAL: $@");
@@ -170,9 +171,9 @@ sub unpack_thread() {
 #############################################################################################
 #############################################################################################
 # Pending thread
-# Submit pending jobs if no files with same prefix is present in $INCOMING
-# A job is pending if this is a multi-file upload and the obs file is received. It will be
-# submitted if no new files have arrived the last 20s.
+# Submits pending jobs if no files with same prefix is present in $INCOMING
+# A job is pending if it is a multi-file upload and the obs file have been received. It will be
+# submitted if no new files has arrived within the last 20s.
 #
 
 my %Pending;
@@ -330,6 +331,7 @@ sub scan_incoming() {
   close($fd);
 }
 
+# Below the actual main
 
 setprogram(basename($0));
 $0 = basename($0)." ".join(' ',@ARGV);
