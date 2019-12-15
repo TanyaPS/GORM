@@ -87,16 +87,21 @@ sub getNavlist() {
 }
 
 #################################
-# Defines $obj->{ftyp} if file exists.
-# ftyp is MO.[interval] or [A-Z]N
+# Search all files in $workdir with this filename prefix
+# and sets MO.# and xN in $self
 #
 sub checkfiles() {
   my $self = shift;
   my $w = $self->getWorkdir;
-  foreach my $ftyp (qw(MO.1 MO.15 MO.30 GN RN EN JN CN IN SN MN)) {
-    delete $self->{$ftyp};
-    my $fn = $self->getRinexFilename($ftyp);
-    $self->{$ftyp} = $fn if -f "$w/$fn";
+  my $prefix = $self->getFilenamePrefix;
+  foreach (<"${w}/${prefix}*.rnx">) {
+    if (/_([0-9]{2})S_MO\.rnx$/) {
+      # observation file
+      $self->{'MO.'.int($1)} = basename($_);
+    } elsif (/_([A-X]N)\.rnx$/) {
+      # navigation file
+      $self->{$1} = basename($_);
+    }
   }
 }
 

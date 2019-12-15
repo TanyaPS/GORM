@@ -4,26 +4,185 @@
 # When a new file arrived, move it to $SAVEDIR and unpack it to $WORKDIR.
 # Files are renamed to RINEXv3 standard naming during unpack.
 #
-# Soren Juul Moller, Nov 2019
+# Soren Juul Moller, Dec 2019
 
 use strict;
 use warnings;
-use Getopt::Std;
-use Linux::Inotify2;
+use threads;
+use Thread::Queue;
 use BaseConfig;
-use Utils;
 use Logger;
-use RinexSet;
+use Utils;
 use Job;
-use GPSDB;
 
-my $DB;
-my %SCS;			# All sites defined
-my %Pending;			# Postponed jobs to be submitted
-my $Debug = 0;
+my $Debug = 1;
+
+my $UQ = Thread::Queue->new;	# Unpack queue
+my $PQ = Thread::Queue->new;	# Pending queue
+
+#############################################################################################
+#############################################################################################
+# Unpack thread(s)
+
+sub unpack_file($) {
+  my $jqparm = shift;
+  my ($ifn, $site, $obsint) = ($jqparm->{'ifn'}, $jqparm->{'site'}, $jqparm->{'obsint'});
+  my $fn = basename($ifn);
+
+  my $fd = parseFilename($fn);		# see Utils.pm
+  return unless defined $fd;
+  my ($year, $doy, $hour) = ($fd->{'year'}, $fd->{'doy'}, $fd->{'hour'});
+
+  my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
+  my $workdir = $job->getWorkdir;
+  my $rs;
+
+  if ($fd->{'ftyp'} eq 'septentrio-rnx3') {
+    my $ftyp = 'UU';
+    $ftyp = $1 if $fn =~ /_(MO|[A-Z]N)\.rnx/;
+    my $ufn = $fn; $ufn =~ s/\.gz$//;
+    my $wfn = "$workdir/$ufn";
+    if ($fn =~ /\.gz$/) {
+      $wfn =~ s/\.gz$//;
+      loginfo("Gunzip $fn to $workdir");
+      sysrun("gzip -dc $ifn >$wfn", { log => $Debug });
+    } else {
+      loginfo("Copy $fn to $workdir");
+      syscp($ifn, $wfn, { log => $Debug });
+    }
+    $ftyp .= '.'.$obsint;
+
+    # Since this is a multi file set, we will have to wait until we do not think
+    # any more files will arrive.
+    # Register pending job only if we got the observation file (see submit_pending)
+    if ($fn =~ /_MO\.rnx/) {
+      $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
+      my $rsfile = $rs->getRsFile;
+      $rs->load() if -f $rsfile;
+      $rs->{$ftyp} = $ufn;
+      $rs->store();
+      $PQ->enqueue({ fn => $fn, rsfile => $rsfile });
+    }
+    return;
+  }
+
+  elsif ($fd->{'ftyp'} eq 'septentrio-raw') {
+    $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
+    loginfo("Unpack Septentrio raw file $fn into $workdir");
+    chdir($workdir);
+    my $countrycode = substr($site, 6, 3);
+    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHI -O $countrycode >/dev/null", { log => $Debug });
+    chdir($INCOMING);
+    $rs->checkfiles();
+  }
+
+  elsif ($fd->{'ftyp'} eq 'trinzic-zip') {
+    $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
+    loginfo("Unzipping $fn to ".$rs->getWorkdir);
+    $rs->unzip($ifn, $obsint);
+  }
+
+  elsif ($fd->{'ftyp'} eq 'leica-zip') {
+    $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
+    loginfo("Unzipping $fn to ".$rs->getWorkdir);
+    $rs->unzip($ifn, $obsint);
+  }
+
+  if (defined $rs) {
+    $rs->store();
+    $job->{'rsfile'} = $rs->getRsFile;
+    $job->submitjob('ftp');
+  }
+}
+
+#
+# Receive files to unpack from main thread.
+# Loop ends when main thread calls $UQ->end()
+#
+sub unpack_thread() {
+  while (my $jqparm = $UQ->dequeue()) {
+    eval {
+      unpack_file($jqparm);
+      return 1;
+    } || do {
+      logerror("FATAL: $@");
+      last;
+    }
+  }
+  threads->detach;
+}
 
 
 #############################################################################################
+#############################################################################################
+# Pending thread
+# Submit pending jobs if no files with same prefix is present in $INCOMING
+# A job is pending if this is a multi-file upload and the obs file is received. It will be
+# submitted if no new files have arrived the last 20s.
+#
+
+my %Pending;
+
+sub submit_pending() {
+  my @pending = keys %Pending;
+  foreach my $fn (@pending) {
+    my $rs = $Pending{$fn};
+    if (time() - $rs->{'timestamp'} > 19) {
+      # check nothing is being transferred right now
+      my $prefix = $rs->getFilenamePrefix();
+      next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
+      # no active inbound found, then submit
+      delete $rs->{'timestamp'};
+      $rs->checkfiles();
+      $rs->store();
+      my $job = new Job(rs => $rs);
+      loginfo("Submitting ".$job->getIdent());
+      $job->submitjob('ftp');
+      delete $Pending{$fn};
+    }
+  }
+  my $left = scalar(keys %Pending);
+  loginfo("Pending left: $left") if $left > 0;
+}
+
+#
+# Receive pending file sets from unpack_thread
+# Loop ends when main threads sends the EXIT command.
+#
+sub pending_thread() {
+  while (1) {
+    my $parm = $PQ->dequeue_timed(5);
+    if (defined $parm) {
+      last if defined $parm->{'command'} && $parm->{'command'} eq 'EXIT';
+      my $rs = new RinexSet(rsfile => $parm->{'rsfile'});
+      $rs->{'timestamp'} = time();
+      $Pending{$parm->{'fn'}} = $rs;
+    } else {
+      submit_pending();
+    }
+  }
+  threads->detach;
+}
+
+
+#############################################################################################
+#############################################################################################
+# Main thread
+# THe main thread monitors $INCOMING for new files.
+# Check if site is know, move it away from $INCOMING, and send message to a unpack_thread
+# to do the unpacking into $WORKDIR.
+#
+# IMPORTANT: All database (DBI) operations MUST be in the main thread. DBI is not thread safe.
+#
+
+use Linux::Inotify2;
+use GPSDB;
+use Getopt::Std;
+
+my %SCS;
+my $DB = new GPSDB;
+
+#
 # Lookup site in gpssums. Returns true if current year-doy exists, false if not.
 #
 sub dailysum_exists($$$) {
@@ -42,198 +201,7 @@ sub dailysum_exists($$$) {
 }
 
 
-#############################################################################################
-# Process all files in %Inbound
-# Move complete filesets to workdir as is and create a job for processing the files
-# Unknown sites and unknown filetypes for site are moved to £SAVEDIR/stale.
 #
-sub process($$) {
-  my ($ifn, $fn) = @_;
-
-  # Make sure we know the site
-  my $site4 = substr($fn, 0, 4);
-  my $sc = $SCS{$site4};
-  if (!defined $sc) {
-    sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug });
-    logwarn("No such site: $site4");
-    return;
-  }
-  my $site = $sc->{'site'};
-
-  # Now that we know this is a known site, copy the file(s) to it's workdir and move to $SAVEDIR.
-  # Derive the date & time from filename if possible.
-
-  # Trinzic
-  # ssssyyyymmddhhmiB.zip
-  if ($fn =~ /^[A-Z0-9]{4}(\d\d\d\d)(\d\d)(\d\d)(\d\d)\d\dB\.zip$/) {
-    my ($year, $mm, $dd, $hh) = ($1, $2, $3, $4);
-    my $doy = Day_of_Year($year, $mm, $dd);
-    my $hour = hour2letter($hh);
-    sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
-    $ifn = "$SAVEDIR/$site/$fn";
-    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->getWorkdir();
-    if (! -d $workdir) {
-      return if dailysum_exists($site, $year, $doy);
-      $job->mkWorkdir();
-    }
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, zipfile => $ifn);
-    loginfo("Unzipping $fn to ".$rs->getWorkdir);
-    $rs->unzip($ifn, $sc->{'obsint'});
-    $rs->store();
-    $job->{'rsfile'} = $rs->getRsFile;
-    $job->submitjob('ftp');
-  }
-
-  # Leica
-  # ssssdddh.yyo.zip
-  elsif ($fn =~ /^[A-Z0-9]{4}(\d\d\d)([a-x])\.(\d\d)o\.zip$/) {
-    my ($doy, $hour, $year) = ($1, $2, sy2year($3));
-    sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
-    $ifn = "$SAVEDIR/$site/$fn";
-    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->getWorkdir();
-    if (! -d $workdir) {
-      return if dailysum_exists($site, $year, $doy);
-      $job->mkWorkdir();
-    }
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, zipfile => $ifn);
-    loginfo("Unzipping $fn to ".$rs->getWorkdir);
-    $rs->unzip($ifn, $sc->{obsint});
-    $rs->store();
-    $job->{'rsfile'} = $rs->getRsFile;
-    $job->submitjob('ftp');
-  }
-
-  # Septentrio raw format
-  # ssssdddh.yy_
-  elsif ($fn =~ /^[A-Z0-9]{4}([0-9]{3})([a-z])\.([0-9]{2})_/i) {
-    my ($doy, $hour, $year) = ($1, lc($2), sy2year($3));
-    sysmv($ifn, "$SAVEDIR/$site", { mkdir => 1, log => $Debug });
-    $ifn = "$SAVEDIR/$site/$fn";
-    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $workdir = $job->getWorkdir();
-    if (! -d $workdir) {
-      return if dailysum_exists($site, $year, $doy);
-      $job->mkWorkdir();
-    }
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint}, rawfile => $ifn);
-    loginfo("Unpack Septentrio raw file $fn into $workdir");
-    chdir($workdir);
-    my $countrycode = substr($site, 6, 3);
-    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHI -O $countrycode >/dev/null");
-    chdir($INCOMING);
-    $rs->checkfiles();
-    $rs->store();
-    $job->{'rsfile'} = $rs->getRsFile;
-    $job->submitjob('ftp');
-  }
-
-  # Septentrio (not zipped into one file)
-  # Strategy is to submit job until the newest file is at least XXs old. Then its safe to assume all files have arrived
-  # TA0200DNK_R_20190161900_01H_01S_MO.rnx
-  # TA0200DNK_R_20190161800_01H_RN.rnx
-  elsif ($fn =~ /^[A-Z0-9a-z]{9}_R_(\d{4})(\d{3})(\d\d)(\d\d)_\d\d(H|D).*_(MO|[A-Z]N)\.rnx/) {
-    my ($year, $doy, $hh, $mi, $hd, $ftyp) = ($1, $2, $3, $4, $5, $6);
-    my $hour = ($hd eq 'H') ? hour2letter($hh) : '0';
-    my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    my $ident = $job->getIdent();
-
-    my $savedir = "$SAVEDIR/$site";
-    sysmv($ifn, $savedir, { mkdir => 1, log => $Debug });
-    $ifn = "$savedir/$fn";
-
-    my $workdir = $job->getWorkdir();
-    if (! -d $workdir) {
-      return if dailysum_exists($site, $year, $doy);
-      $job->mkWorkdir();
-    }
-
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $sc->{obsint});
-    $job->{'rsfile'} = $rs->getRsFile();
-    $rs->load() if -f $job->{'rsfile'};
-
-    my $ufn = $fn; $ufn =~ s/\.gz$//;
-    my $wfn = "$workdir/$ufn";
-    if ($fn =~ /\.gz$/) {
-      $wfn =~ s/\.gz$//;
-      loginfo("Gunzip $fn to $workdir");
-      sysrun("gzip -dc $ifn >$wfn", { log => $Debug });
-    } else {
-      loginfo("Copy $fn to $workdir");
-      syscp($ifn, $wfn, { log => $Debug });
-    }
-    $ftyp .= '.'.$sc->{'obsint'} if $ftyp eq 'MO';
-    $rs->{$ftyp} = $ufn;
-    $rs->store();
-
-    # Update timestamp for each file added to this job
-    $job->{'timestamp'} = time();
-    # Register pending job only if we got the observation file (see submit_pending)
-    if ($fn =~ /_MO\.rnx/) {
-      $Pending{$fn} = $job;
-    }
-  }
-
-  # Unknown filename structure?!
-  else {
-    logerror("Unknown filetype for site $site: $ifn");
-    sysmv($ifn, "$SAVEDIR/stale", { log => $Debug });
-  }
-}
-
-
-#############################################################################################
-# scan_incoming will add all plain files in $INCOMING to %Inbound
-#
-sub scan_incoming() {
-  my $fd;
-  open($fd, '-|', qq(/bin/find $INCOMING -type f -print));
-  while (<$fd>) {
-    chomp;
-    process($_, basename($_)) if fileage($_) > 15;
-  }
-  close($fd);
-}
-
-
-#############################################################################################
-# Submit pending jobs if no files with same prefix is present in $INCOMING
-# A job is pending if this is a multi-file upload and the obs file is received. It will be
-# submitted if no new files have arrived the last 15s.
-#
-sub submit_pending() {
-  my @pending = keys %Pending;
-  foreach my $fn (@pending) {
-    my $job = $Pending{$fn};
-    if (time() - $job->{'timestamp'} > 14) {
-      # check nothing is being transferred right now
-      my $rs = new RinexSet(rsfile => $job->{'rsfile'});
-      my $prefix = $rs->getFilenamePrefix();
-      next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
-      # no active inbound found, then submit
-      loginfo("Submitting ".$job->getIdent());
-      delete $job->{'timestamp'};
-      $job->submitjob('ftp');
-      delete $Pending{$fn};
-    }
-  }
-  my $left = scalar(keys %Pending);
-  loginfo("Pending left: $left") if $left > 0;
-}
-
-
-#############################################################################################
-# Called from Linux::Inotify2 for each file event
-#
-sub inotify_callback() {
-  my $event = shift;
-  alarm 0;		# disable timer while processing
-  process($event->fullname, $event->name);
-}
-
-
-#############################################################################################
 # Load all sites from locations table into %SCS
 #
 sub load_sites() {
@@ -249,55 +217,113 @@ sub load_sites() {
 }
 
 
-#############################################################################################
-# Main program
 #
+# Handle one file in $INCOMING
+# Move to $SAVEDIR, create $workdir and send to unpack threads
+#
+sub handle_inbound($) {
+  my $ifn = shift;
+
+  my $fn = basename($ifn);
+  my $fd = parseFilename($fn);
+
+  # Make sure we know the site
+  my $site4 = substr($fn, 0, 4);
+  my $sc = $SCS{$site4};
+  if (!defined $fd || !defined $sc) {
+    sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
+    logwarn("No such site: $site4");
+    return;
+  }
+  my $site = $sc->{'site'};
+  sysmv($ifn, "$SAVEDIR/$site", { log => $Debug, mkdir => 1 });
+
+  my $job = new Job(site => $site, year => $fd->{'year'}, doy => $fd->{'doy'}, hour => $fd->{'hour'}, interval => $sc->{'obsint'});
+  my $workdir = $job->getWorkdir();
+  if (! -d $workdir) {
+    return if dailysum_exists($site, $fd->{'year'}, $fd->{'doy'});
+    $job->mkWorkdir();
+  }
+  $UQ->enqueue({ ifn => "$SAVEDIR/$site/$fn", site => $sc->{'site'}, obsint => $sc->{'obsint'} });
+}
+
+
+#
+# Called from Linux::Inotify2 for each file event
+#
+sub inotify_callback() {
+  my $event = shift;
+  alarm 0;		# disable timer while processing
+  handle_inbound($event->fullname);
+}
+
+
+#
+# scan_incoming will add all plain files in $INCOMING to %Inbound
+#
+sub scan_incoming() {
+  my $fd;
+  open($fd, '-|', qq(/bin/find $INCOMING -type f -print));
+  while (<$fd>) {
+    chomp;
+    handle_inbound($_) if fileage($_) > 20;
+  }
+  close($fd);
+}
+
+
 setprogram(basename($0));
 $0 = basename($0)." ".join(' ',@ARGV);
 
 my %opts = ();
-getopts('c:dl:', \%opts);
+getopts('c:di:l:', \%opts);
 
 BaseConfig::init($opts{'c'}) if defined $opts{'c'};
 
 $Debug = 1 if defined $opts{'d'};
 logchannel($opts{'l'}) if defined $opts{'l'};
 
+my $Nthreads = (defined $opts{'i'} ? $opts{'i'} : $JOBINSTANCES);
+
 chdir($INCOMING);
 select(STDERR); $| = 1;
 select(STDOUT); $| = 1;
+
+threads->create('unpack_thread') for (1..$Nthreads);
+threads->create('pending_thread');
 
 my $inotify = new Linux::Inotify2
 	|| errdie("$0: unable to create new inotify object: $!");
 $inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
 
-$DB = new GPSDB;
 load_sites();
 
-loginfo("$0 started. Debug=$Debug");
+loginfo("$0 started. threads=$Nthreads, Debug=$Debug");
 
 scan_incoming();
 
-my $lastscan = time();
 while (1) {
   eval {
     local $SIG{ALRM} = sub { die("gpspickupalarm") };
     local $SIG{INT} = sub { die("interrupted") };
     local $SIG{TERM} = sub { die("terminated") };
     local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 8;
+    alarm 300;
     $inotify->poll;
     alarm 0;
   };
   if ($@) {
     last unless $@ =~ /^gpspickupalarm|^SIGHUP/;
-    submit_pending();
-    next if time() < $lastscan + 600;	# do not need to do below as often
     scan_incoming();
     load_sites();
-    $lastscan = time();
   }
 }
+
+# shutdown threads
+$PQ->enqueue({ command => 'EXIT' });
+$PQ->end();
+$UQ->end();
+sleep 1 while threads->list(threads::running);		# wait for threads to terminate
 
 loginfo("$0 stopped");
 exit(0);

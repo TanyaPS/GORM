@@ -1,5 +1,11 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-15	sjm	Use threads in gpspickup
+- Make gpspickup multi-threaded to parallelize the unpacking process
+- Increased the wait time for multi-file incoming file sets.
+- Improve RinexSet->checkfiles
+- Job can now be instantiated using a RinexSet as argument
+
 ## 2019-12-14	sjm	Move DOY complete check to Job.pm
 - Moved check of DOY complete to Job.pm to make it independent of process reaping interval.
 - Handle sites with no antannes or receivers defined.

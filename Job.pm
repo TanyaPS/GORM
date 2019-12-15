@@ -32,6 +32,10 @@ sub new {
   if (exists $args{'jobfile'}) {
     my $href = loadJSON($args{'jobfile'});
     $self->{$_} = $$href{$_} foreach keys %$href;
+  } elsif (exists $args{'rs'}) {
+    my $rs = $args{'rs'};
+    $self->{$_} = $rs->{$_} foreach qw(site year doy hour interval);
+    $self->{'rsfile'} = $rs->getRsFile;
   } else {
     $self->{$_} = $args{$_} foreach keys %args;
   }

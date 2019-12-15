@@ -286,35 +286,50 @@ sub site42site($) {
 #
 sub parseFilename($) {
   my $fn = shift;
-  my ($site, $site4, $year, $yy, $doy, $mm, $dd, $hour, $hh, $mi);
+  my ($site, $site4, $year, $yy, $doy, $mm, $dd, $hour, $hh, $mi, $ftyp, $period);
   study($fn);
-  # Trinzic: ssssyyyymmddhhmiB.zip
-  # Leica:   ssssdddh*.yyo.zip
+
   # Septentrio: sssssssss_R_yyyydddhhmi_##H_##S_MO.rnx
   #             sssssssss_R_yyyydddhhmi_##H_xN.rnx
-  if ($fn =~ /^([a-z0-9]{4})([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})B\.zip$/i) {
+  if ($fn =~ /^([A-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})([0-9]{2})_[0-9]{2}(H|D)/i) {
+    ($site, $year, $yy, $doy, $hh, $hour, $mi, $period) = (uc($1), int($2), year2sy($2), int($3), int($4), hour2letter($4), int($5), $6);
+    $hour = '0' if $period eq 'D';
+    $ftyp = 'septentrio-rnx3';
+    ($year, $mm, $dd) = Doy_to_Date($year, $doy);
+  }
+
+  # Septentrio raw: ssssdddh.yy_
+  elsif ($fn =~ /^([A-Z0-9]{4})([0-9]{3})([a-z])\.([0-9]{2})_/i) {
+    ($site4, $doy, $hour, $hh, $yy, $year, $mi) = (uc($1), int($2), $3, letter2hour($3), int($4), sy2year($4), 0);
+    $ftyp = 'septentrio-raw';
+    ($year, $mm, $dd) = Doy_to_Date($year, $doy);
+  }
+
+  # Trinzic: ssssyyyymmddhhmiB.zip
+  elsif ($fn =~ /^([a-z0-9]{4})([0-9]{4})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})B\.zip$/i) {
     ($site4, $year, $yy, $mm, $dd, $hh, $hour, $mi) =
 		(uc($1), int($2), year2sy($2), int($3), int($4), int($5), hour2letter($5), int($6));
+    $ftyp = 'trinzic-zip';
     $yy = year2sy($year);
     $doy = Day_of_Year($year, $mm, $dd);
   }
+
+  # Leica:   ssssdddh*.yyo.zip
   elsif ($fn =~ /^([a-zA-Z0-9]{4})([0-9]{3})([a-xA-X0]).*\.([0-9]{2})[a-z]\.zip$/i) {
     ($site4, $doy, $hour, $hh, $yy, $year, $mi) = (uc($1), int($2), $3, letter2hour($3), int($4), sy2year($4), 0);
+    $ftyp = 'leica-zip';
     ($year, $mm, $dd) = Doy_to_Date($year, $doy);
   }
-  elsif ($fn =~ /^([A-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})([0-9]{2})/i) {
-    ($site, $year, $yy, $doy, $hh, $hour, $mi) = (uc($1), int($2), year2sy($2), int($3), int($4), hour2letter($4), int($5));
-    ($year, $mm, $dd) = Doy_to_Date($year, $doy);
-  }
+
   return undef if !defined $site && !defined $site4;
   if (!defined $site) {
     $site = $site4."00DNK";
-    $site = $site4."00FRO" if $site4 eq 'ARGI';
+    $site = $site4."00FRO" if $site4 eq 'ARGI';		# special case for ARGI
   }
   $site4 = substr($site, 0, 4) if !defined $site4;
 
   return { site => $site, site4 => $site4, year => $year, doy => $doy, yy => $yy, mm => $mm, dd => $dd,
-           hour => $hour, hh => $hh, mi => $mi };
+           hour => $hour, hh => $hh, mi => $mi, ftyp => $ftyp };
 }
 
 
