@@ -19,10 +19,10 @@ fi
 while read rpm; do
   rpm -q $rpm >/dev/null || yum -y install $rpm
 done <<%EOD
+perl-ExtUtils-MakeMaker
 perl-Sys-Syslog
 perl-Net-SFTP-Foreign
 perl-Linux-Inotify2
-perl-Parallel-ForkManager
 perl-Time-Local
 perl-JSON
 perl-JSON-XS

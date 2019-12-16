@@ -61,6 +61,13 @@ G-Nut/Anubis:
 		./autogen.sh
 		sudo install -u root -g bin -m 755 app/anubis /usr/local/bin
 
+Parallel-Fork-BossWorkerAsync:
+	Download lastest version of Parallel-Fork-BossWorkerAsync
+		https://cpan.metacpan.org/authors/id/J/JV/JVANNUCCI/Parallel-Fork-BossWorkerAsync-0.09.tar.gz
+	Extract and goto Parallel-Fork-BossWorker-x.xx
+	Compile and install
+		perl Makefile.PL
+		sudo make install
 
 Configure:
 

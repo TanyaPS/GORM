@@ -3,6 +3,8 @@
 ## 2019-12-16	sjm	Removed StatusDB.pm
 - Removed StatusDB.pm again. Use individual horly status files and status.0 in exclusive mode.
 - jobengine: Read all jobfiles and enqueue internally before running jobs.
+- jobengine: Use Parallel::Fork::BossWorkerAsync instead of Parallel::ForkManager. It is much faster,
+  offers automatic reaping and most importantly, non-blocking enqueuing of jobs to do.
 
 ## 2019-12-15	sjm	Use threads in gpspickup
 - Make gpspickup multi-threaded to parallelize the unpacking process
