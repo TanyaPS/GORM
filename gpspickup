@@ -124,22 +124,25 @@ sub unpack_file($) {
   elsif ($fd->{'ftyp'} eq 'septentrio-raw') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
-    chdir($workdir);
     my $countrycode = substr($site, 6, 3);
-    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHI -O $countrycode >/dev/null", { log => $Debug });
+    mkdir("$workdir/sbfunpack.$hour");
+    chdir("$workdir/sbfunpack.$hour");
+    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHI -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
+    system("mv $workdir/sbfunpack.$hour/* $workdir");
     chdir($INCOMING);
+    system("rm -r $workdir/sbfunpack.$hour");
     $rs->checkfiles();
   }
 
   elsif ($fd->{'ftyp'} eq 'trinzic-zip') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
-    loginfo("Unzipping $fn to ".$rs->getWorkdir);
+    loginfo("Unzipping $fn to $workdir");
     $rs->unzip($ifn, $obsint);
   }
 
   elsif ($fd->{'ftyp'} eq 'leica-zip') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
-    loginfo("Unzipping $fn to ".$rs->getWorkdir);
+    loginfo("Unzipping $fn to $workdir");
     $rs->unzip($ifn, $obsint);
   }
 
