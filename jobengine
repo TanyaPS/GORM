@@ -167,7 +167,7 @@ $0 = basename($0)." ".join(' ',@ARGV);
 # Initialize BossWorkerAsync
 my $BW = Parallel::Fork::BossWorkerAsync->new(
 	work_handler => \&runjob,
-	global_timeout => 600,
+	global_timeout => 0,		# Disable timeouts
 	worker_count => $Ninstances,
 );
 loginfo("jobengine started with $Ninstances instances");
@@ -214,7 +214,13 @@ while (1) {
       next unless defined $res;			# Wait for next file if nothing yet...
       logerror($res->{'ERROR'}) if $res->{'ERROR'};
       delete $Running{$res->{'ident'}};
-    } 
+    }
+    if ($ntimeouts % 600 == 0) {		# For every 10min idle time, check for leftovers
+      foreach (dirlist($JOBQUEUE)) {
+        next unless fileage($_) < 900;
+        push(@RunQueue, { jobfile => $_, content => readfile($_) });
+      }
+    }
   }
 }
 loginfo($signal_received) if $signal_received;
