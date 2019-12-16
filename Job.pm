@@ -16,6 +16,7 @@ use Data::Dumper;
 use Time::Local;
 use File::Path qw(make_path);
 use Fcntl qw(:DEFAULT :flock);
+use JSON;
 use BaseConfig;
 use Utils;
 use Logger;
@@ -32,6 +33,8 @@ sub new {
   if (exists $args{'jobfile'}) {
     my $href = loadJSON($args{'jobfile'});
     $self->{$_} = $$href{$_} foreach keys %$href;
+  } elsif (exists $args{'json'}) {
+    $self = from_json($args{'json'});
   } elsif (exists $args{'rs'}) {
     my $rs = $args{'rs'};
     $self->{$_} = $rs->{$_} foreach qw(site year doy hour interval);

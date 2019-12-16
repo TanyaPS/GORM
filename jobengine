@@ -82,10 +82,7 @@ sub scan_for_forced_incompletes() {
 # Run command issued by someone like admin.cgi
 #
 sub runcommand($) {
-  my $file = shift;
-  open(my $fd, '<', $file);
-  my $cmd = <$fd>; chomp;
-  close($fd);
+  my $cmd = shift;
 
   if ($cmd =~ /^reload ftpuploader/) {
     sysrun("systemctl reload ftpuploader");
@@ -99,22 +96,18 @@ sub runcommand($) {
 #####################################
 # Spawn a job using ForkManager
 #
-sub runjob($) {
-  my $jobfile = shift;
-
-  return unless -f $jobfile;
+sub runjob($$) {
+  my ($jobfile, $content) = @_;
 
   # If filename ends with 'command', then assume it is a command file
   if ($jobfile =~ /command$/) {
     # message from admin.cgi
-    runcommand($jobfile);
-    unlink($jobfile);
+    runcommand($content);
     return;
   }
 
   # otherwise assume it's a JSON file
-  my $job = new Job(jobfile => $jobfile);
-  unlink($jobfile);
+  my $job = new Job(json => $content);
 
   unless (defined $job && $job->verifyobj()) {
     logerror("invalid jobfile $jobfile");
@@ -160,17 +153,6 @@ sub onfinish() {
 }
 
 
-#####################################
-# Inotify2 callback
-# Called for each new file arrived in queue
-#
-sub inotify_callback() {
-  my $event = shift;
-  alarm 0;
-  runjob($event->fullname);
-}
-
-
 ########################################################################################################
 # Main program
 #
@@ -196,19 +178,25 @@ $FM->run_on_finish(\&onfinish);
 
 loginfo("jobengine started with $Ninstances instances");
 
-# Run jobs in queue already
-runjob("$JOBQUEUE/$_") foreach dirlist($JOBQUEUE);
 
 # Setup queue event handler
 my $inotify = new Linux::Inotify2;
 $inotify->blocking(0);
-my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
+my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
 
 # main loop
 my $signal_received = '';
 $SIG{INT} = sub { $signal_received = 'interrupt' };
 $SIG{TERM} = sub { $signal_received = 'terminated' };
 $SIG{HUP} = sub { $signal_received = 'SIGHUP' };
+
+my @RunQueue = ();
+
+# Enqueue jobs already in jobspool
+foreach (dirlist($JOBQUEUE)) {
+  push(@RunQueue, { jobfile => "$JOBQUEUE/$_", content => readfile("$JOBQUEUE/$_") });
+  unlink($_);
+}
 
 my $ntimeouts = 0;
 while (1) {
@@ -217,7 +205,11 @@ while (1) {
   select($v, undef, undef, 1);		# wait 1s for inotify has something
   if (vec($v, $inotify->fileno, 1)) {
     $ntimeouts = 0;
-    $inotify->poll;
+    my @events = $inotify->read;
+    foreach my $e (@events) {
+      push(@RunQueue, { jobfile => $e->fullname, content => readfile($e->fullname) });
+      unlink($e->fullname);
+    }
   } else {
     last if $signal_received && $signal_received ne 'SIGHUP';
     $ntimeouts++;
@@ -225,12 +217,20 @@ while (1) {
       # ForkManager needs reaping of finished childs to force callback
       $FM->reap_finished_children if $FM->running_procs > 0;
     }
+    while (my $q = shift(@RunQueue)) {
+      runjob($q->{'jobfile'}, $q->{'content'});
+    }
   }
 }
 loginfo($signal_received) if $signal_received;
 
 $watcher->cancel;
 $FM->wait_all_children;
+
+# Restore unfinished jobs into jobspool
+while (my $q = shift(@RunQueue)) {
+  writefile($q->{'jobfile'}, $q->{'content'});
+}
 
 loginfo("$0 stopped");
 logclose();

@@ -147,6 +147,7 @@ sub unpack_file($) {
   }
 
   if (defined $rs) {
+    unlink("$workdir/status.$hour");
     $rs->store();
     $job->{'rsfile'} = $rs->getRsFile;
     $job->submitjob('ftp');
@@ -193,6 +194,7 @@ sub submit_pending() {
       delete $rs->{'timestamp'};
       $rs->checkfiles();
       $rs->store();
+      unlink($rs->getWorkdir."/status.".$rs->{'hour'});
       my $job = new Job(rs => $rs);
       loginfo("Submitting ".$job->getIdent());
       $job->submitjob('ftp');
