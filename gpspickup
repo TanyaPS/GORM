@@ -162,7 +162,7 @@ sub unpack_thread() {
   while (my $parm = $UQ->dequeue()) {
     eval {
       unpack_file($parm);
-      return 1;
+      1;
     } || do {
       logerror("FATAL ERROR: ".longmess($parm->{'site'}.'-'.$parm->{'year'}.'-'.$parm->{'doy'}.'-'.$parm->{'hour'}));
     }
