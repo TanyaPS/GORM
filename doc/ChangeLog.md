@@ -5,6 +5,7 @@
 - jobengine: Read all jobfiles and enqueue internally before running jobs.
 - jobengine: Use Parallel::Fork::BossWorkerAsync instead of Parallel::ForkManager. It is much faster,
   offers automatic reaping and most importantly, non-blocking enqueuing of jobs to do.
+- gpspickup: Use select() instead of alarm() in main loop.
 
 ## 2019-12-15	sjm	Use threads in gpspickup
 - Make gpspickup multi-threaded to parallelize the unpacking process

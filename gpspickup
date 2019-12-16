@@ -165,7 +165,6 @@ sub unpack_thread() {
       return 1;
     } || do {
       logerror("FATAL ERROR: ".longmess($parm->{'site'}.'-'.$parm->{'year'}.'-'.$parm->{'doy'}.'-'.$parm->{'hour'}));
-      last;
     }
   }
   threads->detach;
@@ -314,16 +313,6 @@ sub handle_inbound($) {
 
 
 #
-# Called from Linux::Inotify2 for each file event
-#
-sub inotify_callback() {
-  my $event = shift;
-  alarm 0;		# disable timer while processing
-  handle_inbound($event->fullname);
-}
-
-
-#
 # scan_incoming will add all plain files in $INCOMING to %Inbound
 #
 sub scan_incoming() {
@@ -360,7 +349,8 @@ threads->create('pending_thread');
 
 my $inotify = new Linux::Inotify2
 	|| errdie("$0: unable to create new inotify object: $!");
-$inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE, \&inotify_callback);
+$inotify->blocking(0);
+$inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE);
 
 $DB = new GPSDB;	# GPSDB must be instantiated after thread creations
 load_sites();
@@ -369,21 +359,30 @@ loginfo("$0 started. threads=$Nthreads, Debug=$Debug");
 
 scan_incoming();
 
-while (1) {
-  eval {
-    local $SIG{ALRM} = sub { die("gpspickupalarm") };
-    local $SIG{INT} = sub { die("interrupted") };
-    local $SIG{TERM} = sub { die("terminated") };
-    local $SIG{HUP} = sub { die("SIGHUP") };
-    alarm 300;
-    $inotify->poll;
-    alarm 0;
-  };
-  if ($@) {
-    last unless $@ =~ /^gpspickupalarm|^SIGHUP/;
-    scan_incoming();
-    load_sites();
+my $signal_received = '';
+local $SIG{INT} = sub { $signal_received = 'interrupted' };
+local $SIG{TERM} = sub { $signal_received = 'terminated' };
+local $SIG{HUP} = sub { $signal_received = 'SIGHUP' };
+
+my $ntimeouts = 0;
+while (!$signal_received) {
+  my $v = '';
+  vec($v, $inotify->fileno, 1) = 1;
+  select($v, undef, undef, 1);			# wait 1s for inotify has something
+  if (vec($v, $inotify->fileno, 1)) {
+    $ntimeouts = 0;
+    my @events = $inotify->read;
+    foreach my $e (@events) {
+      handle_inbound($e->fullname);
+    }
+  } else {
+    $ntimeouts++;
+    if ($signal_received eq 'SIGHUP' || $ntimeouts % 600 == 0) {
+      load_sites();
+      scan_incoming();
+    }
   }
+  $signal_received = '' if $signal_received eq 'SIGHUP';
 }
 
 # shutdown threads

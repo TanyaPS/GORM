@@ -14,7 +14,6 @@ use Parallel::Fork::BossWorkerAsync ();
 use Linux::Inotify2;
 use BaseConfig;
 use Utils;
-use Sys::Syslog qw(openlog syslog closelog);
 use Logger;
 use RinexSet;
 use Job;
@@ -124,7 +123,9 @@ sub runjob($) {
   }
 
   my $workdir = $job->getWorkdir;
-  my $statusfile = "$workdir/status.".$job->{'hour'};
+  chdir($workdir);
+
+  my $statusfile = "status.".$job->{'hour'};
   if (-f $statusfile && readfile($statusfile) =~ /^running/) {
     logerror("Duplicate job");
     return $res;
@@ -132,11 +133,12 @@ sub runjob($) {
   writefile($statusfile, "running");
 
   loginfo("Run $ident");
-  chdir($workdir);
   eval {
-    $job->process(); 1;
+    $job->process();
+    1;
   } || do {
     logerror("FATAL ERROR: ".longmess($ident));	# Serious program error occurred.
+    $res->{'result'} = 'fatal';
     return $res;
   };
 
@@ -144,6 +146,23 @@ sub runjob($) {
   return $res;
 }
 
+#
+# Executed when the worker is forked
+#
+sub init_worker() {
+  setprogram("job");
+}
+
+# Initialize BossWorkerAsync
+sub start_bw($) {
+  my $instances = shift;
+  return Parallel::Fork::BossWorkerAsync->new(
+	work_handler => \&runjob,
+	init_handler => \&init_worker,
+	global_timeout => 0,		# Disable timeouts
+	worker_count => $instances,
+  );
+}
 
 ########################################################################################################
 # Main program
@@ -164,12 +183,7 @@ $0 = basename($0)." ".join(' ',@ARGV);
 #select(STDERR); $| = 1;         # Unbuffered output
 #select(STDOUT); $| = 1;         # Unbuffered output
 
-# Initialize BossWorkerAsync
-my $BW = Parallel::Fork::BossWorkerAsync->new(
-	work_handler => \&runjob,
-	global_timeout => 0,		# Disable timeouts
-	worker_count => $Ninstances,
-);
+my $BW = start_bw($Ninstances);
 loginfo("jobengine started with $Ninstances instances");
 
 # Setup queue event handler
@@ -181,18 +195,20 @@ my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
 my $signal_received = '';
 $SIG{INT} = sub { $signal_received = 'interrupt' };
 $SIG{TERM} = sub { $signal_received = 'terminated' };
-$SIG{HUP} = sub { $signal_received = 'SIGHUP' };
+$SIG{HUP} = 'IGNORE';
 
 my @RunQueue = ();
 
 # Enqueue jobs already in jobspool
 foreach (dirlist($JOBQUEUE)) {
-  push(@RunQueue, { jobfile => "$JOBQUEUE/$_", content => readfile("$JOBQUEUE/$_") });
-  unlink($_);
+  my $fn = "$JOBQUEUE/$_";
+  push(@RunQueue, { jobfile => $fn, content => readfile($fn) });
+  unlink($fn);
 }
 
 my $ntimeouts = 0;
-while (1) {
+my $need_restart = 0;
+while (!$signal_received) {
   my $v = '';
   vec($v, $inotify->fileno, 1) = 1;
   select($v, undef, undef, 1);			# wait 1s for inotify has something
@@ -204,7 +220,6 @@ while (1) {
       unlink($e->fullname);
     }
   } else {
-    last if $signal_received && $signal_received ne 'SIGHUP';
     $ntimeouts++;
     while (my $q = shift(@RunQueue)) {		# enqueue all jobs read by inotify
       $BW->add_work($q);
@@ -214,12 +229,27 @@ while (1) {
       next unless defined $res;			# Wait for next file if nothing yet...
       logerror($res->{'ERROR'}) if $res->{'ERROR'};
       delete $Running{$res->{'ident'}};
+      if ($res->{'result'} eq 'fatal') {
+        $need_restart = 1;
+      }
     }
     if ($ntimeouts % 600 == 0) {		# For every 10min idle time, check for leftovers
       foreach (dirlist($JOBQUEUE)) {
-        next unless fileage($_) < 900;
-        push(@RunQueue, { jobfile => $_, content => readfile($_) });
+        my $fn = "$JOBQUEUE/$_";
+        next unless fileage($fn) < 900;
+        push(@RunQueue, { jobfile => $fn, content => readfile($fn) });
+        unlink($fn);
       }
+      scan_for_forced_incompletes();
+    }
+    if ($need_restart) {
+      loginfo("Restarting fork manager due to fatal error");
+      $watcher->cancel;
+      $BW->shut_down;
+      $BW = start_nw($Ninstances);
+      $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
+      $need_restart = 0;
+      loginfo("Fork manager restarted.");
     }
   }
 }

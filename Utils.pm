@@ -92,7 +92,7 @@ sub sysmv($$;$) {
 
 sub readfile($) {
   my $file = shift;
-  open(my $fd, '<', $file) || return;
+  open(my $fd, '<', $file) || return '';
   local $/ = undef;
   my $data = <$fd>;
   close($fd);
