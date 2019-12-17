@@ -161,6 +161,7 @@ sub start_bw($) {
 	init_handler => \&init_worker,
 	global_timeout => 0,		# Disable timeouts
 	worker_count => $instances,
+	read_size => 1024 * 2,
   );
 }
 
@@ -216,7 +217,12 @@ while (!$signal_received) {
     $ntimeouts = 0;
     my @events = $inotify->read;		# Read all events available
     foreach my $e (@events) {
-      push(@RunQueue, { jobfile => $e->fullname, content => readfile($e->fullname) });
+      my $content = readfile($e->fullname);
+      if (!defined $content || length($content) == 0) {
+        logerror($e->fullname.' does not exist or empty?!');
+      } else {
+        push(@RunQueue, { jobfile => $e->fullname, content => $content });
+      }
       unlink($e->fullname);
     }
   } else {

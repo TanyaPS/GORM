@@ -34,7 +34,12 @@ sub new {
     my $href = loadJSON($args{'jobfile'});
     $self->{$_} = $$href{$_} foreach keys %$href;
   } elsif (exists $args{'json'}) {
-    $self = from_json($args{'json'});
+    if (!defined $args{'json'} || $args{'json'} eq '') {
+      logerror(longmess("invalid JSON string"));
+      $self = {};
+    } else {
+      $self = from_json($args{'json'});
+    }
   } elsif (exists $args{'rs'}) {
     my $rs = $args{'rs'};
     $self->{$_} = $rs->{$_} foreach qw(site year doy hour interval);

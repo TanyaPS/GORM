@@ -90,6 +90,7 @@ sub unpack_file($) {
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
+  unlink("$workdir/status.$hour");	# precaution
   my $rs;
 
   if ($fd->{'ftyp'} eq 'septentrio-rnx3') {
@@ -113,7 +114,6 @@ sub unpack_file($) {
     if ($fn =~ /_MO\.rnx/) {
       $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
       my $rsfile = $rs->getRsFile;
-      $rs->load() if -f $rsfile;
       $rs->{$ftyp} = $ufn;
       $rs->store();
       $PQ->enqueue({ fn => $fn, rsfile => $rsfile });
@@ -147,7 +147,6 @@ sub unpack_file($) {
   }
 
   if (defined $rs) {
-    unlink("$workdir/status.$hour");
     $rs->store();
     $job->{'rsfile'} = $rs->getRsFile;
     $job->submitjob('ftp');
