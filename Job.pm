@@ -642,11 +642,7 @@ sub process() {
   my $qc = _QC($rs);
   loginfo("$site-$year-$doy-$hour: QC: $qc");
   my $sumfileblob;  # NULL in DB allowed
-  if (defined $rs->{'sumfile'}) {
-    if (open(my $fd, $rs->{'sumfile'})) {
-      read($fd, $sumfileblob, -s $rs->{'sumfile'});
-    }
-  }
+  $sumfileblob = readfile($rs->{'sumfile'}) if defined $rs->{'sumfile'};
 
   $dbh->do(qq{
 	delete from gpssums
@@ -772,7 +768,7 @@ sub process() {
     if ($status eq 'incomplete') {
       my $complete = 1;
       foreach my $h ('a'..'x') {
-	$complete = 0 unless -f "status.$h"  && readfile("status.$h") =~ /^processed/;
+	$complete = 0 unless -f "status.$h"  && readfile("status.$h") eq 'processed';
       }
       if ($complete) {
 	loginfo("$site-$year-$doy: all hours present. Submitting hour2daily job.");

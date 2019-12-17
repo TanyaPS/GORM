@@ -13,6 +13,7 @@ use warnings;
 use POSIX qw(strftime);
 use File::stat;
 use File::Path qw(make_path);
+use Fcntl qw(:DEFAULT);
 use Net::SMTP;
 use Date::Manip::Base;
 use JSON;
@@ -90,21 +91,28 @@ sub sysmv($$;$) {
   return _eval_cp_args('mv', $srclist, $dst, $opts);
 }
 
+
+##########################################################################
+# Read entire file. Returns data read or empty string.
+#
 sub readfile($) {
-  my $file = shift;
-  open(my $fd, '<', $file) || return '';
-  local $/ = undef;
-  my $data = <$fd>;
+  my ($fn) = @_;
+  sysopen(my $fd, $fn, O_RDONLY) || return '';
+  sysread($fd, my $data, -s $fn);
   close($fd);
-  chomp($data);
-  return $data;
+  return $data ? $data : '';
 }
 
+##########################################################################
+# Write data to file. Creates/truncates exiting file.
+# Returns number of bytes written or -1 on fail.
+#
 sub writefile($$) {
-  my ($file, $data) = @_;
-  open(my $fd, '>', $file) || return;
-  print $fd "$data\n";
+  my ($fn, $data) = @_;
+  sysopen(my $fd, $fn, O_WRONLY|O_CREAT|O_TRUNC) || return -1;
+  my $n = syswrite($fd, $data);
   close($fd);
+  return $n;
 }
 
 ##########################################################################

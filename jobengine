@@ -45,7 +45,7 @@ sub force_completion($$$) {
   if (defined $interval) {
     ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'incomplete'}) = ('0', $interval, 1);
     $dayjob->submitjob('hour2daily');
-    writefile("$workdir/status.0", "queued");
+    writefile("$workdir/status.0", 'queued');
   } else {
     logerror("6:Cannot force completion of $site-$year-$doy. No proccessed hours.");
   }
@@ -126,11 +126,11 @@ sub runjob($) {
   chdir($workdir);
 
   my $statusfile = "status.".$job->{'hour'};
-  if (-f $statusfile && readfile($statusfile) =~ /^running/) {
+  if (-f $statusfile && readfile($statusfile) eq 'running') {
     logerror("Duplicate job");
     return $res;
   }
-  writefile($statusfile, "running");
+  writefile($statusfile, 'running');
 
   loginfo("Run $ident");
   eval {

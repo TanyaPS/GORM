@@ -20,7 +20,7 @@ sub test_sysrun_fail() {
 
 ### syscp
 sub test_syscp() {
-  syscp($0, "/tmp");
+  syscp($0, '/tmp');
   my $rc = system("cmp -s $0 /tmp/$0");
   unlink("/tmp/$0");
   return $rc == 0;
@@ -60,6 +60,18 @@ sub test_sysmv_array() {
   my $files = `ls $tdir`;
   system("rm -rf $sdir $tdir");
   return $files eq "cp1\ncp2\n";
+}
+
+### readfile and writefile
+sub test_readwritefile() {
+  my $testfile = "/tmp/testfile.$$";
+  my $data = 'testdata';
+  my $ok = 0;
+  if (writefile($testfile, $data) == 8) {
+    $ok = 1 if readfile($testfile) eq $data;
+  }
+  unlink($testfile);
+  return $ok;
 }
 
 ### Day_of_Year
@@ -191,13 +203,15 @@ sub test_site42site() {
 
 ########################
 
+die("$0: must be runned from same directory using 'perl utils.tst'") if (index($0,'/') >= 0);
+
 test_sysrun_ok() || print "test_sysrun_ok FAILED\n";
 test_sysrun_fail() || print "test_synrun_fail FAILED\n";
 test_syscp() || print "test_syscp FAILED\n";
 test_syscp_array() || print "test_syscp_array FAILED\n";
 test_sysmv() || print "test_sysmv FAILED\n";
 test_sysmv_array() || print "test_sysmv_array FAILED\n";
-
+test_readwritefile() || print "test_readwritefile FAILED\n";
 test_Day_of_Year() || print "test_Day_of_Year FAILED\n";
 test_Doy_to_Date() || print "test_Doy_to_Date FAILED\n";
 test_Doy_to_Days() || print "test_Doy_to_Days FAILED\n";

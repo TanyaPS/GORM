@@ -98,12 +98,12 @@ sub ftpuploader($) {
         delete $todo{$fn};
         next;
       }
-      $todo{$fn}++;
+      $todo{$fn}++;	# Increase try count
 
       my $rc = 0;
 
-      # start a new session not logged in
       if (!defined $ftp) {
+        # start a new session
         if ($protocol eq 'ftp') {
           $ftp = Net::FTP->new($host, Passive => 1);
           $rc = $ftp->login($user, $pass);
@@ -130,6 +130,7 @@ sub ftpuploader($) {
       }
 
       # Contruct destination path
+      # Replace all %words with values
       my $destpath = $remotedir;
       if ($destpath =~ /%/) {
         my ($site, $site4, $year, $doy, $hour, $hh);
@@ -160,7 +161,7 @@ sub ftpuploader($) {
         } 
       }
 
-      # Change dir to $destpath. Create if necessary.
+      # Change remote dir to $destpath. Create if necessary.
       if ($protocol eq 'ftp') {
         $rc = $ftp->cwd($destpath);
         if (!$rc) {
@@ -262,6 +263,7 @@ sub reload() {
       logerror("$name: ftp user without password ignored");
     }
     else {
+      # Spawn child
       my $pid = fork();
       die("$0: cannot fork") unless defined $pid;
       if ($pid == 0) {
