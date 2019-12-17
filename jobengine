@@ -242,13 +242,14 @@ while (!$signal_received) {
     if ($ntimeouts % 600 == 0) {		# For every 10min idle time, check for leftovers
       foreach (dirlist($JOBQUEUE)) {
         my $fn = "$JOBQUEUE/$_";
-        next unless fileage($fn) < 900;
+        next if fileage($fn) < 900;		# Wait at least 15min before running a leftover
         push(@RunQueue, { jobfile => $fn, content => readfile($fn) });
         unlink($fn);
       }
       scan_for_forced_incompletes();
     }
     if ($need_restart) {
+      # Something bad happened. Restart fork manager...
       loginfo("Restarting fork manager due to fatal error");
       $watcher->cancel;
       $BW->shut_down;
@@ -263,11 +264,6 @@ loginfo($signal_received) if $signal_received;
 
 $watcher->cancel;
 $BW->shut_down();
-
-# Restore unfinished jobs into jobspool
-while (my $q = shift(@RunQueue)) {
-  writefile($q->{'jobfile'}, $q->{'content'});
-}
 
 loginfo("$0 stopped");
 logclose();

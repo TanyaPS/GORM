@@ -35,6 +35,8 @@ inc/
 /*.zip
 
 # Custom
+*.old
+*.swp
 .bash*
 .cache*
 .config
