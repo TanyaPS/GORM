@@ -571,7 +571,7 @@ sub _QC($) {
   }
   close($fd);
 
-  sysrun("/usr/bin/gzip -9f $sumfile");
+  sysrun("gzip -9fq $sumfile");
   $rs->{'sumfile'} = $sumfile.'.gz';
 
   return round($qc);
@@ -703,7 +703,7 @@ sub process() {
       # Compress and upload
       if (! -f $crxfile) {
         loginfo("Compressing $filetosend");
-        sysrun("$RNX2CRX $filetosend - | gzip > $crxfile", { log => $Debug });
+        sysrun("$RNX2CRX $filetosend - | gzip -9q > $crxfile", { log => $Debug });
       }
       syscp($crxfile, $destpath, { mkdir => 1, log => 1 } );
     }
@@ -716,7 +716,7 @@ sub process() {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile) {
           loginfo("Compressing $navfile");
-          system("gzip < $navfile > $gzfile");
+          system("gzip -9cq $navfile > $gzfile");
         }
         push(@copylist, $gzfile);
       }

@@ -285,7 +285,6 @@ sub loadJSON($) {
 #
 sub storeJSON($$) {
   my ($file, $ref) = @_;
-  open(my $fh, '>', $file) || die("cannot create $file: $!");
   writefile($file, to_json($ref, { utf8 => 1, pretty => 1, canonical => 0 }));
 }
 
