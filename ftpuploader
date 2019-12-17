@@ -220,7 +220,7 @@ sub reload() {
     }, { Slice => {} });
     # add fields not present on gpsftp4
     foreach my $conf (@$confs) {
-      $conf->{'ts'} = 0;  # not supported by gpsftp4
+      $conf->{'ts'} = 'none';  # not supported by gpsftp4
       if ($conf->{'localdir'} =~ /sftp-/) {
         $conf->{'protocol'} = 'sftp';
         $conf->{'privatekey'} = $Privatekey;
@@ -242,13 +242,13 @@ sub reload() {
   my $changed = 0;
 
   # Stop all not in config
-  running:
   foreach my $name (keys %PIDS) {
+    my $found = 0;
     foreach my $conf (@$confs) {
-      next running if $conf->{'name'} eq $name && $conf->{'ts'} eq $TS{$name};
-      loginfo("Stopping ftpuploader [$name]");
+      $found = 1 if $conf->{'name'} eq $name && $conf->{'ts'} eq $TS{$name};
     }
-    next unless exists $PIDS{$name};
+    next if $found;
+    loginfo("Stopping ftpuploader [$name]");
     kill(15, $PIDS{$name});
     delete $PIDS{$name};
     delete $TS{$name};
@@ -258,7 +258,7 @@ sub reload() {
   # Start all in config not already running
   foreach my $conf (@$confs) {
     my $name = $conf->{'name'};
-    next if exists $PIDS{$name};
+    next if exists $PIDS{$name} && kill(0, $PIDS{$name});
     if ($conf->{'protocol'} eq 'ftp' && (!exists $conf->{'pass'} || $conf->{'pass'} eq "")) {
       logerror("$name: ftp user without password ignored");
     }
