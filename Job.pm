@@ -759,12 +759,8 @@ sub process() {
     # Manipulate status.0 in exclusive mode since all processes tries to update this.
     sysopen(my $lockfd, 'status.0', O_RDWR|O_CREAT);
     flock($lockfd, LOCK_EX);
-    my $status = <$lockfd>;
-    if (defined $status) {
-      chomp($status);
-    } else {
-      $status = 'incomplete';
-    }
+    sysread($lockfd, my $status, -s 'status.0');
+    $status = 'incomplete' if !defined $status || $status eq '';
     if ($status eq 'incomplete') {
       my $complete = 1;
       foreach my $h ('a'..'x') {
@@ -780,7 +776,7 @@ sub process() {
       }
       seek($lockfd, 0, 0);
       truncate($lockfd, 0);
-      print $lockfd "$status\n";
+      syswrite($lockfd, $status);
     }
     close($lockfd);
   }

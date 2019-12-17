@@ -274,10 +274,7 @@ sub round($;$) {
 #
 sub loadJSON($) {
   my $file = shift;
-  local $/;  # enable slurp
-  open(my $fh, '<', $file) || return undef;
-  my $json = <$fh>;
-  close($fh);
+  my $json = readfile($file);
   return undef if !defined $json || length($json) == 0;
   return from_json($json);
 }
@@ -289,8 +286,7 @@ sub loadJSON($) {
 sub storeJSON($$) {
   my ($file, $ref) = @_;
   open(my $fh, '>', $file) || die("cannot create $file: $!");
-  print $fh to_json($ref, { utf8 => 1, pretty => 1, canonical => 0 });
-  close($fh);
+  writefile($file, to_json($ref, { utf8 => 1, pretty => 1, canonical => 0 }));
 }
 
 
@@ -334,9 +330,7 @@ sub create_pid_file(;$) {
     $path = dirname($pidfile);
   }
   make_path($path) unless -d $path;
-  open(my $fd, '>', $pidfile);
-  print $fd "$$\n";
-  close($fd);
+  writefile($pidfile, "$$\n");
   return $pidfile;
 }
 
