@@ -105,6 +105,7 @@ sub checkfiles() {
       $self->{$1} = basename($_);
     }
   }
+  return $self;
 }
 
 #################################
@@ -166,6 +167,7 @@ sub load(;$) {
   $file = $self->getRsFile() unless defined $file;
   my $json = loadJSON($file);
   $self->{$_} = $json->{$_} foreach keys %$json;
+  return $self;
 }
 
 #################################
@@ -176,6 +178,7 @@ sub store(;$) {
   $file = $self->getRsFile() unless defined $file;
   my %h = map { $_ => $self->{$_} } keys %$self;
   storeJSON($file, \%h);
+  return $self;
 }
  
 1;

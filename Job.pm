@@ -97,12 +97,14 @@ sub submitjob($) {
   my %h = map { $_ => $self->{$_} } keys %$self;
   $h{'source'} = $source;
   storeJSON($self->jobfile(), \%h);
+  return $self;
 }
 
 # Delete this job from $JOBQUEUE
 sub deletejob() {
   my $self = shift;
   unlink($self->jobfile());
+  return $self;
 }
 
 ###################################################################################
@@ -458,7 +460,7 @@ sub gendayfiles() {
   }
   if (scalar(@rslist) != 24 && !exists $self->{'incomplete'}) {
     logerror("2:Cannot splice incomplete day");
-    return;
+    return undef;
   }
   loginfo("$site-$year-$doy: finishing incomplete day.") if exists $self->{'incomplete'};
 
@@ -621,6 +623,7 @@ sub process() {
   my $rs;
   if ($self->{'source'} eq 'hour2daily') {
     $rs = $self->gendayfiles();
+    return 'error' unless defined $rs;
   } else {
     $rs = new RinexSet(rsfile => $self->{rsfile});
   }

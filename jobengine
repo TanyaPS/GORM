@@ -252,7 +252,8 @@ while (!$signal_received) {
       # Something bad happened. Restart fork manager...
       loginfo("Restarting fork manager due to fatal error");
       $watcher->cancel;
-      $BW->shut_down;
+      $BW->shut_down(force => 1);
+      sleep 300;
       $BW = start_nw($Ninstances);
       $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
       $need_restart = 0;

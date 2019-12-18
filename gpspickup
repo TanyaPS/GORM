@@ -85,7 +85,11 @@ sub unpack_file($) {
   my $fn = basename($ifn);
 
   my $fd = parseFilename($fn);
-  return unless defined $fd;
+  if (!defined $fd) {
+    logwarn("Cannot recognize file $fn");
+    return;
+  }
+
   my ($year, $doy, $hour) = ($fd->{'year'}, $fd->{'doy'}, $fd->{'hour'});
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
