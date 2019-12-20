@@ -115,12 +115,15 @@ sub unpack_file($) {
     # Since this is a multi file set, we will have to wait until we do not think
     # any more files will arrive.
     # Register pending job only if we got the observation file (see submit_pending)
+    my $ident = $job->getIdent();
     if ($fn =~ /_MO\.rnx/) {
       $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
       my $rsfile = $rs->getRsFile;
       $rs->{$ftyp} = $ufn;
       $rs->store();
-      $PQ->enqueue({ fn => $fn, rsfile => $rsfile });
+      $PQ->enqueue({ ident => $ident, rsfile => $rsfile });
+    } else {
+      $PQ->enqueue({ command => 'update-ttl', ident => $ident });
     }
     return;
   }
@@ -186,8 +189,8 @@ my %Pending;
 
 sub submit_pending() {
   my @pending = keys %Pending;
-  foreach my $fn (@pending) {
-    my $rs = $Pending{$fn};
+  foreach my $ident (@pending) {
+    my $rs = $Pending{$ident};
     if (time() - $rs->{'timestamp'} > 19) {
       # check nothing is being transferred right now
       my $prefix = $rs->getFilenamePrefix();
@@ -200,7 +203,7 @@ sub submit_pending() {
       my $job = new Job(rs => $rs);
       loginfo("Submitting ".$job->getIdent());
       $job->submitjob('ftp');
-      delete $Pending{$fn};
+      delete $Pending{$ident};
     }
   }
   my $left = scalar(keys %Pending);
@@ -215,10 +218,17 @@ sub pending_thread() {
   while (1) {
     my $parm = $PQ->dequeue_timed(5);
     if (defined $parm) {
-      last if defined $parm->{'command'} && $parm->{'command'} eq 'EXIT';
-      my $rs = new RinexSet(rsfile => $parm->{'rsfile'});
-      $rs->{'timestamp'} = time();
-      $Pending{$parm->{'fn'}} = $rs;
+      if (defined $parm->{'command'}) {
+        last if $parm->{'command'} eq 'EXIT';		# Shutdown requested
+        if ($parm->{'command'} eq 'update-ttl') {	# Update TTL on Pending{ident} if exists
+          my $rs = $Pending{$parm->{'ident'}};
+          $rs->{'timestamp'} = time() if defined $rs;
+        }
+      } else {
+        my $rs = new RinexSet(rsfile => $parm->{'rsfile'});
+        $rs->{'timestamp'} = time();
+        $Pending{$parm->{'ident'}} = $rs;
+      }
     } else {
       submit_pending();
     }
