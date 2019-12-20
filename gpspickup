@@ -206,8 +206,6 @@ sub submit_pending() {
       delete $Pending{$ident};
     }
   }
-  my $left = scalar(keys %Pending);
-  loginfo("Pending left: $left") if $left > 0;
 }
 
 #
@@ -216,6 +214,7 @@ sub submit_pending() {
 #
 sub pending_thread() {
   while (1) {
+    submit_pending();
     my $parm = $PQ->dequeue_timed(5);
     if (defined $parm) {
       if (defined $parm->{'command'}) {
@@ -229,8 +228,6 @@ sub pending_thread() {
         $rs->{'timestamp'} = time();
         $Pending{$parm->{'ident'}} = $rs;
       }
-    } else {
-      submit_pending();
     }
   }
   threads->detach;
