@@ -36,7 +36,7 @@ if ($ARGV[0] eq 'all') {
 
 foreach my $s (@sites) {
   my $s4 = substr($s, 0, 4);
-  my @files = glob("${SAVEDIR}/${s}/${s4}${dstr}????B.zip ${SAVEDIR}/${s}/${s4}${doy}?.${sy}o.zip ${SAVEDIR}/${s}/${s}_R_${year}${doy}????_*");
+  my @files = glob("${SAVEDIR}/${s}/${s4}${dstr}????B.zip ${SAVEDIR}/${s}/${s4}${doy}?.${sy}o.zip ${SAVEDIR}/${s}/${s4}${doy}?.${sy}_ ${SAVEDIR}/${s}/${s}_R_${year}${doy}????_*");
   if (scalar(@files) > 0) {
     system("forget $s $year $doy");
     system("mv ".join(' ',@files)." $INCOMING 2>/dev/null");
