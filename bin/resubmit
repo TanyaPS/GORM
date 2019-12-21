@@ -1,0 +1,44 @@
+#!/usr/bin/perl
+#
+# Utility to resubmit all hours for one or all sites from $SAVEDIR
+#
+# Usage:
+#	resubmit site year doy		- resubmit all hours for one site (9ch site name)
+#	resubmit all year doy		- resubmit all hours for all sites
+
+use strict;
+use warnings;
+use Getopt::Std;
+use BaseConfig;
+use Utils;
+
+my %opts = ();
+getopts('c:', \%opts);
+
+BaseConfig::init($opts{'c'}) if defined $opts{'c'};
+
+die("Usage: $0 [-c config] all|site year doy") if scalar(@ARGV) != 3;
+
+my $year = $ARGV[1];
+my $doy = sprintf("%03d", $ARGV[2]);
+my @ymd = Doy_to_Date($ARGV[1], $ARGV[2]);
+my $dstr = sprintf("%4d%02d%02d", @ymd);
+my $sy = year2sy($year);
+
+my @sites = ();
+if ($ARGV[0] eq 'all') {
+  opendir(my $dh, $SAVEDIR);
+  @sites = grep(/^[A-Z0-9]{9}$/, readdir($dh));
+  closedir($dh);
+} else {
+  push(@sites, uc($ARGV[0]));
+}
+
+foreach my $s (@sites) {
+  my $s4 = substr($s, 0, 4);
+  my @files = glob("${SAVEDIR}/${s}/${s4}${dstr}????B.zip ${SAVEDIR}/${s}/${s4}${doy}?.${sy}o.zip ${SAVEDIR}/${s}/${s}_R_${year}${doy}????_*");
+  if (scalar(@files) > 0) {
+    system("forget $s $year $doy");
+    system("mv ".join(' ',@files)." $INCOMING 2>/dev/null");
+  }
+}
