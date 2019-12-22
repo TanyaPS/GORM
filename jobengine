@@ -77,6 +77,22 @@ sub scan_for_forced_incompletes() {
 
 
 #####################################
+# Move all $SAVEDIR files for a site/year/doy to $INCOMING
+# The site/year/doy needs to be forgotten before calling this.
+#
+sub reprocess($$$) {
+  my ($site, $year, $doy) = @_;
+
+  my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
+  if (!-d $savedir) {
+    logwarn("Cannot reprocess $site-$year-$doy. Not in $SAVEDIR.");
+    return;
+  }
+  sysmv("$savedir/*", $INCOMING, { log => $Debug });
+}
+
+
+#####################################
 # Run command issued by someone like admin.cgi
 #
 sub runcommand($) {
@@ -87,6 +103,9 @@ sub runcommand($) {
   }
   elsif ($cmd =~ /^force complete (\w+) (\d+) (\d+)/) {
     force_completion($1, $2, $3);
+  }
+  elsif ($cmd =~ /^reprocess (\w+) (\d+) (\d+)/) {
+    reprocess($1, $2, $3);
   }
 }
 

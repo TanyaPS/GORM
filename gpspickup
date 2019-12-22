@@ -309,8 +309,9 @@ sub handle_inbound($) {
     return;
   }
 
-  my $site = $sc->{'site'};
-  sysmv($ifn, "$SAVEDIR/$site", { log => $Debug, mkdir => 1 });
+  my ($site, $year, $doy) = ($sc->{'site'}, $fd->{'year'}, $fd->{'doy'});
+  my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
+  sysmv($ifn, $savedir, { log => $Debug, mkdir => 1 });
 
   my $job = new Job(site => $site, year => $fd->{'year'}, doy => $fd->{'doy'}, hour => $fd->{'hour'}, interval => $sc->{'obsint'});
   my $workdir = $job->getWorkdir();
@@ -318,7 +319,7 @@ sub handle_inbound($) {
     return if dailysum_exists($site, $fd->{'year'}, $fd->{'doy'});
     $job->mkWorkdir();
   }
-  $UQ->enqueue({ ifn => "$SAVEDIR/$site/$fn", site => $sc->{'site'}, obsint => $sc->{'obsint'} });
+  $UQ->enqueue({ ifn => "$savedir/$fn", site => $sc->{'site'}, obsint => $sc->{'obsint'} });
 }
 
 

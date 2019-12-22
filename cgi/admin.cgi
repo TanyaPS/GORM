@@ -822,6 +822,7 @@ sub incompletes() {
     my @a = split(/\//, $_);
     next if ($a[1] == $year && $a[2] == $doy);	# Ignore today
     my $site = $a[0];
+    next unless (-d "$WORKDIR/$site" && $site =~ /^[A-Z0-9]{9}$/i);
     if (defined $sites{$site}) {
       next if index($sites{$site}, "$a[1]:$a[2]") >= 0;
       $sites{$site} .= ",";
@@ -868,6 +869,62 @@ sub incompletes() {
 }
 
 ##########################################################################
+# Reprocess all hours for given site/year/doy's.
+#
+sub reprocess() {
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  showheader("Reprocess entire day");
+
+  if (defined $v{'submit'}) {
+    my ($site, $year, $fromdoy, $todoy, $uploading) = ($v{'site'}, $v{'year'}, $v{'fromdoy'}, $v{'todoy'});
+    if (defined $site && $site ne "" && length($site) == 9 &&
+        defined $year && $year ne "" &&
+        defined $fromdoy && $fromdoy ne "") {
+      $site = uc($site);
+      $year = sy2year($year) if $year < 100;
+      $todoy = $fromdoy unless defined $todoy && $todoy ne "";
+      print "Submitting reprocess request for $site/$year/$fromdoy-$todoy.<p>\n";
+      for (my $doy = $fromdoy; $doy <= $todoy; $doy++) {
+        my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
+        if (-d $savedir) {
+          $dbh->do(q{ delete from gpssums where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+          $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+          sendcommand("reprocess $site $year $doy");
+        } else {
+          print "<b style=\"color:red\">$site-$year-$doy not in SAVEDIR.</b> You need to manually forget and re-upload files.<br>";
+        }
+      }
+    } else {
+      print "<b style=\"color:red\">Please specify all values</b><p>\n";
+    }
+  }
+
+  print qq{
+    <form name="reprocessform" method=POST action="$ENV{'SCRIPT_NAME'}">
+    <input type=hidden name=cmd value=reprocess>
+    <table border=1>
+    <tr><td title="Site identifier (xxxx##ccc)">
+        <b>Site:</b><td><input type=text name=site size=9></tr>
+    <tr><td title="Specify year as YYYY">
+        <b>Year:</b><td><input type=number name=year size=4></tr>
+    <tr><td title="From DOY">
+        <b>From DOY:</b><td><input type=number name=fromdoy size=3></tr>
+    <tr><td title="To DOY">
+        <b>To DOY:</b><td><input type=number name=todoy size=3></tr>
+    <tr><td colspan=2><input type=submit name=submit value=Submit></tr>
+    </table>
+    <br>
+    This will make the system forget and reprocess the specified range of DOY's.
+    The source is the zip files in the archive.<br>
+    All RINEX files for the specified range will be re-distributed according to RINEX
+    distribution scheme.
+    </form>
+  };
+
+  showbottom();
+}
+
+##########################################################################
 # Main menu
 #
 sub menu() {
@@ -879,10 +936,10 @@ sub menu() {
     <a href="?cmd=editlocaldirs">Edit Localdirs</a><br>
     <a href="?cmd=forget">Forget DOYs</a><br>
     <a href="?cmd=incompletes">Finish Incomplete DOYs</a><br>
+    <a href="?cmd=reprocess">Reprocess DOY's</a><br>
 <!--
     <a href="?cmd=editaliases">Edit Aliases</a><br>
     <a href="?cmd=syslog">System log</a><br>
-    <a href="?cmd=reprocess">Reprocess DOY's</a><br>
     <a href="?cmd=reproccurr">Reprocess current DOY for one site</a><br>
     <a href="?cmd=mkincomplete">Make one DOY incomplete for one site</a><br>
     <a href="?cmd=qcreport">Show Uptime report for hourly sites</a><br>
@@ -918,4 +975,6 @@ if (!defined $cmd || $cmd eq "menu") {
   editantennas();
 } elsif ($cmd eq "editreceivers") {
   editreceivers();
+} elsif ($cmd eq "reprocess") {
+  reprocess();
 }

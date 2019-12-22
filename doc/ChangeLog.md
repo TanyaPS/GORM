@@ -1,5 +1,9 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-22	sjm	Removed StatusDB.pm
+- Inbound files are now saved in $SAVEDIR/$site/$year/$doy.
+- Implement reprocess entire DOY. Only works if files are present in $SAVEDIR.
+
 ## 2019-12-16	sjm	Removed StatusDB.pm
 - Removed StatusDB.pm again. Use individual horly status files and status.0 in exclusive mode.
 - jobengine: Read all jobfiles and enqueue internally before running jobs.
