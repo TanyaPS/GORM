@@ -554,8 +554,9 @@ sub _QC($) {
 	" :inputs:rinexo ".$rs->{'MO.30'}.
 	" :inputs:rinexn \"".$rs->getNavlist()."\"".
 	" :gen:int 30".
+	" :qc:int_gap=30".
 	" :qc:ele_cut=0".
-	" :qc:health=true".
+	" :qc:pos_cut=0".
 	" :outputs:xtr $sumfile".
 	" :outputs:log $logfile".
 	" :outputs:verb=0";
