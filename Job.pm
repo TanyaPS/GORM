@@ -480,7 +480,7 @@ sub gendayfiles() {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
     loginfo("Creating $navoutfile");
-    my $cmd = "$GFZRNX -f -kv -q -finp ".join(' ',@$aref)." -fout $navoutfile -no_nav_stk >/dev/null 2>&1";
+    my $cmd = "$GFZRNX -finp ".join(' ',@$aref)." -fout $navoutfile -f -kv -q -no_nav_stk >/dev/null 2>&1";
     sysrun($cmd, { log => $Debug });
     $rsday->{$navtyp} = $navoutfile;
   }
@@ -550,9 +550,21 @@ sub _QC($) {
   loginfo('Running QC on '.$rs->{'MO.30'});
   my $sumfile = $rs->getFilenamePrefix().'.sum';
   my $logfile = 'anubis.'.$rs->{'hour'}.'.log';
+  my $navlist;
+  if ($rs->{'hour'} eq '0') {
+    my $lasthour = "";
+    foreach my $h ('a'..'x') {
+      $lasthour = $h if -f "rs.$h.json";
+    }
+    if ($lasthour ne '') {
+      my $lastrs = new RinexSet(rsfile => "rs.$lasthour.json");
+      $navlist = join(' ',$lastrs->getNavlist());
+    }
+  }
+  $navlist = join(' ',$rs->getNavlist()) unless defined $navlist;
   my $cmd = "$ANUBIS".
 	" :inputs:rinexo ".$rs->{'MO.30'}.
-	" :inputs:rinexn \"".join(' ',$rs->getNavlist())."\"".
+	" :inputs:rinexn \"$navlist\"".
 	" :gen:int 30".
 	" :qc:ele_cut=0".
 	" :outputs:xtr $sumfile".
