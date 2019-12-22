@@ -23,7 +23,7 @@ use Logger;
 use RinexSet;
 use GPSDB;
 
-my $Debug = 0;
+my $Debug = 1;
 
 sub new {
   my $class = shift;
@@ -550,21 +550,9 @@ sub _QC($) {
   loginfo('Running QC on '.$rs->{'MO.30'});
   my $sumfile = $rs->getFilenamePrefix().'.sum';
   my $logfile = 'anubis.'.$rs->{'hour'}.'.log';
-  my $navlist;
-  if ($rs->{'hour'} eq '0') {
-    my $lasthour = "";
-    foreach my $h ('a'..'x') {
-      $lasthour = $h if -f "rs.$h.json";
-    }
-    if ($lasthour ne '') {
-      my $lastrs = new RinexSet(rsfile => "rs.$lasthour.json");
-      $navlist = join(' ',$lastrs->getNavlist());
-    }
-  }
-  $navlist = join(' ',$rs->getNavlist()) unless defined $navlist;
   my $cmd = "$ANUBIS".
 	" :inputs:rinexo ".$rs->{'MO.30'}.
-	" :inputs:rinexn \"$navlist\"".
+	" :inputs:rinexn \"".$rs->getNavlist()."\"".
 	" :gen:int 30".
 	" :qc:ele_cut=0".
 	" :outputs:xtr $sumfile".

@@ -85,7 +85,7 @@ sub getNavlist() {
   foreach my $k (keys %$self) {
     push(@fa, $self->{$k}) if $k =~ /[A-Z]N/;
   }
-  return @fa;
+  return wantarray ? @fa : join(' ',@fa);
 }
 
 #################################
