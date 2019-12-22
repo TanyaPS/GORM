@@ -3,6 +3,7 @@
 ## 2019-12-22	sjm	Removed StatusDB.pm
 - Inbound files are now saved in $SAVEDIR/$site/$year/$doy.
 - Implement reprocess entire DOY. Only works if files are present in $SAVEDIR.
+- Issue warning on Leica split hour files. Do nothing on splitted hours.
 
 ## 2019-12-16	sjm	Removed StatusDB.pm
 - Removed StatusDB.pm again. Use individual horly status files and status.0 in exclusive mode.
