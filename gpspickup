@@ -135,7 +135,7 @@ sub unpack_file($) {
     my $countrycode = substr($site, 6, 3);
     mkdir("$workdir/sbfunpack.$hour");
     chdir("$workdir/sbfunpack.$hour");
-    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHI -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
+    sysrun("$SBF2RIN -f $ifn -l -R3 -nONGELHIB -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
     system("mv $workdir/sbfunpack.$hour/* $workdir");
     chdir($INCOMING);
     system("rm -r $workdir/sbfunpack.$hour");
