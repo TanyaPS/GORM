@@ -23,7 +23,7 @@ use Logger;
 use RinexSet;
 use GPSDB;
 
-my $Debug = 1;
+my $Debug = 0;
 
 sub new {
   my $class = shift;
@@ -555,6 +555,7 @@ sub _QC($) {
 	" :inputs:rinexn \"".$rs->getNavlist()."\"".
 	" :gen:int 30".
 	" :qc:ele_cut=0".
+	" :qc:health=true".
 	" :outputs:xtr $sumfile".
 	" :outputs:log $logfile".
 	" :outputs:verb=0";
