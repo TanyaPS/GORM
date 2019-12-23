@@ -554,8 +554,7 @@ sub _QC($) {
   my $cmd = $ANUBIS.
 	" :inputs:rinexo ".$rs->{'MO.30'}.
 	" :inputs:rinexn \"".$rs->getNavlist()."\"".
-	" :gen:sys \"GPS GLO\"".
-	" :gen:int 180".
+	" :gen:sys GPS".
 	" :qc:int_gap=360".
 	" :qc:ele_cut=3".
 	" :qc:pos_cut=3".
