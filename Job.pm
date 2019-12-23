@@ -567,6 +567,11 @@ sub _QC($) {
 	" :outputs:verb=0".
 	" :outputs:xtr $sumfile".
 	" :outputs:log $logfile";
+  if ($rs->{'hour'} eq '0') {
+    $cmd .= " :gen:int 180 :qc:int_stp=3600";
+  } else {
+    $cmd .= " :gen:int 30 :qc:int_stp=900";
+  }
   $cmd .= " :qc:int_stp=".($rs->{'hour'} eq '0' ? '3600':'900');
   sysrun($cmd, { log => $Debug});
 
