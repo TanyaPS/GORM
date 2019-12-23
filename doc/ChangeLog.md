@@ -1,6 +1,10 @@
 # Changelog for GPSFTP5 scripts
 
-## 2019-12-22	sjm	Removed StatusDB.pm
+## 2019-12-23	sjm	QC parameters
+- Changed QC calculation parameters to match EUREF 2018 recommendations.
+  See http://epncb.oma.be/_documentation/guidelines/guidelines_analysis_centres.pdf
+
+## 2019-12-22	sjm	Regorganize $SAVEDIR
 - Inbound files are now saved in $SAVEDIR/$site/$year/$doy.
 - Implement reprocess entire DOY. Only works if files are present in $SAVEDIR.
 - Issue warning on Leica split hour files. Do nothing on splitted hours.
