@@ -554,10 +554,9 @@ sub _QC($) {
   my $cmd = $ANUBIS.
 	" :inputs:rinexo ".$rs->{'MO.30'}.
 	" :inputs:rinexn \"".$rs->getNavlist()."\"".
-	" :gen:sys GPS".
 	" :qc:int_gap=360".
-	" :qc:ele_cut=3".
-	" :qc:pos_cut=3".
+	" :qc:ele_cut=0".
+	" :qc:pos_cut=0".
 	" :qc:sec_sum=2".
 	" :qc:sec_bnd=2".
 	" :qc:sec_gap=2".
@@ -567,7 +566,7 @@ sub _QC($) {
 	" :outputs:xtr $sumfile".
 	" :outputs:log $logfile";
   if ($rs->{'hour'} eq '0') {
-    $cmd .= " :gen:int 180 :qc:int_stp=3600";
+    $cmd .= " :gen:sys GPS :gen:int 180 :qc:int_stp=3600";
   } else {
     $cmd .= " :gen:int 30 :qc:int_stp=900";
   }
