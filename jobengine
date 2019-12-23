@@ -170,6 +170,7 @@ sub runjob($) {
 #
 sub init_worker() {
   setprogram("job");
+  $0 = 'job';
 }
 
 # Initialize BossWorkerAsync

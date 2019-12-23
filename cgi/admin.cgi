@@ -59,8 +59,8 @@ sub sendcommand($) {
 
   open(my $fd, '>', "$JOBQUEUE/command");
   print $fd "$cmd\n";
-  chmod(0666, "$JOBQUEUE/command");
   close($fd);
+  chmod(0666, "$JOBQUEUE/command");
 }
 
 ##########################################################################
