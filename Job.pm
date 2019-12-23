@@ -556,8 +556,8 @@ sub _QC($) {
 	" :inputs:rinexn \"".$rs->getNavlist()."\"".
 	" :gen:sys GPS".
 	" :qc:int_gap=360".
-	" :qc:ele_cut=0".
-	" :qc:pos_cut=0".
+	" :qc:ele_cut=3".
+	" :qc:pos_cut=3".
 	" :qc:sec_sum=2".
 	" :qc:sec_bnd=2".
 	" :qc:sec_gap=2".
