@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-24	sjm	gpspickup unpack locking
+- Ensure exclusive access when unpacking
+
 ## 2019-12-23	sjm	QC parameters
 - Changed QC calculation parameters to match EUREF 2018 recommendations.
   See http://epncb.oma.be/_documentation/guidelines/guidelines_analysis_centres.pdf

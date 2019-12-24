@@ -93,8 +93,13 @@ sub submit_pending() {
       # check nothing is being transferred right now
       my $prefix = $rs->getFilenamePrefix();
       next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
+
       # no active inbound found, then submit
-      writefile($rs->getWorkdir()."/status.".$rs->{'hour'}, 'queued');
+      my $lock = openlocked($rs->getWorkdir()."/status.".$rs->{'hour'});
+      truncate($lock, 0);
+      syswrite($lock, 'queued');
+      close($lock);
+
       delete $rs->{'timestamp'};
       $rs->checkfiles();
       $rs->store();
