@@ -155,8 +155,8 @@ sub unpack_file($) {
 
   my $lock = openlocked("$workdir/status.$hour");
   sysread($lock, my $status, -s "$workdir/status.$hour");
-  $status = 'none' if !defined $status;
-  if ($status eq 'queued' || $status eq 'running') {	# allow unpack in 'pending' state
+  $status = 'none' if !defined $status || $status eq '';
+  if ($status !~ /^(none|pending|processed)/) {		# Only allow unpack in none/pending/processd state
     logerror("Duplicate unpack?!");
     close($lock);
     return;
@@ -239,7 +239,7 @@ sub unpack_file($) {
     syswrite($lock, 'queued');
   } else {
     logerror("Unknown filetype: $ff->{'ftyp'}");
-    syswrite($lock, 'unknown');
+    syswrite($lock, 'none');
   }
 
   close($lock);
