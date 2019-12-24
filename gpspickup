@@ -153,17 +153,11 @@ sub unpack_file($) {
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
 
-  my $fd = openlocked("$workdir/status.$hour");
-  sysread($fd, my $status, -s "$workdir/status.$hour");
-  $status = 'none' if !defined $status || $status eq '';
-  if ($status ne 'none' && $status ne 'processed') {
+  my $status = readfile("$workdir/status.$hour");
+  if ($status eq 'queued' || $status eq 'running') {
     logerror("Duplicate unpack?!");
-    close($fd);
     return;
   }
-  seek($fd, 0, 0); truncate($fd, 0);
-  syswrite($fd, 'unpacking');
-  close($fd);
 
   unlink("$workdir/rs.$hour.json");
   my $rs;
