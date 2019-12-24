@@ -153,14 +153,19 @@ sub unpack_file($) {
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
 
-  my $status = readfile("$workdir/status.$hour");
-  if ($status eq 'queued' || $status eq 'running') {
+  my $lock = openlocked("$workdir/status.$hour");
+  sysread($lock, my $status, -s "$workdir/status.$hour");
+  $status = 'none' if !defined $status;
+  if ($status eq 'queued' || $status eq 'running') {	# allow unpack in 'pending' state
     logerror("Duplicate unpack?!");
+    close($lock);
     return;
   }
+  seek($lock, 0, 0); truncate($lock, 0);
 
-  unlink("$workdir/rs.$hour.json");
   my $rs;
+
+  # Multi file uploads
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
     my $ftyp = 'UU';
@@ -190,10 +195,14 @@ sub unpack_file($) {
     } else {
       $PQ->enqueue({ command => 'update-ttl', ident => $ident });
     }
+    syswrite($lock, 'pending');
+    close($lock);
     return;
   }
 
-  elsif ($ff->{'ftyp'} eq 'septentrio-raw') {
+  # Single file uploads
+
+  if ($ff->{'ftyp'} eq 'septentrio-raw') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
@@ -227,8 +236,13 @@ sub unpack_file($) {
     $rs->store();
     $job->{'rsfile'} = $rs->getRsFile;
     $job->submitjob('ftp');
-    writefile("$workdir/status.$hour", 'queued');
+    syswrite($lock, 'queued');
+  } else {
+    logerror("Unknown filetype: $ff->{'ftyp'}");
+    syswrite($lock, 'unknown');
   }
+
+  close($lock);
 }
 
 #
