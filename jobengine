@@ -144,12 +144,19 @@ sub runjob($) {
   my $workdir = $job->getWorkdir;
   chdir($workdir);
 
+  # Make sure we are alone
   my $statusfile = "status.".$job->{'hour'};
-  if (-f $statusfile && readfile($statusfile) eq 'running') {
+  my $fd = openlocked($statusfile);
+  sysread($fd, my $status, -s $statusfile);
+  if ($status eq 'running') {
+    close($fd);
     logerror("Duplicate job");
     return $res;
   }
-  writefile($statusfile, 'running');
+  seek($fd, 0, 0);
+  truncate($fd, 0);
+  syswrite($fd, 'running');
+  close($fd);
 
   loginfo("Run $ident");
   eval {

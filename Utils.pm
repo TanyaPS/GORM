@@ -13,7 +13,7 @@ use warnings;
 use POSIX qw(strftime);
 use File::stat;
 use File::Path qw(make_path);
-use Fcntl qw(:DEFAULT);
+use Fcntl qw(:DEFAULT :flock);
 use Net::SMTP;
 use Date::Manip::Base;
 use JSON;
@@ -27,7 +27,7 @@ BEGIN {
   require Exporter;
   @ISA = qw(Exporter);
   @EXPORT = qw(
-	sysrun syscp sysmv readfile writefile
+	sysrun syscp sysmv openlocked readfile writefile
 	Day_of_Year Doy_to_Date Doy_to_Days Days_to_Date Date_to_Days
 	sy2year year2sy letter2hour hour2letter gm2str
 	basename dirname fileage dirlist round
@@ -91,6 +91,16 @@ sub sysmv($$;$) {
   return _eval_cp_args('mv', $srclist, $dst, $opts);
 }
 
+
+##########################################################################
+# Open/create a file in exclusive mode and return filehandle.
+#
+sub openlocked($) {
+  my ($fn) = @_;
+  sysopen(my $fd, $fn, O_RDWR|O_CREAT) || return 0;
+  flock($fd, LOCK_EX);
+  return $fd;
+}
 
 ##########################################################################
 # Read entire file. Returns data read or empty string.

@@ -95,7 +95,7 @@ sub unpack_file($) {
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
-  unlink("$workdir/status.$hour");	# precaution
+  unlink("$workdir/status.$hour", "$workdir/rs.$hour.json");	# precaution
   my $rs;
 
   if ($fd->{'ftyp'} eq 'septentrio-rnx3') {

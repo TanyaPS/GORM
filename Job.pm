@@ -15,7 +15,6 @@ use Carp qw(longmess);
 use Data::Dumper;
 use Time::Local;
 use File::Path qw(make_path);
-use Fcntl qw(:DEFAULT :flock);
 use JSON;
 use BaseConfig;
 use Utils;
@@ -630,6 +629,9 @@ sub save_originals($) {
 #
 sub process() {
   my $self = shift;
+  my ($site, $year, $doy, $hour) = ($self->{'site'}, $self->{'year'}, $self->{'doy'}, $self->{'hour'});
+  my $hh24 = ($hour eq '0') ? 0 : letter2hour($hour);
+  my $freq = $hour eq '0' ? 'D':'H';
 
   loginfo($self->getIdent()." starting");
 
@@ -643,10 +645,6 @@ sub process() {
   } else {
     $rs = new RinexSet(rsfile => $self->{rsfile});
   }
-
-  my ($site, $year, $doy, $hour) = ($self->{'site'}, $self->{'year'}, $self->{'doy'}, $self->{'hour'});
-  my $hh24 = ($hour eq '0') ? 0 : letter2hour($hour);
-  my $freq = $hour eq '0' ? 'D':'H';
 
   # Patch RINEX header
   if ($self->{'source'} eq 'ftp') {
@@ -781,8 +779,7 @@ sub process() {
 
     # Check if doy is complete, and if it is, submit a day job
     # Manipulate status.0 in exclusive mode since all processes tries to update this.
-    sysopen(my $lockfd, 'status.0', O_RDWR|O_CREAT);
-    flock($lockfd, LOCK_EX);
+    my $lockfd = openlocked('status.0');
     sysread($lockfd, my $status, -s 'status.0');
     $status = 'incomplete' if !defined $status || $status eq '';
     if ($status eq 'incomplete') {
