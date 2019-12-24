@@ -2,6 +2,7 @@
 
 ## 2019-12-24	sjm	gpspickup unpack locking
 - Ensure exclusive access when unpacking
+- Make locking methods of status.? part of Job object
 
 ## 2019-12-23	sjm	QC parameters
 - Changed QC calculation parameters to match EUREF 2018 recommendations.

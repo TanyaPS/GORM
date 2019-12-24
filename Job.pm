@@ -14,6 +14,7 @@ use warnings;
 use Carp qw(longmess);
 use Data::Dumper;
 use Time::Local;
+use Fcntl qw(:DEFAULT :flock);
 use File::Path qw(make_path);
 use JSON;
 use BaseConfig;
@@ -93,7 +94,7 @@ sub submitjob($) {
   my $self = shift;
   my $source = shift;
   $self->verifyobj() if $Debug;
-  my %h = map { $_ => $self->{$_} } keys %$self;
+  my %h = map { $_ => $self->{$_} } grep(!/^_/, keys %$self);
   $h{'source'} = $source;
   storeJSON($self->jobfile(), \%h);
   return $self;
@@ -103,6 +104,48 @@ sub submitjob($) {
 sub deletejob() {
   my $self = shift;
   unlink($self->jobfile());
+  return $self;
+}
+
+# Manipulate status file in exclusive mode
+sub openstate() {
+  my $self = shift;
+  my $fd;
+  $self->{'_statefile'} = $self->getWorkdir()."/status.".$self->{'hour'};
+  sysopen($fd, $self->{'_statefile'}, O_RDWR|O_CREAT);
+  flock($fd, LOCK_EX);
+  $self->{'_statefd'} = $fd;
+  return $self;
+}
+
+sub readstate() {
+  my $self = shift;
+  my $str;
+  seek($self->{'_statefd'}, 0, 0);
+  sysread($self->{'_statefd'}, $str, -s $self->{'_statefile'});
+  $str = '' unless defined $str;
+  return $str;
+}
+
+sub writestate($) {
+  my ($self,$str) = @_;
+  seek($self->{'_statefd'}, 0, 0);
+  truncate($self->{'_statefd'}, 0);
+  syswrite($self->{'_statefd'}, $str);
+  return $self;
+}
+
+sub closestate() {
+  my $self = shift;
+  close($self->{'_statefd'});
+  delete $self->{'_statefd'};
+  delete $self->{'_statefile'};
+  return $self;
+}
+
+sub setstate($) {
+  my ($self, $str) = @_;
+  $self->openstate()->writestate($str)->closestate();
   return $self;
 }
 
@@ -775,12 +818,13 @@ sub process() {
     chdir("..");
     system("rm -rf ".$self->getWorkdir);
   } else {
-    writefile("status.$hour", 'processed');
+    $self->setstate('processed');
 
     # Check if doy is complete, and if it is, submit a day job
     # Manipulate status.0 in exclusive mode since all processes tries to update this.
-    my $lockfd = openlocked('status.0');
-    sysread($lockfd, my $status, -s 'status.0');
+    my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
+    $dayjob->openstate();
+    my $status = $dayjob->readstate();
     $status = 'incomplete' if !defined $status || $status eq '';
     if ($status eq 'incomplete') {
       my $complete = 1;
@@ -789,17 +833,14 @@ sub process() {
       }
       if ($complete) {
 	loginfo("$site-$year-$doy: all hours present. Submitting hour2daily job.");
-	my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
 	$dayjob->submitjob('hour2daily');
         $status = 'queued';
       } else {
         $status = 'incomplete';
       }
-      seek($lockfd, 0, 0);
-      truncate($lockfd, 0);
-      syswrite($lockfd, $status);
+      $dayjob->writestate($status);
     }
-    close($lockfd);
+    $dayjob->closestate();
   }
 
   loginfo($self->getIdent()." finished");

@@ -95,15 +95,11 @@ sub submit_pending() {
       next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
 
       # no active inbound found, then submit
-      my $lock = openlocked($rs->getWorkdir()."/status.".$rs->{'hour'});
-      truncate($lock, 0);
-      syswrite($lock, 'queued');
-      close($lock);
-
       delete $rs->{'timestamp'};
       $rs->checkfiles();
       $rs->store();
       my $job = new Job(rs => $rs);
+      $job->setstate('queued');
       loginfo("Submitting ".$job->getIdent());
       $job->submitjob('ftp');
       delete $Pending{$ident};
@@ -159,17 +155,15 @@ sub unpack_file($) {
   my $workdir = $job->getWorkdir;
 
   # Aquire exclusive access to this hour while unpacking this file
-  my $lock = openlocked("$workdir/status.$hour");
-  sysread($lock, my $status, -s "$workdir/status.$hour");
+  my $status = $job->openstate()->readstate();
   $status = 'none' if !defined $status || $status eq '';
 
   # Check if it is a legal state for unpacking
   if ($status !~ /^(none|pending|processed)/) {		# Only allow unpack in none/pending/processd state
     logerror("Duplicate unpack?!");
-    close($lock);
+    $job->closestate();
     return;
   }
-  seek($lock, 0, 0); truncate($lock, 0);
 
   my $rs;
 
@@ -203,8 +197,7 @@ sub unpack_file($) {
     } else {
       $PQ->enqueue({ command => 'update-ttl', ident => $ident });
     }
-    syswrite($lock, 'pending');
-    close($lock);
+    $job->writestate('pending')->closestate();
     return;
   }
 
@@ -244,13 +237,13 @@ sub unpack_file($) {
     $rs->store();
     $job->{'rsfile'} = $rs->getRsFile;
     $job->submitjob('ftp');
-    syswrite($lock, 'queued');
+    $job->writestate('queued');
   } else {
     logerror("Unknown filetype: $ff->{'ftyp'}");
-    syswrite($lock, 'none');
+    $job->writestate('none');
   }
 
-  close($lock);
+  $job->closestate();
 }
 
 #

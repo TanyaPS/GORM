@@ -44,8 +44,8 @@ sub force_completion($$$) {
   # Submit dayjob
   if (defined $interval) {
     ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'incomplete'}) = ('0', $interval, 1);
+    $dayjob->putstate('queued');
     $dayjob->submitjob('hour2daily');
-    writefile("$workdir/status.0", 'queued');
   } else {
     logerror("6:Cannot force completion of $site-$year-$doy. No proccessed hours.");
   }
@@ -145,19 +145,14 @@ sub runjob($) {
   chdir($workdir);
 
   # Make sure we are alone
-  my $statusfile = "status.".$job->{'hour'};
-  my $fd = openlocked($statusfile);
-  sysread($fd, my $status, -s $statusfile);
-  $status = 'queued' if !defined $status || $status eq '';
-  if ($status eq 'running') {	# allow queued and processed
-    close($fd);
-    logerror("Duplicate job");
+  $job->openstate();
+  my $status = $job->readstate();
+  if ($status ne 'queued') {
+    $job->closestate();
+    logerror("$ident: Illegal state: $status");
     return $res;
   }
-  seek($fd, 0, 0);
-  truncate($fd, 0);
-  syswrite($fd, 'running');
-  close($fd);
+  $job->writestate('running')->closestate();
 
   loginfo("Run $ident");
   eval {
