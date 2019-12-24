@@ -51,6 +51,11 @@ sub new {
   return $self;
 }
 
+DESTROY {
+  my $self = shift;
+  close($self->{'_statefd'}) if defined $self->{'_statefd'};
+}
+
 sub verifyobj() {
   my $self = shift;
   my $ok = 1;
