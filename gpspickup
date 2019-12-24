@@ -94,13 +94,13 @@ sub submit_pending() {
       my $prefix = $rs->getFilenamePrefix();
       next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
       # no active inbound found, then submit
+      writefile($rs->getWorkdir()."/status.".$rs->{'hour'}, 'queued');
       delete $rs->{'timestamp'};
       $rs->checkfiles();
       $rs->store();
       my $job = new Job(rs => $rs);
       loginfo("Submitting ".$job->getIdent());
       $job->submitjob('ftp');
-      writefile($rs->getWorkdir()."/status.".$rs->{'hour'}, 'queued');
       delete $Pending{$ident};
     }
   }
@@ -153,9 +153,12 @@ sub unpack_file($) {
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
 
+  # Aquire exclusive access to this hour while unpacking this file
   my $lock = openlocked("$workdir/status.$hour");
   sysread($lock, my $status, -s "$workdir/status.$hour");
   $status = 'none' if !defined $status || $status eq '';
+
+  # Check if it is a legal state for unpacking
   if ($status !~ /^(none|pending|processed)/) {		# Only allow unpack in none/pending/processd state
     logerror("Duplicate unpack?!");
     close($lock);
@@ -165,7 +168,7 @@ sub unpack_file($) {
 
   my $rs;
 
-  # Multi file uploads
+  # Multi file uploads go to the pending thread
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
     my $ftyp = 'UU';
@@ -200,7 +203,7 @@ sub unpack_file($) {
     return;
   }
 
-  # Single file uploads
+  # Single file uploads. Unpack and submit job directly.
 
   if ($ff->{'ftyp'} eq 'septentrio-raw') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
