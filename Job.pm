@@ -828,9 +828,8 @@ sub process() {
     # Check if doy is complete, and if it is, submit a day job
     # Manipulate status.0 in exclusive mode since all processes tries to update this.
     my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
-    $dayjob->openstate();
-    my $status = $dayjob->readstate();
-    $status = 'incomplete' if !defined $status || $status eq '';
+    my $status = $dayjob->openstate()->readstate();
+    $status = 'incomplete' if $status eq '';
     if ($status eq 'incomplete') {
       my $complete = 1;
       foreach my $h ('a'..'x') {
