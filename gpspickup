@@ -85,20 +85,32 @@ sub unpack_file($) {
   my ($ifn, $site, $obsint) = ($parm->{'ifn'}, $parm->{'site'}, $parm->{'obsint'});
   my $fn = basename($ifn);
 
-  my $fd = parseFilename($fn);
-  if (!defined $fd) {
+  my $ff = parseFilename($fn);
+  if (!defined $ff) {
     logwarn("Cannot recognize file $fn");
     return;
   }
 
-  my ($year, $doy, $hour) = ($fd->{'year'}, $fd->{'doy'}, $fd->{'hour'});
+  my ($year, $doy, $hour) = ($ff->{'year'}, $ff->{'doy'}, $ff->{'hour'});
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
-  unlink("$workdir/status.$hour", "$workdir/rs.$hour.json");	# precaution
+
+  my $fd = openlocked("$workdir/status.$hour");
+  sysread($fd, my $status, -s "$workdir/status.$hour");
+  $status = 'none' if !defined $status || $status eq '';
+  if ($status ne 'none' && $status ne 'processed') {
+    logerror("Duplicate unpack?!");
+    close($fd);
+    return;
+  }
+  seek($fd, 0, 0); truncate($fd, 0);
+  syswrite($fd, 'unpacking');
+  close($fd);
+
   my $rs;
 
-  if ($fd->{'ftyp'} eq 'septentrio-rnx3') {
+  if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
     my $ftyp = 'UU';
     $ftyp = $1 if $fn =~ /_(MO|[A-Z]N)\.rnx/;
     my $ufn = $fn; $ufn =~ s/\.gz$//;
@@ -129,7 +141,7 @@ sub unpack_file($) {
     return;
   }
 
-  elsif ($fd->{'ftyp'} eq 'septentrio-raw') {
+  elsif ($ff->{'ftyp'} eq 'septentrio-raw') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
@@ -142,14 +154,14 @@ sub unpack_file($) {
     $rs->checkfiles();
   }
 
-  elsif ($fd->{'ftyp'} eq 'trinzic-zip') {
+  elsif ($ff->{'ftyp'} eq 'trinzic-zip') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
     $rs->unzip($ifn, $obsint);
   }
 
-  elsif ($fd->{'ftyp'} eq 'leica-zip') {
-    if ($fd->{'mi'} != 0) {
+  elsif ($ff->{'ftyp'} eq 'leica-zip') {
+    if ($ff->{'mi'} != 0) {
       # TODO: merge split hour into exiting hour
       logwarn("Split hours not supported yet.");
       return;
@@ -163,6 +175,7 @@ sub unpack_file($) {
     $rs->store();
     $job->{'rsfile'} = $rs->getRsFile;
     $job->submitjob('ftp');
+    writefile("$workdir/status.$hour", 'queued');
   }
 }
 
@@ -205,10 +218,10 @@ sub submit_pending() {
       delete $rs->{'timestamp'};
       $rs->checkfiles();
       $rs->store();
-      unlink($rs->getWorkdir."/status.".$rs->{'hour'});
       my $job = new Job(rs => $rs);
       loginfo("Submitting ".$job->getIdent());
       $job->submitjob('ftp');
+      writefile($rs->getWorkdir."/status.".$rs->{'hour'}, 'queued');
       delete $Pending{$ident};
     }
   }
@@ -300,29 +313,29 @@ sub handle_inbound($) {
   my $ifn = shift;
 
   my $fn = basename($ifn);
-  my $fd = parseFilename($fn);
-  if (!defined $fd || !defined $fd->{'site4'}) {
+  my $ff = parseFilename($fn);
+  if (!defined $ff || !defined $ff->{'site4'}) {
     logwarn("$fn not recorgnized. Moved to stale.");
     sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
   # Make sure we know the site
-  my $sc = $SCS{$fd->{'site4'}};
+  my $sc = $SCS{$ff->{'site4'}};
   if (!defined $sc) {
-    logwarn('No such site: '.$fd->{'site'}.'. Moved to stale.');
+    logwarn('No such site: '.$ff->{'site'}.'. Moved to stale.');
     sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
-  my ($site, $year, $doy) = ($sc->{'site'}, $fd->{'year'}, $fd->{'doy'});
+  my ($site, $year, $doy) = ($sc->{'site'}, $ff->{'year'}, $ff->{'doy'});
   my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
   sysmv($ifn, $savedir, { log => $Debug, mkdir => 1 });
 
-  my $job = new Job(site => $site, year => $fd->{'year'}, doy => $fd->{'doy'}, hour => $fd->{'hour'}, interval => $sc->{'obsint'});
+  my $job = new Job(site => $site, year => $ff->{'year'}, doy => $ff->{'doy'}, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
   my $workdir = $job->getWorkdir();
   if (! -d $workdir) {
-    return if dailysum_exists($site, $fd->{'year'}, $fd->{'doy'});
+    return if dailysum_exists($site, $ff->{'year'}, $ff->{'doy'});
     $job->mkWorkdir();
   }
   $UQ->enqueue({ ifn => "$savedir/$fn", site => $sc->{'site'}, obsint => $sc->{'obsint'} });

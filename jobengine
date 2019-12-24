@@ -148,7 +148,8 @@ sub runjob($) {
   my $statusfile = "status.".$job->{'hour'};
   my $fd = openlocked($statusfile);
   sysread($fd, my $status, -s $statusfile);
-  if ($status eq 'running') {
+  $status = 'queued' if !defined $status || $status eq '';
+  if ($status eq 'running') {	# allow queued and processed
     close($fd);
     logerror("Duplicate job");
     return $res;
