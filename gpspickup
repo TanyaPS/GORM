@@ -77,6 +77,63 @@ sub parseFilename($) {
 
 #############################################################################################
 #############################################################################################
+# Pending thread
+# Submits pending jobs if no files with same prefix is present in $INCOMING
+# A job is pending if it is a multi-file upload and the obs file have been received. It will be
+# submitted if no new files has arrived within the last 20s.
+#
+
+my %Pending;
+
+sub submit_pending() {
+  my @pending = keys %Pending;
+  foreach my $ident (@pending) {
+    my $rs = $Pending{$ident};
+    if (time() - $rs->{'timestamp'} > 19) {
+      # check nothing is being transferred right now
+      my $prefix = $rs->getFilenamePrefix();
+      next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
+      # no active inbound found, then submit
+      delete $rs->{'timestamp'};
+      $rs->checkfiles();
+      $rs->store();
+      my $job = new Job(rs => $rs);
+      loginfo("Submitting ".$job->getIdent());
+      $job->submitjob('ftp');
+      writefile($rs->getWorkdir()."/status.".$rs->{'hour'}, 'queued');
+      delete $Pending{$ident};
+    }
+  }
+}
+
+#
+# Receive pending file sets from unpack_thread
+# Loop ends when main threads sends the EXIT command.
+#
+sub pending_thread() {
+  while (1) {
+    submit_pending();
+    my $parm = $PQ->dequeue_timed(5);
+    if (defined $parm) {
+      if (defined $parm->{'command'}) {
+        last if $parm->{'command'} eq 'EXIT';		# Shutdown requested
+        if ($parm->{'command'} eq 'update-ttl') {	# Update TTL on Pending{ident} if exists
+          my $rs = $Pending{$parm->{'ident'}};
+          $rs->{'timestamp'} = time() if defined $rs;
+        }
+      } else {
+        my $rs = new RinexSet(rsfile => $parm->{'rsfile'});
+        $rs->{'timestamp'} = time();
+        $Pending{$parm->{'ident'}} = $rs;
+      }
+    }
+  }
+  threads->detach;
+}
+
+
+#############################################################################################
+#############################################################################################
 # Unpack thread(s)
 # Unpack one file into its workdir. There will be Nthreads number of instances of this function.
 
@@ -108,6 +165,7 @@ sub unpack_file($) {
   syswrite($fd, 'unpacking');
   close($fd);
 
+  unlink("$workdir/rs.$hour.json");
   my $rs;
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
@@ -190,63 +248,6 @@ sub unpack_thread() {
       1;
     } || do {
       logerror("FATAL ERROR: ".longmess($parm->{'site'}.'-'.$parm->{'year'}.'-'.$parm->{'doy'}.'-'.$parm->{'hour'}));
-    }
-  }
-  threads->detach;
-}
-
-
-#############################################################################################
-#############################################################################################
-# Pending thread
-# Submits pending jobs if no files with same prefix is present in $INCOMING
-# A job is pending if it is a multi-file upload and the obs file have been received. It will be
-# submitted if no new files has arrived within the last 20s.
-#
-
-my %Pending;
-
-sub submit_pending() {
-  my @pending = keys %Pending;
-  foreach my $ident (@pending) {
-    my $rs = $Pending{$ident};
-    if (time() - $rs->{'timestamp'} > 19) {
-      # check nothing is being transferred right now
-      my $prefix = $rs->getFilenamePrefix();
-      next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
-      # no active inbound found, then submit
-      delete $rs->{'timestamp'};
-      $rs->checkfiles();
-      $rs->store();
-      my $job = new Job(rs => $rs);
-      loginfo("Submitting ".$job->getIdent());
-      $job->submitjob('ftp');
-      writefile($rs->getWorkdir."/status.".$rs->{'hour'}, 'queued');
-      delete $Pending{$ident};
-    }
-  }
-}
-
-#
-# Receive pending file sets from unpack_thread
-# Loop ends when main threads sends the EXIT command.
-#
-sub pending_thread() {
-  while (1) {
-    submit_pending();
-    my $parm = $PQ->dequeue_timed(5);
-    if (defined $parm) {
-      if (defined $parm->{'command'}) {
-        last if $parm->{'command'} eq 'EXIT';		# Shutdown requested
-        if ($parm->{'command'} eq 'update-ttl') {	# Update TTL on Pending{ident} if exists
-          my $rs = $Pending{$parm->{'ident'}};
-          $rs->{'timestamp'} = time() if defined $rs;
-        }
-      } else {
-        my $rs = new RinexSet(rsfile => $parm->{'rsfile'});
-        $rs->{'timestamp'} = time();
-        $Pending{$parm->{'ident'}} = $rs;
-      }
     }
   }
   threads->detach;
