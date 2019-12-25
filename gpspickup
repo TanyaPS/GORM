@@ -105,18 +105,12 @@ sub submit_pending() {
 
       # no active inbound found
       my $job = new Job(rs => $rs);
-      my $state = $job->openstate()->readstate();
-      if ($state eq 'queued') {
-        $rs->{'_timestamp'} = time();	# Late arrival on an active job. Postpone.
-      } else {
-        $job->writestate('queued');
-        loginfo("Submitting ".$job->getIdent());
-        delete $rs->{'_timestamp'};
-        $rs->store();
-        $job->submitjob('ftp');
-        delete $Pending{$ident};
-      }
-      $job->closestate();
+      $job->setstate('queued');
+      loginfo("Submitting ".$job->getIdent());
+      delete $rs->{'_timestamp'};
+      $rs->store();
+      $job->submitjob('ftp');
+      delete $Pending{$ident};
     }
   }
 }
@@ -185,9 +179,21 @@ sub unpack_file($) {
   my $workdir = $job->getWorkdir;
   my $rs;
 
+  # Aquire exclusive access to this hour while unpacking this file
+  my $state = $job->openstate()->readstate();
+  $state = 'none' if $state eq '';
+
+  # Check if it is a legal state for unpacking
+  if ($state !~ /^(none|processed)/) {		# Only allow unpack in none/processd state
+    logerror("Cannot unpack into active job");
+    $job->closestate();
+    return;
+  }
+
   # Multi file uploads go to the pending thread. State is handled there.
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
+    $job->closestate();		# ok to release lock early
     $fn =~ s/\.gz$//;
     my $dst = "$workdir/$fn";
     loginfo("gunzip $fn.gz to $workdir") if !$Debug;
@@ -197,17 +203,6 @@ sub unpack_file($) {
   }
 
   # Single file uploads. Unpack and submit job directly.
-
-  # Aquire exclusive access to this hour while unpacking this file
-  my $state = $job->openstate()->readstate();
-  $state = 'none' if $state eq '';
-
-  # Check if it is a legal state for unpacking
-  if ($state !~ /^(none|processed)/) {		# Only allow unpack in none/processd state
-    logerror("Duplicate unpack?!");
-    $job->closestate();
-    return;
-  }
 
   if ($ff->{'ftyp'} eq 'septentrio-raw') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
