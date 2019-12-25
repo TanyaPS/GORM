@@ -134,16 +134,19 @@ sub pending_thread() {
     my $ident = $parm->{'ident'};
     last if $ident eq 'EXIT';
 
+    my $fn = $parm->{'fn'};
     my $rs = $Pending{$ident};
     if (!defined $rs) {
       # Not in $Pending. Either new or late arrival.
       my ($site, $year, $doy, $hour) = split(/-/, $ident);
       $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
-      $rs->load() if -f $rs->getRsFile();	# If rs file exists, then it is a late arrival.
+      if (-f $rs->getRsFile()) {
+        logwarn("$ident: $fn arrived late.");
+        $rs->load();
+      }
     }
  
     # Add this file
-    my $fn = $parm->{'fn'};
     if ($fn =~ /_([0-9]{2})S_MO\.rnx$/) {
       my $interval = int($1);
       $rs->{'MO.'.$interval} = $fn;
