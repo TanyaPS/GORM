@@ -181,33 +181,31 @@ sub unpack_file($) {
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
-
-  # Aquire exclusive access to this hour while unpacking this file
-  my $state = $job->openstate()->readstate();
-  $state = 'none' if !defined $state || $state eq '';
-
-  # Check if it is a legal state for unpacking
-  if ($state !~ /^(none|pending|processed)/) {		# Only allow unpack in none/pending/processd state
-    logerror("Duplicate unpack?!");
-    $job->closestate();
-    return;
-  }
-
   my $rs;
 
-  # Multi file uploads go to the pending thread
+  # Multi file uploads go to the pending thread. State is handled there.
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
     $fn =~ s/\.gz$//;
     my $dst = "$workdir/$fn";
-    loginfo("gunzip $fn.gz to $dst") if !$Debug;
+    loginfo("gunzip $fn.gz to $workdir") if !$Debug;
     sysrun("gzip -dc $ifn >$dst", { log => $Debug });
     $PQ->enqueue({ ident => $job->getIdent(), fn => $fn });
-    $job->writestate('pending')->closestate();
     return;
   }
 
   # Single file uploads. Unpack and submit job directly.
+
+  # Aquire exclusive access to this hour while unpacking this file
+  my $state = $job->openstate()->readstate();
+  $state = 'none' if $state eq '';
+
+  # Check if it is a legal state for unpacking
+  if ($state !~ /^(none|processed)/) {		# Only allow unpack in none/processd state
+    logerror("Duplicate unpack?!");
+    $job->closestate();
+    return;
+  }
 
   if ($ff->{'ftyp'} eq 'septentrio-raw') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
@@ -240,13 +238,13 @@ sub unpack_file($) {
   }
 
   if (defined $rs) {
+    $job->writestate('queued');
     $rs->store();
     $job->{'rsfile'} = $rs->getRsFile;
     $job->submitjob('ftp');
-    $job->writestate('queued');
   } else {
-    logerror("Unknown filetype: $ff->{'ftyp'}");
     $job->writestate('none');
+    logerror("Unknown filetype: $ff->{'ftyp'}");
   }
 
   $job->closestate();
