@@ -3,6 +3,7 @@
 ## 2019-12-25	sjm	Handle late arrival of multi-file upload file
 - Rewrite gpspickup pending logic.
 - Resubmit if one or more files in a multi-file upload arrived after job has been submitted.
+- Add shortname to location table. Do not guess 9-ch sitename from shortname anymore.
 
 ## 2019-12-24	sjm	gpspickup unpack locking
 - Ensure exclusive access when unpacking

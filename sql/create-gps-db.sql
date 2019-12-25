@@ -1,6 +1,6 @@
--- Generation Time: Dec 06, 2019 at 01:31 PM
+-- Generation Time: Dec 25, 2019 at 02:42 PM
 -- Server version: 5.5.64-MariaDB
--- PHP Version: 7.3.12
+-- PHP Version: 7.3.13
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS `localdirs` (
 
 CREATE TABLE IF NOT EXISTS `locations` (
   `site` char(9) COLLATE utf8_unicode_ci NOT NULL,
+  `shortname` char(4) COLLATE utf8_unicode_ci NOT NULL,
   `freq` enum('H','D') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'H',
   `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
   `markernumber` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
@@ -187,7 +188,8 @@ ALTER TABLE `localdirs`
 -- Indexes for table `locations`
 --
 ALTER TABLE `locations`
-  ADD PRIMARY KEY (`site`);
+  ADD PRIMARY KEY (`site`),
+  ADD UNIQUE KEY `shortname` (`shortname`);
 
 --
 -- Indexes for table `receivers`

@@ -19,9 +19,18 @@ if (scalar(@ARGV) != 3) {
   exit(2);
 }
 my ($site, $year, $doy) = (uc($ARGV[0]), $ARGV[1], $ARGV[2]);
-$site = site42site($site) if length($site) == 4;
 
 my $db = new GPSDB;
+
+if (length($site) == 4) {
+  my $aref = $db->{'DBH'}->selectrow_arrayref(q{
+	select site from locations where shortname = ?
+  }, undef, $site);
+  if (defined $aref->[0] && length($aref->[0]) == 9) {
+    $site = $aref->[0];
+  }
+}
+
 $db->{'DBH'}->do(q{
 	delete from gpssums where site=? and year=? and doy=?
 }, undef, $site, $year, $doy);

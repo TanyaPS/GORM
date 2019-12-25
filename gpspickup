@@ -64,11 +64,11 @@ sub parseFilename($) {
   }
 
   return undef if !defined $site && !defined $site4;
-  if (!defined $site) {
-    $site = $site4."00DNK";
-    $site = $site4."00FRO" if $site4 eq 'ARGI';		# special case for ARGI
+  if (defined $site) {
+    $site4 = substr($site, 0, 4);
+  } else {
+    $site = $site4.'00DNK';	# best guess
   }
-  $site4 = substr($site, 0, 4) if !defined $site4;
 
   return { site => $site, site4 => $site4, year => $year, doy => $doy, yy => $yy, mm => $mm, dd => $dd,
            hour => $hour, hh => $hh, mi => $mi, ftyp => $ftyp };
@@ -79,9 +79,10 @@ sub parseFilename($) {
 #############################################################################################
 # Pending thread
 # Submits pending jobs if no files with same prefix is present in $INCOMING
-# A job is pending if it is a multi-file upload and the obs file have been received. It will be
-# submitted if no new files has arrived within the last 20s.
-# If a file arrives after is has been submittet, the job will be resubmitted.
+# A job is pending if it is a multi-file upload. It will be pending until no new files
+# has arrived within the last 20s.
+# If a file arrives much later (after it has been processed), the RinexSet will be updated
+# and the job resubmitted.
 #
 
 my %Pending;
@@ -106,7 +107,7 @@ sub submit_pending() {
       my $job = new Job(rs => $rs);
       my $state = $job->openstate()->readstate();
       if ($state eq 'queued') {
-        $rs->{'_timestamp'} = time();	# Late arrival. Postpone.
+        $rs->{'_timestamp'} = time();	# Late arrival on an active job. Postpone.
       } else {
         $job->writestate('queued');
         loginfo("Submitting ".$job->getIdent());
@@ -121,7 +122,8 @@ sub submit_pending() {
 }
 
 #
-# Receive pending file sets from unpack_thread
+# Receive file belonging to a multi-file upload. The file is added to its RinexSet
+# and the timestamp is updated.
 # Loop ends when main threads sends the EXIT command.
 #
 sub pending_thread() {
@@ -132,19 +134,16 @@ sub pending_thread() {
     my $ident = $parm->{'ident'};
     last if $ident eq 'EXIT';
 
-    my $fn = $parm->{'fn'};
     my $rs = $Pending{$ident};
     if (!defined $rs) {
       # Not in $Pending. Either new or late arrival.
-      my $ff = parseFilename($fn);
-      $rs = new RinexSet(site => $ff->{'site'}, year => $ff->{'year'}, doy => $ff->{'doy'}, hour => $ff->{'hour'});
-      if (-f $rs->getRsFile()) {
-        # Late arrival.
-        $rs->load();
-      }
+      my ($site, $year, $doy, $hour) = split(/-/, $ident);
+      $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+      $rs->load() if -f $rs->getRsFile();	# If rs file exists, then it is a late arrival.
     }
  
     # Add this file
+    my $fn = $parm->{'fn'};
     if ($fn =~ /_([0-9]{2})S_MO\.rnx$/) {
       my $interval = int($1);
       $rs->{'MO.'.$interval} = $fn;
@@ -311,11 +310,11 @@ sub load_sites() {
   # We only use the short version of sitename here.
   my $dbh = $DB->{'DBH'};
   my $aref = $dbh->selectall_arrayref(q{
-	select	site, freq, obsint
+	select	site, shortname, obsint
 	from	locations
   }, { Slice => {} });
   die("No sites defined!?") if !defined $aref || scalar(@$aref) == 0;
-  %SCS = map { uc(substr($_->{'site'},0,4)) => $_ } @$aref;
+  %SCS = map { $_->{'shortname'} => $_ } @$aref;
 }
 
 
@@ -337,22 +336,23 @@ sub handle_inbound($) {
   # Make sure we know the site
   my $sc = $SCS{$ff->{'site4'}};
   if (!defined $sc) {
-    logwarn('No such site: '.$ff->{'site'}.'. Moved to stale.');
+    logwarn('No such site: '.$ff->{'site4'}.'. Moved to stale.');
     sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
+  # From hereon use the 9-ch site name.
   my ($site, $year, $doy) = ($sc->{'site'}, $ff->{'year'}, $ff->{'doy'});
   my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
   sysmv($ifn, $savedir, { log => $Debug, mkdir => 1 });
 
-  my $job = new Job(site => $site, year => $ff->{'year'}, doy => $ff->{'doy'}, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
+  my $job = new Job(site => $site, year => $year, doy => $doy, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
   my $workdir = $job->getWorkdir();
   if (! -d $workdir) {
-    return if dailysum_exists($site, $ff->{'year'}, $ff->{'doy'});
+    return if dailysum_exists($site, $year, $doy);
     $job->mkWorkdir();
   }
-  $UQ->enqueue({ ifn => "$savedir/$fn", site => $sc->{'site'}, obsint => $sc->{'obsint'} });
+  $UQ->enqueue({ ifn => "$savedir/$fn", site => $site, obsint => $sc->{'obsint'} });
 }
 
 

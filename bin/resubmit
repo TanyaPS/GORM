@@ -11,6 +11,7 @@ use warnings;
 use Getopt::Std;
 use BaseConfig;
 use Utils;
+use GPSDB;
 
 my %opts = ();
 getopts('c:', \%opts);
@@ -20,11 +21,25 @@ BaseConfig::init($opts{'c'}) if defined $opts{'c'};
 die("Usage: $0 [-c config] all|site year doy") if scalar(@ARGV) != 3;
 
 my $site = uc($ARGV[0]);
+my $db = new GPSDB;
+my $dbh = $db->{'DBH'};
+
 if (length($site) == 4) {
-  $site .= ($site eq 'ARGI') ? '00FRO':'00DNK';
+  my $aref = $dbh->selectrow_arrayref(q{
+	select site from locations where shortname = ?
+  }, undef, $site);
+  if (defined $aref->[0] && length($aref->[0]) == 9) {
+    $site = $aref->[0];
+  }
 }
+
 my $year = $ARGV[1];
 my $doy = sprintf("%03d", $ARGV[2]);
+
+if ($site ne 'ALL' && ! -d "$SAVEDIR/$site/$year/$doy") {
+  print STDERR "No saved files for $site/$year/$doy\n";
+  exit(2);
+}
 
 my @sites = ();
 if ($site eq 'ALL') {
@@ -37,8 +52,12 @@ if ($site eq 'ALL') {
 
 foreach my $s (@sites) {
   my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $s, $year, $doy);
+  if (! -d $savedir) {
+    print STDERR "$savedir not found\n";
+    next;
+  }
   print "mv $savedir/* $INCOMING\n";
   next unless -d $savedir;
-  system("forget $s $year $doy");
+  $dbh->do(q{ delete from gpssums where site = ? and year = ? and doy = ? }, undef, $s, $year, $doy);
   system("mv $savedir/* $INCOMING");
 }
