@@ -81,6 +81,7 @@ sub parseFilename($) {
 # Submits pending jobs if no files with same prefix is present in $INCOMING
 # A job is pending if it is a multi-file upload and the obs file have been received. It will be
 # submitted if no new files has arrived within the last 20s.
+# If a file arrives after is has been submittet, the job will be resubmitted.
 #
 
 my %Pending;
@@ -89,20 +90,32 @@ sub submit_pending() {
   my @pending = keys %Pending;
   foreach my $ident (@pending) {
     my $rs = $Pending{$ident};
-    if (time() - $rs->{'timestamp'} > 19) {
+    my $age = time() - $rs->{'_timestamp'};
+    if ($age > 3600) {
+      delete $Pending{$ident};
+    }
+    elsif ($age > 19) {
+      # Cannot submit if no obs file
+      next if scalar(grep(/^MO\./, keys %$rs)) == 0;
+
       # check nothing is being transferred right now
       my $prefix = $rs->getFilenamePrefix();
       next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
 
-      # no active inbound found, then submit
-      delete $rs->{'timestamp'};
-      $rs->checkfiles();
-      $rs->store();
+      # no active inbound found
       my $job = new Job(rs => $rs);
-      $job->setstate('queued');
-      loginfo("Submitting ".$job->getIdent());
-      $job->submitjob('ftp');
-      delete $Pending{$ident};
+      my $state = $job->openstate()->readstate();
+      if ($state eq 'queued') {
+        $rs->{'_timestamp'} = time();	# Late arrival. Postpone.
+      } else {
+        $job->writestate('queued');
+        loginfo("Submitting ".$job->getIdent());
+        delete $rs->{'_timestamp'};
+        $rs->store();
+        $job->submitjob('ftp');
+        delete $Pending{$ident};
+      }
+      $job->closestate();
     }
   }
 }
@@ -115,19 +128,34 @@ sub pending_thread() {
   while (1) {
     submit_pending();
     my $parm = $PQ->dequeue_timed(5);
-    if (defined $parm) {
-      if (defined $parm->{'command'}) {
-        last if $parm->{'command'} eq 'EXIT';		# Shutdown requested
-        if ($parm->{'command'} eq 'update-ttl') {	# Update TTL on Pending{ident} if exists
-          my $rs = $Pending{$parm->{'ident'}};
-          $rs->{'timestamp'} = time() if defined $rs;
-        }
-      } else {
-        my $rs = new RinexSet(rsfile => $parm->{'rsfile'});
-        $rs->{'timestamp'} = time();
-        $Pending{$parm->{'ident'}} = $rs;
+    next unless defined $parm && defined $parm->{'ident'};
+    my $ident = $parm->{'ident'};
+    last if $ident eq 'EXIT';
+
+    my $fn = $parm->{'fn'};
+    my $rs = $Pending{$ident};
+    if (!defined $rs) {
+      # Not in $Pending. Either new or late arrival.
+      my $ff = parseFilename($fn);
+      $rs = new RinexSet(site => $ff->{'site'}, year => $ff->{'year'}, doy => $ff->{'doy'}, hour => $ff->{'hour'});
+      if (-f $rs->getRsFile()) {
+        # Late arrival.
+        $rs->load();
       }
     }
+ 
+    # Add this file
+    if ($fn =~ /_([0-9]{2})S_MO\.rnx$/) {
+      my $interval = int($1);
+      $rs->{'MO.'.$interval} = $fn;
+      $rs->{'interval'} = $interval;
+    }
+    elsif ($fn =~ /_([A-X]N)\.rnx$/) {
+      $rs->{$1} = $fn;
+    }
+
+    $rs->{'_timestamp'} = time();
+    $Pending{$ident} = $rs;
   }
   threads->detach;
 }
@@ -155,11 +183,11 @@ sub unpack_file($) {
   my $workdir = $job->getWorkdir;
 
   # Aquire exclusive access to this hour while unpacking this file
-  my $status = $job->openstate()->readstate();
-  $status = 'none' if !defined $status || $status eq '';
+  my $state = $job->openstate()->readstate();
+  $state = 'none' if !defined $state || $state eq '';
 
   # Check if it is a legal state for unpacking
-  if ($status !~ /^(none|pending|processed)/) {		# Only allow unpack in none/pending/processd state
+  if ($state !~ /^(none|pending|processed)/) {		# Only allow unpack in none/pending/processd state
     logerror("Duplicate unpack?!");
     $job->closestate();
     return;
@@ -170,33 +198,11 @@ sub unpack_file($) {
   # Multi file uploads go to the pending thread
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
-    my $ftyp = 'UU';
-    $ftyp = $1 if $fn =~ /_(MO|[A-Z]N)\.rnx/;
-    my $ufn = $fn; $ufn =~ s/\.gz$//;
-    my $wfn = "$workdir/$ufn";
-    if ($fn =~ /\.gz$/) {
-      $wfn =~ s/\.gz$//;
-      loginfo("Gunzip $fn to $workdir");
-      sysrun("gzip -dc $ifn >$wfn", { log => $Debug });
-    } else {
-      loginfo("Copy $fn to $workdir");
-      syscp($ifn, $wfn, { log => $Debug });
-    }
-    $ftyp .= '.'.$obsint;
-
-    # Since this is a multi file set, we will have to wait until we do not think
-    # any more files will arrive.
-    # Register pending job only if we got the observation file (see submit_pending)
-    my $ident = $job->getIdent();
-    if ($fn =~ /_MO\.rnx/) {
-      $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
-      my $rsfile = $rs->getRsFile;
-      $rs->{$ftyp} = $ufn;
-      $rs->store();
-      $PQ->enqueue({ ident => $ident, rsfile => $rsfile });
-    } else {
-      $PQ->enqueue({ command => 'update-ttl', ident => $ident });
-    }
+    $fn =~ s/\.gz$//;
+    my $dst = "$workdir/$fn";
+    loginfo("gunzip $fn.gz to $dst") if !$Debug;
+    sysrun("gzip -dc $ifn >$dst", { log => $Debug });
+    $PQ->enqueue({ ident => $job->getIdent(), fn => $fn });
     $job->writestate('pending')->closestate();
     return;
   }
@@ -426,7 +432,7 @@ while (!$signal_received) {
 }
 
 # shutdown threads
-$PQ->enqueue({ command => 'EXIT' });
+$PQ->enqueue({ ident => 'EXIT' });
 $PQ->end();
 $UQ->end();
 sleep 1 while threads->list(threads::running);		# wait for threads to terminate
