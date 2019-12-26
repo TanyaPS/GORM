@@ -75,6 +75,23 @@ sub parseFilename($) {
            hour => $hour, hh => $hh, mi => $mi, ftyp => $ftyp };
 }
 
+#############################################################################################
+# Efficient move all files in $src dir to $dst dir and remove $dst dir
+#
+sub moveall($$) {
+  my ($src,$dst) = @_;
+
+  opendir(my $dh, $src) || return;
+  my @files = grep(!/^\./, readdir($dh));
+  closedir($dh);
+  foreach my $f (@files) {
+    my $s = "$src/$f";
+    my $d = "$dst/$f";
+    unlink($d);
+    rename($s, $d)
+  }
+  rmdir($src);
+}
 
 #############################################################################################
 #############################################################################################
@@ -107,14 +124,12 @@ sub submit_pending() {
       # no active inbound found
       my $job = new Job(rs => $rs);
       my $state = $job->openstate()->readstate();
+      $state = 'none' unless $state;
       if ($state =~ /^(none|processed)$/) {
-        loginfo("Submitting ".$job->getIdent());
+        loginfo("Submitting $ident");
         delete $Pending{$ident};
         delete $rs->{'_timestamp'};
-        my $workdir = $job->getWorkdir();
-        my $unpackdir = "$workdir/unpack.".$rs->{'hour'};
-        system("mv $unpackdir/* $workdir");
-        system("rm -r $unpackdir");
+        moveall($job->getWorkdir().'/unpack.'.$rs->{'hour'}, $job->getWorkdir());
         $rs->store();
         $job->writestate('queued');
         $job->submitjob('ftp');
@@ -289,8 +304,7 @@ sub unpack_file($) {
     my $state = $job->openstate()->readstate();
     $state = 'none' if $state eq '';
     if ($state =~ /none|processed/) {
-      system("mv $unpackdir/* $workdir");
-      system("rm -r $unpackdir");
+      moveall($unpackdir, $workdir);
       $job->writestate('queued');
       $rs->store();
       $job->{'rsfile'} = $rs->getRsFile;
