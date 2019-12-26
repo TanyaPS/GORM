@@ -151,10 +151,10 @@ sub runjob($) {
   chdir($workdir);
 
   # Make sure we are alone
-  my $status = $job->lockstate()->readstate();
-  if ($status ne 'queued') {
+  my $state = $job->lockstate()->readstate();
+  if ($state ne 'queued') {
     $job->unlockstate();
-    logerror("$ident: Illegal state: $status");
+    logerror("$ident: Illegal state: $state");
     return $res;
   }
   $job->writestate('running')->unlockstate();

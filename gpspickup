@@ -125,7 +125,7 @@ sub submit_pending() {
 
       # Check if dayjob is active
       if ($rs->{'hour'} ne '0') {
-        if (readfile("$workdir/status.0") =~ /^(queued|running)/) {
+        if (readfile("$workdir/state.0") =~ /^(queued|running)/) {
           logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
           delete $Pending{$ident};
           next;
@@ -312,7 +312,7 @@ sub unpack_file($) {
   if (defined $rs) {
     # Check if dayjob has started
     if ($rs->{'hour'} ne '0') {
-      if (readfile("$workdir/status.0") =~ /^(queued|running)/) {
+      if (readfile("$workdir/state.0") =~ /^(queued|running)/) {
         logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
         return;
       }
@@ -518,9 +518,10 @@ while (!$signal_received) {
 
 # shutdown threads
 $PQ->enqueue({ ident => 'EXIT' });
-$PQ->end();
 $UQ->end();
-sleep 1 while threads->list(threads::running);		# wait for threads to terminate
+
+my $nwaits = 0;
+sleep 1 while ($nwaits++ < 25 && threads->list(threads::running));	# wait for threads to terminate
 
 loginfo("$0 stopped");
 logclose();

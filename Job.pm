@@ -112,11 +112,18 @@ sub deletejob() {
   return $self;
 }
 
-# Manipulate status file in exclusive mode
+###################################################################################
+# Manipulate state file in exclusive mode. States can be:
+#   none	Not yet started.
+#   queued	In queue for processing.
+#   running	Currently processing.
+#   processed	Processed.
+#   incomplete	All hours not yet present. Valid only for hour '0'.
+#
 sub lockstate() {
   my $self = shift;
   my $fd;
-  $self->{'_statefile'} = $self->getWorkdir()."/status.".$self->{'hour'};
+  $self->{'_statefile'} = $self->getWorkdir()."/state.".$self->{'hour'};
   sysopen($fd, $self->{'_statefile'}, O_RDWR|O_CREAT);
   flock($fd, LOCK_EX);
   $self->{'_statefd'} = $fd;
@@ -825,23 +832,23 @@ sub process() {
     $self->setstate('processed');
 
     # Check if doy is complete, and if it is, submit a day job
-    # Manipulate status.0 in exclusive mode since all processes tries to update this.
+    # Manipulate state.0 in exclusive mode since all processes tries to update this.
     my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
-    my $status = $dayjob->lockstate()->readstate();
-    $status = 'incomplete' if $status eq 'none';
-    if ($status eq 'incomplete') {
+    my $state = $dayjob->lockstate()->readstate();
+    $state = 'incomplete' if $state eq 'none';
+    if ($state eq 'incomplete') {
       my $complete = 1;
       foreach my $h ('a'..'x') {
-	$complete = 0 unless -f "status.$h"  && readfile("status.$h") eq 'processed';
+	$complete = 0 unless -f "state.$h"  && readfile("state.$h") eq 'processed';
       }
       if ($complete) {
 	loginfo("$site-$year-$doy: all hours present. Submitting hour2daily job.");
 	$dayjob->submitjob('hour2daily');
-        $status = 'queued';
+        $state = 'queued';
       } else {
-        $status = 'incomplete';
+        $state = 'incomplete';
       }
-      $dayjob->writestate($status);
+      $dayjob->writestate($state);
     }
     $dayjob->unlockstate();
   }
