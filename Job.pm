@@ -511,11 +511,11 @@ sub gendayfiles() {
       push(@rslist, $rs);
     }
   }
-  if (scalar(@rslist) != 24 && !exists $self->{'incomplete'}) {
+  if (scalar(@rslist) != 24 && !exists $self->{'force_complete'}) {
     logerror("2:Cannot splice incomplete day");
     return undef;
   }
-  loginfo("$site-$year-$doy: finishing incomplete day.") if exists $self->{'incomplete'};
+  loginfo("$site-$year-$doy: finishing incomplete day.") if exists $self->{'force_complete'};
 
   loginfo("Generating daily files for $site-$year-$doy");
   # Splice navigation files

@@ -43,7 +43,7 @@ sub force_completion($$$) {
 
   # Submit dayjob
   if (defined $interval) {
-    ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'incomplete'}) = ('0', $interval, 1);
+    ($dayjob->{'hour'}, $dayjob->{'interval'}, $dayjob->{'force_complete'}) = ('0', $interval, 1);
     $dayjob->setstate('queued');
     $dayjob->submitjob('hour2daily');
   } else {

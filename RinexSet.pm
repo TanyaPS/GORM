@@ -29,6 +29,12 @@ sub new {
   bless $self, $class;
 }
 
+# Unique RinexSet id
+sub getIdent() {
+  my $self = shift;
+  return "$self->{site}-$self->{year}-$self->{doy}-$self->{hour}";
+}
+
 #################################
 # Get working dir of this RINEX set
 #

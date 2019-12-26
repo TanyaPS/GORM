@@ -76,7 +76,7 @@ sub parseFilename($) {
 }
 
 #############################################################################################
-# Efficient move all files in $src dir to $dst dir and remove $dst dir
+# Move all files in $src dir to $dst dir and remove $src dir
 #
 sub moveall($$) {
   my ($src,$dst) = @_;
@@ -96,11 +96,12 @@ sub moveall($$) {
 #############################################################################################
 #############################################################################################
 # Pending thread
-# Submits pending jobs if no files with same prefix is present in $INCOMING
-# A job is pending if it is a multi-file upload. It will be pending until no new files
-# has arrived within the last 20s.
+#
+# This thread gather files to be submitted later. The file is added to its RinexSet
+# object, and when no files has been added the last 20s and no active uploads in $INCOMING,
+# then the job is submitted if state allows it.
 # If a file arrives much later (after it has been processed), the RinexSet will be updated
-# and the job resubmitted.
+# and the job will be resubmitted.
 #
 
 my %Pending;
@@ -192,6 +193,15 @@ sub pending_thread() {
   threads->detach;
 }
 
+
+#############################################################################################
+#############################################################################################
+# Unpack thread(s)
+# The heavy lifting (decompressing) is done by multiple threads.
+# If the file is part of a multi-file upload, send the file to pending_thread to be added
+# to its RinexSet.
+#
+
 #################################
 # Unzip $zipfile into $unpackdir using RINEXv3 filenames
 #
@@ -223,18 +233,21 @@ sub unzip($$$) {
       unlink("$unpackdir/$zmfn");
       $zmfn = $ofn;
     }
-    my $ftyp = "UU";
+    my $ftyp;
     if ($zmfn =~ /\.\d\d([onglfq])$/) {
       $ftyp = $v3typemap{$1};
     } elsif ($zmfn =~ /_(MO|[A-Z]N)\.rnx$/) {
       $ftyp = $1;
+    } else {
+      logwarn($rs->getIdent().": unrecognized filetype $zmfn in $zipfile");
+      unlink($zmfn);
+      next;
     }
     $ftyp .= '.'.$rs->{'interval'} if $ftyp eq 'MO';
     $ofn = $rs->getRinexFilename($ftyp);
     if ($ofn ne $zmfn) {
       unlink("$unpackdir/$ofn");
-      link("$unpackdir/$zmfn", "$unpackdir/$ofn");
-      unlink("$unpackdir/$zmfn");
+      rename("$unpackdir/$zmfn", "$unpackdir/$ofn");
     }
     $rs->{$ftyp} = $ofn;
   }
@@ -243,11 +256,9 @@ sub unzip($$$) {
 }
 
 
-#############################################################################################
-#############################################################################################
-# Unpack thread(s)
-# Unpack one file into its workdir. There will be Nthreads number of instances of this function.
-
+#################################
+# Unpack one file into its workdir.
+#
 sub unpack_file($) {
   my $parm = shift;
   my ($ifn, $site, $obsint) = ($parm->{'ifn'}, $parm->{'site'}, $parm->{'obsint'});
@@ -337,8 +348,8 @@ sub unpack_file($) {
 }
 
 #
-# Receive files to unpack from main thread.
-# Loop ends when main thread calls $UQ->end()
+# Receive files to unpack from main thread. Loop ends when main thread calls $UQ->end()
+# There will be Nthreads number of instances of this function.
 #
 sub unpack_thread() {
   while (my $parm = $UQ->dequeue()) {
