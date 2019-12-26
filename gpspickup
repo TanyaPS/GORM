@@ -121,14 +121,25 @@ sub submit_pending() {
       my $prefix = $rs->getFilenamePrefix();
       next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
 
-      # no active inbound found
+      my $workdir = $rs->getWorkdir();
+
+      # Check if dayjob is active
+      if ($rs->{'hour'} ne '0') {
+        if (readfile("$workdir/status.0") =~ /^(queued|running)/) {
+          logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
+          delete $Pending{$ident};
+          next;
+        }
+      }
+
+      # Submit the job if not active
       my $job = new Job(rs => $rs);
       my $state = $job->openstate()->readstate();
       if ($state =~ /^(none|processed)$/) {
         loginfo("Submitting $ident");
         delete $Pending{$ident};
         delete $rs->{'_timestamp'};
-        moveall($job->getWorkdir().'/unpack.'.$rs->{'hour'}, $job->getWorkdir());
+        moveall("$workdir/unpack.".$rs->{'hour'}, $workdir);
         $rs->store();
         $job->writestate('queued');
         $job->submitjob('ftp');
@@ -299,6 +310,14 @@ sub unpack_file($) {
   }
 
   if (defined $rs) {
+    # Check if dayjob has started
+    if ($rs->{'hour'} ne '0') {
+      if (readfile("$workdir/status.0") =~ /^(queued|running)/) {
+        logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
+        return;
+      }
+    }
+
     # Move files un unpack.$h to $workdir. If job is active, send files to pending thread.
     my $state = $job->openstate()->readstate();
     if ($state =~ /^(none|processed)$/) {

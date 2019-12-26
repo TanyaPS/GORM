@@ -2,6 +2,7 @@
 
 ## 2019-12-26	sjm	Optimize hour locking. Handle inbound while active.
 - Unpack in subdirs and move in locked mode when done unpacking.
+- Reject new files once dayjob has started.
 
 ## 2019-12-25	sjm	Handle late arrival of multi-file upload file
 - Rewrite gpspickup pending logic.
