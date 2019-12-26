@@ -10,6 +10,7 @@ use strict;
 use warnings;
 use threads;
 use Thread::Queue;
+use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use BaseConfig;
 use Logger;
 use Utils;
@@ -105,12 +106,20 @@ sub submit_pending() {
 
       # no active inbound found
       my $job = new Job(rs => $rs);
-      $job->setstate('queued');
-      loginfo("Submitting ".$job->getIdent());
-      delete $rs->{'_timestamp'};
-      $rs->store();
-      $job->submitjob('ftp');
-      delete $Pending{$ident};
+      my $state = $job->openstate()->readstate();
+      if ($state =~ /^(none|processed)$/) {
+        loginfo("Submitting ".$job->getIdent());
+        delete $Pending{$ident};
+        my $w = $job->getWorkdir();
+        system("mv $w/unpack.".$rs->{'hour'}."/* $w");
+        delete $rs->{'_timestamp'};
+        $rs->store();
+        $job->writestate('queued');
+        $job->submitjob('ftp');
+      } else {
+        $rs->{'_timestamp'} = time();	# Job still active, postpone.
+      }
+      $job->closestate();
     }
   }
 }
@@ -156,6 +165,56 @@ sub pending_thread() {
   threads->detach;
 }
 
+#################################
+# Unzip $zipfile into $unpackdir using RINEXv3 filenames
+#
+sub unzip($$$) {
+  my ($rs, $zipfile, $unpackdir) = @_;
+  my %v3typemap = ( 'o' => 'MO', 'n' => 'GN', 'g' => 'RN', 'l' => 'EN', 'f' => 'CN', 'q' => 'JN' );
+
+  my $zip = Archive::Zip->new;
+  if ($zip->read($zipfile) != AZ_OK) {
+    logwarn("unable to read zipfile $zipfile");
+    return undef;
+  }
+  foreach my $zm ($zip->members()) {
+    my $zmfn = $zm->fileName();
+    my $ofn;
+    unlink("$unpackdir/$zmfn");
+    $zm->extractToFileNamed("$unpackdir/$zmfn");
+    if ($zmfn =~ /\.\d\dd$/) {
+      $ofn = $zmfn;
+      $ofn =~ s/d$/o/;
+      system("$CRX2RNX $unpackdir/$zmfn - > $unpackdir/$ofn");
+      unlink("$unpackdir/$zmfn");
+      $zmfn = $ofn;
+    }
+    elsif ($zmfn =~ /\.crx$/) {
+      $ofn = $zmfn;
+      $ofn =~ s/\.crx$/.rnx/;
+      system("$CRX2RNX $unpackdir/$zmfn - > $unpackdir/$ofn");
+      unlink("$unpackdir/$zmfn");
+      $zmfn = $ofn;
+    }
+    my $ftyp = "UU";
+    if ($zmfn =~ /\.\d\d([onglfq])$/) {
+      $ftyp = $v3typemap{$1};
+    } elsif ($zmfn =~ /_(MO|[A-Z]N)\.rnx$/) {
+      $ftyp = $1;
+    }
+    $ftyp .= '.'.$rs->{'interval'} if $ftyp eq 'MO';
+    $ofn = $rs->getRinexFilename($ftyp);
+    if ($ofn ne $zmfn) {
+      unlink("$unpackdir/$ofn");
+      link("$unpackdir/$zmfn", "$unpackdir/$ofn");
+      unlink("$unpackdir/$zmfn");
+    }
+    $rs->{$ftyp} = $ofn;
+  }
+  $rs->{zipfile} = $zipfile;
+  return $rs;
+}
+
 
 #############################################################################################
 #############################################################################################
@@ -177,28 +236,20 @@ sub unpack_file($) {
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
+  my $ident = $job->getIdent();
   my $rs;
 
-  # Aquire exclusive access to this hour while unpacking this file
-  my $state = $job->openstate()->readstate();
-  $state = 'none' if $state eq '';
-
-  # Check if it is a legal state for unpacking
-  if ($state !~ /^(none|processed)/) {		# Only allow unpack in none/processd state
-    logerror("Cannot unpack into active job");
-    $job->closestate();
-    return;
-  }
+  my $unpackdir = "$workdir/unpack.$hour";
+  mkdir($unpackdir) unless -d $unpackdir;
 
   # Multi file uploads go to the pending thread. State is handled there.
 
   if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
-    $job->closestate();		# ok to release lock early
     $fn =~ s/\.gz$//;
-    my $dst = "$workdir/$fn";
-    loginfo("gunzip $fn.gz to $workdir") if !$Debug;
+    my $dst = "$unpackdir/$fn";
+    loginfo("gunzip $fn.gz") if !$Debug;
     sysrun("gzip -dc $ifn >$dst", { log => $Debug });
-    $PQ->enqueue({ ident => $job->getIdent(), fn => $fn });
+    $PQ->enqueue({ ident => $ident, fn => $fn });
     return;
   }
 
@@ -208,19 +259,16 @@ sub unpack_file($) {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
-    mkdir("$workdir/sbfunpack.$hour");
-    chdir("$workdir/sbfunpack.$hour");
+    chdir("$unpackdir");
     sysrun("$SBF2RIN -f $ifn -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
-    system("mv $workdir/sbfunpack.$hour/* $workdir");
     chdir($INCOMING);
-    system("rm -r $workdir/sbfunpack.$hour");
-    $rs->checkfiles();
+    $rs->checkfiles($unpackdir);
   }
 
   elsif ($ff->{'ftyp'} eq 'trinzic-zip') {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
-    $rs->unzip($ifn, $obsint);
+    unzip($rs, $ifn, $unpackdir);
   }
 
   elsif ($ff->{'ftyp'} eq 'leica-zip') {
@@ -231,19 +279,27 @@ sub unpack_file($) {
     }
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
-    $rs->unzip($ifn, $obsint);
+    unzip($rs, $ifn, $unpackdir);
   }
 
   if (defined $rs) {
-    $job->writestate('queued');
-    $rs->store();
-    $job->{'rsfile'} = $rs->getRsFile;
-    $job->submitjob('ftp');
+    # Aquire exclusive access to this hour while working in workdir
+    my $state = $job->openstate()->readstate();
+    $state = 'none' if $state eq '';
+    if ($state =~ /none|processed/) {
+      system("mv $unpackdir/* $workdir");
+      system("rm -r $unpackdir");
+      $job->writestate('queued');
+      $rs->store();
+      $job->{'rsfile'} = $rs->getRsFile;
+      $job->submitjob('ftp');
+    } else {
+      $PQ->enqueue({ ident => $ident, fn => $_ }) foreach grep(/^(MO\.[0-9]+|[A-X]N)$/, keys %$rs);
+    }
   } else {
     $job->writestate('none');
     logerror("Unknown filetype: $ff->{'ftyp'}");
   }
-
   $job->closestate();
 }
 

@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-26	sjm	Optimize hour locking. Handle inbound while active.
+- Unpack in subdirs and move in locked mode when done unpacking.
+
 ## 2019-12-25	sjm	Handle late arrival of multi-file upload file
 - Rewrite gpspickup pending logic.
 - Resubmit if one or more files in a multi-file upload arrived after job has been submitted.

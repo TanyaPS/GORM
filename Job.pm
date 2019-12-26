@@ -501,7 +501,6 @@ sub gendayfiles() {
     if (-f $rs->getRsFile()) {
       $rs->load();
       next unless exists $rs->{'processed'};
-      $rs->checkfiles();
       push(@rslist, $rs);
     }
   }

@@ -8,7 +8,6 @@ package RinexSet;
 
 use Carp;
 use JSON;
-use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use BaseConfig;
 use Utils;
 use Logger;
@@ -89,14 +88,13 @@ sub getNavlist() {
 }
 
 #################################
-# Search all files in $workdir with this filename prefix
+# Search all files in $dir with this filename prefix
 # and sets MO.# and xN in $self
 #
-sub checkfiles() {
-  my $self = shift;
-  my $w = $self->getWorkdir;
+sub checkfiles($) {
+  my ($self, $dir) = @_;
   my $prefix = $self->getFilenamePrefix;
-  foreach (<"${w}/${prefix}*.rnx">) {
+  foreach (<"${dir}/${prefix}*.rnx">) {
     if (/_([0-9]{2})S_MO\.rnx$/) {
       # observation file
       $self->{'MO.'.int($1)} = basename($_);
@@ -105,57 +103,6 @@ sub checkfiles() {
       $self->{$1} = basename($_);
     }
   }
-  return $self;
-}
-
-#################################
-# Unzip into $self->getWorkdir using RINEXv3 filenames
-#
-sub unzip($$) {
-  my ($self, $zipfile, $interval) = @_;
-  my $workdir = $self->getWorkdir;
-  my %v3typemap = ( 'o' => 'MO', 'n' => 'GN', 'g' => 'RN', 'l' => 'EN', 'f' => 'CN', 'q' => 'JN' );
-
-  my $zip = Archive::Zip->new;
-  if ($zip->read($zipfile) != AZ_OK) {
-    logwarn("unable to read zipfile $zipfile");
-    return undef;
-  }
-  foreach my $zm ($zip->members()) {
-    my $zmfn = $zm->fileName();
-    my $ofn;
-    unlink("$workdir/$zmfn");
-    $zm->extractToFileNamed("$workdir/$zmfn");
-    if ($zmfn =~ /\.\d\dd$/) {
-      $ofn = $zmfn;
-      $ofn =~ s/d$/o/;
-      system("$CRX2RNX $workdir/$zmfn - > $workdir/$ofn");
-      unlink("$workdir/$zmfn");
-      $zmfn = $ofn;
-    }
-    elsif ($zmfn =~ /\.crx$/) {
-      $ofn = $zmfn;
-      $ofn =~ s/\.crx$/.rnx/;
-      system("$CRX2RNX $workdir/$zmfn - > $workdir/$ofn");
-      unlink("$workdir/$zmfn");
-      $zmfn = $ofn;
-    }
-    my $ftyp = "UU";
-    if ($zmfn =~ /\.\d\d([onglfq])$/) {
-      $ftyp = $v3typemap{$1};
-    } elsif ($zmfn =~ /_(MO|[A-Z]N)\.rnx$/) {
-      $ftyp = $1;
-    }
-    $ftyp .= '.'.$interval if $ftyp eq 'MO';
-    $ofn = $self->getRinexFilename($ftyp);
-    if ($ofn ne $zmfn) {
-      unlink("$workdir/$ofn");
-      link("$workdir/$zmfn", "$workdir/$ofn");
-      unlink("$workdir/$zmfn");
-    }
-    $self->{$ftyp} = $ofn;
-  }
-  $self->{zipfile} = $zipfile;
   return $self;
 }
 
