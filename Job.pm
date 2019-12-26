@@ -113,7 +113,7 @@ sub deletejob() {
 }
 
 # Manipulate status file in exclusive mode
-sub openstate() {
+sub lockstate() {
   my $self = shift;
   my $fd;
   $self->{'_statefile'} = $self->getWorkdir()."/status.".$self->{'hour'};
@@ -140,7 +140,7 @@ sub writestate($) {
   return $self;
 }
 
-sub closestate() {
+sub unlockstate() {
   my $self = shift;
   close($self->{'_statefd'});
   delete $self->{'_statefd'};
@@ -150,7 +150,7 @@ sub closestate() {
 
 sub setstate($) {
   my ($self, $str) = @_;
-  $self->openstate()->writestate($str)->closestate();
+  $self->lockstate()->writestate($str)->unlockstate();
   return $self;
 }
 
@@ -827,7 +827,7 @@ sub process() {
     # Check if doy is complete, and if it is, submit a day job
     # Manipulate status.0 in exclusive mode since all processes tries to update this.
     my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
-    my $status = $dayjob->openstate()->readstate();
+    my $status = $dayjob->lockstate()->readstate();
     $status = 'incomplete' if $status eq 'none';
     if ($status eq 'incomplete') {
       my $complete = 1;
@@ -843,7 +843,7 @@ sub process() {
       }
       $dayjob->writestate($status);
     }
-    $dayjob->closestate();
+    $dayjob->unlockstate();
   }
 
   loginfo($self->getIdent()." finished");

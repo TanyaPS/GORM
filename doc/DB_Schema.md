@@ -62,6 +62,8 @@ the records for that particular day and hours must be deleted before reprocessin
 ### id, site, year, doy, hour, jday
 See recurring fields.
 site+year+doy+hour must be unique.
+### shortname
+This is the 4ch version of the sitename. It is used for matching files in $INCOMING.
 ### quality
 The QC result.
 ### ngaps

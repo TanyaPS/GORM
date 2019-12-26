@@ -6,7 +6,8 @@ gpspickup, jobengine and ftpuploader are running as daemons managed by systemd.
 
 ## Overall Dataflow
 - gpspickup detect new file in /data/ftp (FTP server inbound)
-  - unpack zip/gz/raw into workdir
+  - unpack zip/gz/raw into workdir/unpack.$h
+  - move all files in workdir/unpack.$h to workdir if state allows it
   - create job in /data/queue
   - return to listen
 - jobengine detect now job in /data/queue

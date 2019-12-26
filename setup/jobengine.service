@@ -8,6 +8,7 @@ Type=simple
 Restart=on-failure
 ExecStart=/usr/local/sbin/jobengine
 ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=30
 Environment="PERL5LIB=/usr/local/lib/gnss"
 
 [Install]
