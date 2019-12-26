@@ -83,12 +83,18 @@ sub scan_for_forced_incompletes() {
 sub reprocess($$$) {
   my ($site, $year, $doy) = @_;
 
-  my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
-  if (!-d $savedir) {
-    logwarn("Cannot reprocess $site-$year-$doy. Not in $SAVEDIR.");
-    return;
+  my ($fromdoy, $todoy) = split(/-/, $doy);
+  $todoy = $fromdoy unless defined $todoy;
+  $todoy = $fromdoy if $todoy < $fromdoy;
+
+  for (my $i = $fromdoy; $i <= $todoy; $i++) {
+    my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $i);
+    if (!-d $savedir) {
+      logwarn("Cannot reprocess $site-$year-$doy. Not in $SAVEDIR.");
+    } else {
+      sysmv("$savedir/*", $INCOMING, { log => $Debug });
+    }
   }
-  sysmv("$savedir/*", $INCOMING, { log => $Debug });
 }
 
 
@@ -104,7 +110,7 @@ sub runcommand($) {
   elsif ($cmd =~ /^force complete (\w+) (\d+) (\d+)/) {
     force_completion($1, $2, $3);
   }
-  elsif ($cmd =~ /^reprocess (\w+) (\d+) (\d+)/) {
+  elsif ($cmd =~ /^reprocess (\w+) (\d+) ([0-9\-]+)/) {
     reprocess($1, $2, $3);
   }
 }

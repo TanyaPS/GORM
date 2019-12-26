@@ -60,7 +60,6 @@ sub sendcommand($) {
   open(my $fd, '>', "$JOBQUEUE/command");
   print $fd "$cmd\n";
   close($fd);
-  chmod(0666, "$JOBQUEUE/command");
 }
 
 ##########################################################################
@@ -84,15 +83,17 @@ sub newsite() {
       print "<B style=\"color:red\">Obsint must be specified and must be larger than 0</b><p>\n";
     } else {
       $site = uc($site);
+      $v{'shortname'} = substr($site, 0, 4) unless defined $v{'shortname'} && $v{'shortname'} =~ /^[A-Z0-9]{4}$/;
+      $v{'shortname'} = uc($v{'shortname'});
       my $res = $dbh->selectrow_arrayref("select 1 from locations where site=?", undef, $site);
       if (defined $res && $res->[0] eq '1') {
         print "<B style=\"color:red\">ERROR: $site already exists!</b><p>\n";
       } else {
         $dbh->do(q{
 	  insert into locations
-	  (site, freq, obsint, markernumber, markertype, position, observer, agency, active)
-	  values (?,?,?,?,?,?,?,?,?)
-        }, undef, $site, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
+	  (site, shortname, freq, obsint, markernumber, markertype, position, observer, agency, active)
+	  values (?,?,?,?,?,?,?,?,?,?)
+        }, undef, $site, $v{'shortname'}, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
            $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'});
         print "<B style=\"color:red\">Site $site created</B><P>\n";
       }
@@ -103,7 +104,8 @@ sub newsite() {
 	<form name=newsite method=POST action="$ENV{'SCRIPT_NAME'}">
 	<input type=hidden name=cmd value=newsite>
 	<table border=1><tr><th>Parameter</th><th align=left>Value</th></tr>
-	<tr><td>Sitename</td><td><input type=text name=site size=9 maxlength=9></td></tr>
+	<tr><td>Sitename (9ch)</td><td><input type=text name=site size=9 maxlength=9></td></tr>
+	<tr><td>Sitename (4ch)</td><td><input type=text name=shortname size=4 maxlength=4></td></tr>
 	<tr><td>Markernumber</td><td><input type=text name=markernumber size=20 maxlength=20></td></tr>
 	<tr><td>Markertype</td><td><select name=markertype>}.gen_option_list("",\@GPSTYPES).qq{</select></td></tr>
 	<tr><td>Position (X,Y,Z)</td><td><input type=text name=position size=40 maxlength=40></td></tr>
@@ -135,7 +137,7 @@ sub showsitelist() {
   my $i = 0;
   print "<b>Hourly sites</b><br>\n";
   foreach my $r (@$aref) {
-    print "<br>\n" if $i++ % 20 == 0;
+    print "<br>\n" if $i++ % 10 == 0;
     print "<a href=\"?cmd=editsite&site=$r->{site}\">$r->{site}</a>\n";
   }
   print "<br>\n";
@@ -366,6 +368,8 @@ sub editsite() {
 
   if (defined $cgi->param('submit')) {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
+    $v{'shortname'} = substr($site, 0, 4) unless defined $v{'shortname'} && $v{'shortname'} =~ /^[A-Z0-9]{4}$/i;
+    $v{'shortname'} = uc($v{'shortname'});
     $v{'active'} = 0 unless defined $v{'active'};
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
     $v{'position'} = undef unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
@@ -377,16 +381,16 @@ sub editsite() {
     } else {
       $dbh->do(q{
 	update	locations
-	set	freq=?, obsint=?, markernumber=?, markertype=?, position=?, observer=?, agency=?, active=?
+	set	shortname=?, freq=?, obsint=?, markernumber=?, markertype=?, position=?, observer=?, agency=?, active=?
 	where	site = ?
-      }, undef, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
+      }, undef, $v{'shortname'}, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
                 $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'}, $site);
       print "<b>Values saved!</b><br>\n";
     }
   }
 
   my $r = $dbh->selectrow_hashref(q{
-	select	freq, obsint, markernumber, markertype, position, observer, agency, active
+	select	shortname, freq, obsint, markernumber, markertype, position, observer, agency, active
 	from	locations
 	where	site = ?
   }, undef, $site);
@@ -404,6 +408,8 @@ sub editsite() {
 	<table border=1>
 	<tr><th align=left>Parameter</th><th align=left>Value</th></tr>
 	<tr><td>Site</td><td>$site</td></tr>
+	<tr><td>Site 4ch</td>
+	     <td><input name=shortname type=text value="$r->{shortname}"></td></tr>
 	<tr><td title="Markernumer">Markernumber</td>
 	     <td><input name=markernumber type=text value="$r->{markernumber}"></td></tr>
 	<tr><td title="Markertype">Markertype</td>
@@ -438,6 +444,7 @@ sub editsite() {
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editreceivers&site=$site">Edit receivers</a>
     </form>
     <p>
+    Site 4ch must match first 4 letters on incoming files.<br>
     If Marker Number is blank and Marker Number is Unknown in original file, set Marker Number to short sitename.<br>
     If Marker number is blank and Marker number is set in original file, do not change original.<br>
     if Marker number is, always redefine Marker number in file.<br>
@@ -889,7 +896,7 @@ sub reprocess() {
         if (-d $savedir) {
           $dbh->do(q{ delete from gpssums where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
           $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
-          sendcommand("reprocess $site $year $doy");
+          sendcommand("reprocess $site $year $doy");	# Web service do not have permissions to move files from savedir
         } else {
           print "<b style=\"color:red\">$site-$year-$doy not in SAVEDIR.</b> You need to manually forget and re-upload files.<br>";
         }
