@@ -110,9 +110,11 @@ sub submit_pending() {
       if ($state =~ /^(none|processed)$/) {
         loginfo("Submitting ".$job->getIdent());
         delete $Pending{$ident};
-        my $w = $job->getWorkdir();
-        system("mv $w/unpack.".$rs->{'hour'}."/* $w");
         delete $rs->{'_timestamp'};
+        my $workdir = $job->getWorkdir();
+        my $unpackdir = "$workdir/unpack.".$rs->{'hour'};
+        system("mv $unpackdir/* $workdir");
+        system("rm -r $unpackdir");
         $rs->store();
         $job->writestate('queued');
         $job->submitjob('ftp');
