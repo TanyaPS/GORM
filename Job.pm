@@ -128,7 +128,7 @@ sub readstate() {
   my $str;
   seek($self->{'_statefd'}, 0, 0);
   sysread($self->{'_statefd'}, $str, -s $self->{'_statefile'});
-  $str = '' unless defined $str;
+  $str = 'none' unless $str;	# 'none' if !defined or empty
   return $str;
 }
 
@@ -828,7 +828,7 @@ sub process() {
     # Manipulate status.0 in exclusive mode since all processes tries to update this.
     my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
     my $status = $dayjob->openstate()->readstate();
-    $status = 'incomplete' if $status eq '';
+    $status = 'incomplete' if $status eq 'none';
     if ($status eq 'incomplete') {
       my $complete = 1;
       foreach my $h ('a'..'x') {

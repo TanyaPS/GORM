@@ -124,7 +124,6 @@ sub submit_pending() {
       # no active inbound found
       my $job = new Job(rs => $rs);
       my $state = $job->openstate()->readstate();
-      $state = 'none' unless $state;
       if ($state =~ /^(none|processed)$/) {
         loginfo("Submitting $ident");
         delete $Pending{$ident};
@@ -300,10 +299,9 @@ sub unpack_file($) {
   }
 
   if (defined $rs) {
-    # Aquire exclusive access to this hour while working in workdir
+    # Move files un unpack.$h to $workdir. If job is active, send files to pending thread.
     my $state = $job->openstate()->readstate();
-    $state = 'none' if $state eq '';
-    if ($state =~ /none|processed/) {
+    if ($state =~ /^(none|processed)$/) {
       moveall($unpackdir, $workdir);
       $job->writestate('queued');
       $rs->store();
