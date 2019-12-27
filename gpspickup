@@ -101,7 +101,9 @@ sub moveall($$) {
 # object, and when no files has been added the last 20s and no active uploads in $INCOMING,
 # then the job is submitted if state allows it.
 # If a file arrives much later (after it has been processed), the RinexSet will be updated
-# and the job will be resubmitted.
+# and the job will be resubmitted unless the dayjob has started.
+# If the dayjob has started already, then the file will be ignored and the day needs to
+# be manually reprocessed.
 #
 
 my %Pending;
@@ -127,7 +129,7 @@ sub submit_pending() {
       # Check if dayjob is active
       if ($rs->{'hour'} ne '0') {
         if (readfile("$workdir/state.0") =~ /^(queued|running)/) {
-          logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
+          logwarn("$ident: Cannot process. Dayjob already started. Ignoring. DOY reprocess needed.");
           delete $Pending{$ident};
           next;
         }
