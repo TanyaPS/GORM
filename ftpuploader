@@ -46,7 +46,7 @@ sub ftpuploader($) {
 
   my $ftp;		# Net::FTP or Net::SFTP::Foreign object
   my %todo = ();	# $todo{$filename} = $retrycount
-  my $first = 1;
+  my $lastclean = 0;	# Last saved cleanup time
 
   my $sig = '';
   local $SIG{'TERM'} = sub { $sig = 'SIGTERM' };
@@ -211,6 +211,17 @@ sub ftpuploader($) {
         delete $todo{$fn};
       }
     }
+
+    if (time() - $lastclean > 12*60*60) {
+      # Remove saved files older than 30 days
+      loginfo("cleaning $name savedir");
+      foreach (qx(find saved -type f -mtime +30)) {
+        chomp;
+        unlink($_);
+      }
+      $lastclean = time();
+    }
+
   }
 
   loginfo("ftpuploader [$name] stopped.".($sig ? " signal=$sig":""));
