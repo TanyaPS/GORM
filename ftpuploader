@@ -35,8 +35,6 @@ sub ftpuploader($) {
   select(STDOUT); $| = 1;                # Unbuffered output
 
   chdir($localdir) || errdie("$0: chdir: $!\n");
-  sysrun("mkdir failed") unless -d "failed";
-  sysrun("mkdir saved")  unless -d "saved";
 
   # Arm directory monitor
   my $inotify = new Linux::Inotify2;
@@ -93,8 +91,9 @@ sub ftpuploader($) {
 
       if ($todo{$fn} > 3) {
         logerror("Giving up on $fn after $todo{$fn} tries. Moved to $localdir/failed");
-        unlink("$localdir/failed/$fn");
-        rename("$localdir/$fn", "$localdir/failed/$fn");
+        mkdir('failed') unless -d 'failed';
+        unlink("failed/$fn");
+        rename($fn, "failed/$fn");
         delete $todo{$fn};
         next;
       }
@@ -155,8 +154,9 @@ sub ftpuploader($) {
 	$destpath =~ s/%hh24/$hh/g;
         if ($destpath =~ /%/) {
           logerror("Invalid variable in $destpath");
-          unlink("$localdir/failed/$fn");
-          rename("$localdir/$fn", "$localdir/failed/$fn");
+          mkdir('failed') unless -d 'failed';
+          unlink("failed/$fn");
+          rename($fn, "failed/$fn");
           delete $todo{$fn};
           next;
         } 
@@ -206,6 +206,7 @@ sub ftpuploader($) {
         $ftp->quit();
         undef $ftp;	# Force re-login
       } else {
+        mkdir('saved') unless -d 'saved';
         unlink("saved/$fn");		# Save upladed file in saved/
         rename($fn, "saved/$fn");
         delete $todo{$fn};
