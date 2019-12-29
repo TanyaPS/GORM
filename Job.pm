@@ -177,7 +177,7 @@ sub _decimate($$$$$) {
 #	"--key reqcRnxVersion 3 ".
 #	"--key reqcSampling $dst_interval";
     my $cmd =
-	"$GFZRNX -finp $obsinfile -fout $obsoutfile -smp $dst_interval >$logfile 2>&1";
+	"$GFZRNX -finp $obsinfile -fout $obsoutfile -smp $dst_interval -f -kv >$logfile 2>&1";
     loginfo("Decimate $obsinfile to $obsoutfile");
     sysrun($cmd, { log => $Debug });
   }
