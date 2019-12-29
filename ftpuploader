@@ -18,7 +18,7 @@ use Utils;
 use Logger;
 
 my $PLATFORM = 'gpsftp5';	# Set to gpsftp4 if running on gpsftp4
-my $Privatekey = (defined $ENV{'HOME'}?$ENV{'HOME'}:'/root').'/.ssh/gnss-uploader';	# only used by gpsftp4
+my $Privatekey = (defined $ENV{'HOME'} ? $ENV{'HOME'}:'/root') . '/.ssh/gnss-uploader';	# only used by gpsftp4
 
 my $Debug = 0;	# set with -d option
 
@@ -220,10 +220,10 @@ sub reload() {
     }, { Slice => {} });
     # add fields not present on gpsftp4
     foreach my $conf (@$confs) {
-      $conf->{'ts'} = 'none';  # not supported by gpsftp4
-      if ($conf->{'localdir'} =~ /sftp-/) {
+      $conf->{'ts'} = 'none';				# timestamp not supported by gpsftp4
+      if ($conf->{'name'} =~ /^sftp-/) {		# If rulename starts with sftp-, then protocol is sftp
         $conf->{'protocol'} = 'sftp';
-        $conf->{'privatekey'} = $Privatekey;
+        $conf->{'privatekey'} = $Privatekey;		# gpsftp4 supports only one common key for all dests
       } else {
         $conf->{'protocol'} = 'ftp';
       }
@@ -237,7 +237,7 @@ sub reload() {
     }, { Slice => {} });
   }
   $DB->{'DBH'}->disconnect;
-  undef $DB;	# we don't want this cloned to the child.
+  undef $DB;	# we don't want this cloned to the childs.
 
   my $changed = 0;
 
@@ -285,10 +285,8 @@ sub reload() {
 # Main program
 #
 my %opts = ();
-getopts('v:d:l:k:c:', \%opts);
+getopts('v:d:l:k:', \%opts);
 $Debug = $opts{'v'} if defined $opts{'v'};
-
-BaseConfig::init($opts{'c'}) if defined $opts{'c'};
 
 my $errlog = (defined $opts{'l'} ? $opts{'l'} : '/dev/null');
 daemonize($errlog) if defined $opts{'d'};
