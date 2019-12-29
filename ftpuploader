@@ -40,7 +40,7 @@ sub ftpuploader($) {
   my $inotify = new Linux::Inotify2;
   my $watch = $inotify->watch($localdir, IN_CLOSE_WRITE | IN_MOVED_TO);
 
-  loginfo("$name uploader started");
+  loginfo("ftpuploader [$name] started");
 
   my $ftp;		# Net::FTP or Net::SFTP::Foreign object
   my %todo = ();	# $todo{$filename} = $retrycount
@@ -68,8 +68,7 @@ sub ftpuploader($) {
         my @in_events = $inotify->read;			# Inotify has something. Read it all
         foreach my $e (@in_events) {			# and put it in %todo.
           my $fn = $e->name;
-          next if $fn eq "failed";
-          next unless -f $fn;
+          next unless -f $fn;				# Ignore anything else than regular files
           $todo{$fn} = 0 unless defined $todo{$fn};
         }
       }
@@ -214,9 +213,9 @@ sub ftpuploader($) {
     }
 
     if (time() - $lastclean > 12*60*60) {
-      # Remove saved files older than 30 days
+      # Remove saved files older than 7 days
       loginfo("cleaning $name savedir");
-      foreach (qx(find saved -type f -mtime +30)) {
+      foreach (qx(find saved -type f -mtime +7)) {
         chomp;
         unlink($_);
       }
@@ -276,7 +275,6 @@ sub reload() {
       $found = 1 if $conf->{'name'} eq $name && $conf->{'ts'} eq $TS{$name};
     }
     next if $found;
-    loginfo("Stopping ftpuploader [$name]");
     kill(15, $PIDS{$name});
     delete $PIDS{$name};
     delete $TS{$name};
@@ -352,4 +350,5 @@ wait;
 unlink($pidfile) if defined $pidfile;
 
 loginfo("ftpuploader [master] stopped");
+sleep(1);
 exit(0);
