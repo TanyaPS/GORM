@@ -197,14 +197,24 @@ sub ftpuploader($) {
       $destpath = '/'.$destpath unless index($destpath,'/') == 0;
       $destpath .= '/' unless $destpath =~ /\/$/;
       loginfo("$localdir/$fn -> $protocol://$host$destpath$fn");
-      $rc = $ftp->put($fn);
-      if ($protocol eq 'sftp' && $ftp->error) {
-        logerror("Error SFTP uploading $fn: ".$ftp->error);
-      } elsif ($protocol eq 'ftp' && !$rc) {
-        logerror("Error FTP uploading $fn: ".$ftp->message);
-        $ftp->quit();
-        undef $ftp;	# Force re-login
-      } else {
+      $rc = 0;
+      if ($protocol eq 'sftp') {
+        $ftp->put($fn, $fn, { copy_perms => 0, copy_time => 0 });
+        if ($ftp->error) {
+          $rc = $ftp->error;
+          logerror("Error SFTP uploading $fn: ".$rc);
+        }
+      }
+      elsif ($protocol eq 'ftp') {
+        my $res = $ftp->put($fn);
+        if (!$res) {
+          $rc = $ftp->message;
+          logerror("Error FTP uploading $fn: ".$rc);
+          $ftp->quit();
+          undef $ftp;	# Force re-login
+        }
+      }
+      if (!$rc) {
         mkdir('saved') unless -d 'saved';
         unlink("saved/$fn");		# Save upladed file in saved/
         rename($fn, "saved/$fn");
