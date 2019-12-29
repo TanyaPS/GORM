@@ -42,13 +42,20 @@ INIT {
 
 
 ##########################################################################
-# Perform shell command and log.
+# Execute command with args.
+# If $cmd is a string, a shell executes the command. If $cmd is an arrayref,
+# the command is executed directly without a shell (i.e. no IO redirects).
 #
 sub sysrun($;$) {
   my ($cmd, $opts) = @_;
   $opts = {} unless defined $opts;
-  loginfo($cmd) if $$opts{'log'};
-  system($cmd);
+  if (ref($cmd) eq 'ARRAY') {
+    loginfo(@$cmd) if $$opts{'log'};
+    system(@$cmd);
+  } else {
+    loginfo($cmd) if $$opts{'log'};
+    system($cmd);
+  }
   if ($? == -1) {
     logerror("failed to execute: $!");
     return -1;

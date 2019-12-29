@@ -136,7 +136,7 @@ sub load(;$) {
 sub store(;$) {
   my ($self, $file) = @_;
   $file = $self->getRsFile() unless defined $file;
-  my %h = map { $_ => $self->{$_} } keys %$self;
+  my %h = map { $_ => $self->{$_} } grep(!/^_/, keys %$self);
   storeJSON($file, \%h);
   return $self;
 }

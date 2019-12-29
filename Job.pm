@@ -168,18 +168,18 @@ sub _decimate($$$$$) {
   my ($obsinfile, $obsoutfile, $src_interval, $dst_interval, $logfile) = @_;
 
   if ($src_interval < $dst_interval) {
-#    my $cmd =
-#	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
-#	"--key reqcRunBy SDFE ".
-#	"--key reqcObsFile $obsinfile ".
-#	"--key reqcOutObsFile $obsoutfile ".
-#	"--key reqcOutLogFile $logfile ".
-#	"--key reqcRnxVersion 3 ".
-#	"--key reqcSampling $dst_interval";
-    my $cmd =
-	"$GFZRNX -finp $obsinfile -fout $obsoutfile -smp $dst_interval -f -kv >$logfile 2>&1";
+    my @bnccmd =
+	($BNC, qw(--nw --conf /dev/null --key reqcAction Edit/Concatenate --key reqcRunBy SDFE),
+	 qw(--key reqcObsFile), $obsinfile,
+	 qw(--key reqcOutObsFile), $obsoutfile,
+	 qw(--key reqcOutLogFile), $logfile,
+	 qw(--key reqcRnxVersion 3),
+	 qw(--key reqcSampling), $dst_interval);
+    my @gfzcmd =
+	($GFZRNX, '-finp', $obsinfile, '-fout', $obsoutfile,
+		  '-smp', $dst_interval, '-f', '-kv', '-errlog', $logfile);
     loginfo("Decimate $obsinfile to $obsoutfile");
-    sysrun($cmd, { log => $Debug });
+    sysrun(\@gfzcmd, { log => $Debug });
   }
 }
 
@@ -190,28 +190,24 @@ sub _splice($$$) {
   my ($rsday, $rslist, $interval) = @_;
 
   my $outfile = $rsday->getRinexFilename('MO.'.$interval);
-  my $logfile = 'splice.'.$rsday->hour;
+  my $logfile = 'splice.'.$rsday->{'hour'};
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
   my $conv = 'GFZ';	# gfzrnx is memory hungry, but twice as fast
-  my $bnccmd = 
-	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
-	"--key reqcRunBy SDFE ".
-	"--key reqcRnxVersion 3 ".
-	"--key reqcObsFile \"".join(',',@infiles)."\" ".
-	"--key reqcOutObsFile $outfile".
-	"--key reqcOutLogFile $logfile";
-  my $gfzcmd =
-	"$GFZRNX -finp ".join(' ',@infiles)." -fout $outfile -f -kv -splice_direct -errlog $logfile";
+  my @gfzcmd = ($GFZRNX, '-finp', @infiles, '-fout', $outfile, qw(-f -kv -splice_direct -errlog), $logfile);
+  my @bnccmd = ($BNC, qw(--nw --conf /dev/null --key reqcAction Edit/Concatenate),
+		qw(--key reqcRunBy SDFE --key reqcRnxVersion 3),
+		qw(--key reqcObsFile), join(',',@infiles),
+		qw(--key reqcOutObsFile), $outfile,
+		qw(--key reqcOutLogFile), $logfile);
   loginfo("Creating $outfile");
   if ($conv eq 'GFZ') {
-    logdebug(@gfzcmd) if $Debug;
-    if (sysrun($gfzcmd, { log => $Debug })) {
+    if (sysrun(\@gfzcmd, { log => $Debug })) {
       logerror("Splice $outfile failed. Trying $BNC");
-      system($bnccmd);
+      sysrun(\@bnccmd, { log => $Debug });
     }
   } else {
-    system($bnccmd);
+    sysrun(\@bnccmd, { log => $Debug });
   }
   $rsday->{'MO.'.$interval} = $outfile;
   return $rsday;
@@ -536,8 +532,8 @@ sub gendayfiles() {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
     loginfo("Creating $navoutfile");
-    my $cmd = "$GFZRNX -finp ".join(' ',@$aref)." -fout $navoutfile -f -kv -q >/dev/null 2>&1";
-    sysrun($cmd, { log => $Debug });
+    my @cmd = ($GFZRNX, '-finp', @$aref, '-fout', $navoutfile, qw(-f -kv -q -errlog /dev/null));
+    sysrun(\@cmd, { log => $Debug });
     $rsday->{$navtyp} = $navoutfile;
   }
 
@@ -645,7 +641,7 @@ sub _QC($) {
   }
   close($fd);
 
-  sysrun("gzip -9fq $sumfile");
+  sysrun(['/usr/bin/gzip', '-9fq', $sumfile], { log => $Debug });
   $rs->{'sumfile'} = $sumfile.'.gz';
 
   return round($qc);
@@ -676,7 +672,7 @@ sub save_originals($) {
   if (scalar(@files) > 0) {
     my $fn = $rs->getFilenamePrefix;
     loginfo("Creating $fn.zip");
-    sysrun("zip -9jq $fn.zip ".join(' ',@files), { log => $Debug });
+    sysrun(['zip','-9jq',"$fn.zip",@files], { log => $Debug });
     $rs->{'zipfile'} = "$fn.zip";
   }
 }
