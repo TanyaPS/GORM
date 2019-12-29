@@ -31,10 +31,10 @@ sub ftpuploader($) {
      map { defined $conf->{$_} ? $conf->{$_}:"" } qw(name host protocol user pass localdir remotedir);
   undef $conf;
 
-  chdir($localdir) || errdie("$0: chdir: $!\n");
   select(STDERR); $| = 1;                # Unbuffered output
   select(STDOUT); $| = 1;                # Unbuffered output
 
+  chdir($localdir) || errdie("$0: chdir: $!\n");
   sysrun("mkdir failed") unless -d "failed";
   sysrun("mkdir saved")  unless -d "saved";
 
@@ -206,7 +206,8 @@ sub ftpuploader($) {
         $ftp->quit();
         undef $ftp;	# Force re-login
       } else {
-        rename("$localdir/$fn", "$localdir/saved/$fn");
+        unlink("saved/$fn");		# Save upladed file in saved/
+        rename($fn, "saved/$fn");
         delete $todo{$fn};
       }
     }
