@@ -107,7 +107,7 @@ sub ftpuploader($) {
           $ftp = Net::FTP->new($host, Passive => 1);
           $rc = $ftp->login($user, $pass);
           if (!$rc) {
-            logerror("Cannot login at $host with user $user: $rc.");
+            logerror("Cannot login at $host with user $user: ".$ftp->message);
             undef $ftp;
             next Inbound;
           }
@@ -180,7 +180,7 @@ sub ftpuploader($) {
       if ($protocol eq 'sftp' && $ftp->error) {
         logerror("Error SFTP uploading $fn: ".$ftp->error);
       } elsif ($protocol eq 'ftp' && !$rc) {
-        logerror("Error FTP uploading $fn");
+        logerror("Error FTP uploading $fn: ".$ftp->message);
       } else {
         unlink("$localdir/$fn");
         delete $todo{$fn};
