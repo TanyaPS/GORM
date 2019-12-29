@@ -17,10 +17,10 @@ use Linux::Inotify2;
 use Utils;
 use Logger;
 
-my $PLATFORM = 'gpsftp5';	# Set to gpsftp4 if running on gpsftp4
+my $PLATFORM = 'gpsftp5';	# Will autodetect if running on gpsftp4
 my $Privatekey = (defined $ENV{'HOME'} ? $ENV{'HOME'}:'/root') . '/.ssh/gnss-uploader';	# only used by gpsftp4
 
-my $Debug = 0;	# set with -d option
+my $Debug = 0;	# set with -v option
 
 ###################################################
 # ftpuploader sub process
@@ -36,6 +36,7 @@ sub ftpuploader($) {
   select(STDOUT); $| = 1;                # Unbuffered output
 
   sysrun("mkdir failed") unless -d "failed";
+  sysrun("mkdir saved")  unless -d "saved";
 
   # Arm directory monitor
   my $inotify = new Linux::Inotify2;
@@ -130,8 +131,9 @@ sub ftpuploader($) {
 
       # Contruct destination path
       # Replace all %words with values
+      my $is_dynamic_dir = index($remotedir, '%') >= 0;
       my $destpath = $remotedir;
-      if (index($remotedir, '%') >= 0) {
+      if ($is_dynamic_dir) {
         my ($site, $site4, $year, $doy, $hour, $hh);
         # TEJH00DNK_R_20171890000_01D_30S_MO.rnx
         if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})/) {
@@ -165,7 +167,7 @@ sub ftpuploader($) {
       if ($protocol eq 'ftp') {
         $rc = $ftp->cwd($destpath);		# Try CWD. Should return new CWD.
         if (!$rc) {
-          if (index($remotedir, '%') >= 0) {	# Did not succeed CWD. Create dir if dynamic.
+          if ($is_dynamic_dir) {		# Did not succeed CWD. Create dir if dynamic.
             $ftp->mkdir($destpath, 1);
             $rc = $ftp->cwd($destpath);
           }
@@ -177,7 +179,7 @@ sub ftpuploader($) {
       elsif ($protocol eq 'sftp') {
         $ftp->setcwd($destpath);
         if ($ftp->error) {
-          if (index($remotedir,'%') >= 0) {
+          if ($is_dynamic_dir) {
             $ftp->mkpath($destpath, undef, 0);
             $ftp->setcwd($destpath);
           }
@@ -204,7 +206,7 @@ sub ftpuploader($) {
         $ftp->quit();
         undef $ftp;	# Force re-login
       } else {
-        unlink("$localdir/$fn");
+        rename("$localdir/$fn", "$localdir/saved/$fn");
         delete $todo{$fn};
       }
     }
@@ -299,8 +301,10 @@ sub reload() {
 # Main program
 #
 my %opts = ();
-getopts('v:d:l:k:', \%opts);
-$Debug = $opts{'v'} if defined $opts{'v'};
+getopts('vd:l:k:', \%opts);
+$Debug = defined $opts{'v'} ? 1:0;
+
+$PLATFORM = 'gpsftp4' if -f '/home/gpsuser/init.d/ftpuploader';
 
 # Backward compat
 my $pidfile;
