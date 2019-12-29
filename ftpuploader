@@ -160,7 +160,7 @@ sub ftpuploader($) {
         } 
       }
 
-      # Create remotedir if it does not exist
+      # Change dir on remote server. If CWD fails and remotedir is dynamic, try create and CWD.
       # Assume remotedir exists if not dynamic
       if ($protocol eq 'ftp') {
         $rc = $ftp->cwd($destpath);		# Try CWD. Should return new CWD.
@@ -175,14 +175,18 @@ sub ftpuploader($) {
         }
       }
       elsif ($protocol eq 'sftp') {
-        $rc = 0;
         $ftp->setcwd($destpath);
-        if ($ftp->error && index($remotedir,'%') >= 0) {
-          $ftp->mkpath($destpath, undef, 0);
-          $ftp->setcwd($destpath);
+        if ($ftp->error) {
+          if (index($remotedir,'%') >= 0) {
+            $ftp->mkpath($destpath, undef, 0);
+            $ftp->setcwd($destpath);
+          }
           $rc = $ftp->error;
+        } else {
+          $rc = 0;
         }
       }
+      # $rc cotains error message if any
       if ($rc) {
         logerror("Cannot CWD to $destpath: ".$rc);
         next;
@@ -197,6 +201,8 @@ sub ftpuploader($) {
         logerror("Error SFTP uploading $fn: ".$ftp->error);
       } elsif ($protocol eq 'ftp' && !$rc) {
         logerror("Error FTP uploading $fn: ".$ftp->message);
+        $ftp->quit();
+        undef $ftp;	# Force re-login
       } else {
         unlink("$localdir/$fn");
         delete $todo{$fn};
