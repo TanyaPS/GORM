@@ -78,6 +78,7 @@ sub ftpuploader($) {
       if (defined $ftp) {
         # stop session while waiting for files
         $ftp->quit() if $protocol eq 'ftp';
+        $ftp->disconnect() if $protocol eq 'sftp';
         undef $ftp;
       }
       next;
@@ -114,7 +115,7 @@ sub ftpuploader($) {
         }
         elsif ($protocol eq 'sftp') {
           loginfo("Login as $user using privatekey $pass") if $Debug;
-          $ftp = Net::SFTP::Foreign->new($host, user => $user, key_path => $pass);
+          $ftp = Net::SFTP::Foreign->new($host, user => $user, key_path => $pass, timeout => 30);
           if ($ftp->error) {
             logerror("Cannot login at $host with user $user: ".$ftp->error);
             undef $ftp;
@@ -199,10 +200,11 @@ sub ftpuploader($) {
       loginfo("$localdir/$fn -> $protocol://$host$destpath$fn");
       $rc = 0;
       if ($protocol eq 'sftp') {
-        $ftp->put($fn, $fn, { copy_perms => 0, copy_time => 0 });
+        $ftp->put($fn, $fn, { copy_perms => 0, copy_time => 0, resume => 0, cleanup => 0 });
         if ($ftp->error) {
           $rc = $ftp->error;
           logerror("Error SFTP uploading $fn: ".$rc);
+          undef $ftp;
         }
       }
       elsif ($protocol eq 'ftp') {
