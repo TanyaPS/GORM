@@ -35,6 +35,13 @@ sub getIdent() {
   return "$self->{site}-$self->{year}-$self->{doy}-$self->{hour}";
 }
 
+# Access methods
+sub site() { shift->{'site'}; }
+sub year() { shift->{'year'}; }
+sub doy()  { shift->{'doy'};  }
+sub hour() { shift->{'hour'}; }
+sub arg() { my $s = shift; ( site => $s->{site}, year => $s->{year}, doy => $s->{doy}, hour => $s->{hour} ); }
+
 #################################
 # Get working dir of this RINEX set
 #

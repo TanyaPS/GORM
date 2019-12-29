@@ -190,19 +190,22 @@ sub _splice($$$) {
   my ($rsday, $rslist, $interval) = @_;
 
   my $outfile = $rsday->getRinexFilename('MO.'.$interval);
+  my $logfile = 'splice.'.$rsday->hour;
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
   my $conv = 'GFZ';	# gfzrnx is memory hungry, but twice as fast
-  my $bnccmd =
+  my $bnccmd = 
 	"$BNC --nw --conf /dev/null --key reqcAction Edit/Concatenate ".
 	"--key reqcRunBy SDFE ".
 	"--key reqcRnxVersion 3 ".
 	"--key reqcObsFile \"".join(',',@infiles)."\" ".
-	"--key reqcOutObsFile $outfile";
+	"--key reqcOutObsFile $outfile".
+	"--key reqcOutLogFile $logfile";
   my $gfzcmd =
-	"$GFZRNX -finp ".join(' ',@infiles)." -fout $outfile -f -q -kv -splice_direct";
+	"$GFZRNX -finp ".join(' ',@infiles)." -fout $outfile -f -kv -splice_direct -errlog $logfile";
   loginfo("Creating $outfile");
   if ($conv eq 'GFZ') {
+    logdebug(@gfzcmd) if $Debug;
     if (sysrun($gfzcmd, { log => $Debug })) {
       logerror("Splice $outfile failed. Trying $BNC");
       system($bnccmd);
