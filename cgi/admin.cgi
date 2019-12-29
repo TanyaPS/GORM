@@ -652,7 +652,7 @@ sub uploaddest() {
 
   print "Remember to create localdir before defining a FTP uploader.<p>\n";
 
-  my @collist = qw(name protocol host user pass privatekey localdir remotedir active);
+  my @collist = qw(name protocol host user pass localdir remotedir active);
   my $sql;
 
   my $aref = $dbh->selectall_arrayref(q{
@@ -674,7 +674,7 @@ sub uploaddest() {
     my $msg = "";
     $sql = $dbh->prepare(q{
 	update	uploaddest
-	set	name=?, protocol=?, host=?, user=?, pass=?, privatekey=?, localdir=?, remotedir=?, active=?
+	set	name=?, protocol=?, host=?, user=?, pass=?, localdir=?, remotedir=?, active=?
 	where	id=?
     });
     for (my $i = 1; defined $v{"id$i"}; $i++) {
@@ -690,7 +690,7 @@ sub uploaddest() {
       $v{'active'} = checkpath($v{'localdir'}) if $v{'active'};
       my @vals = ();
       push(@vals, $v{$_}) foreach @collist;
-      $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?,?)", undef, @vals);
+      $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?)", undef, @vals);
     }
     print "<B style=\"color:red\">Values saved!</B><P>\n";
     $changed = 1;
@@ -707,12 +707,12 @@ sub uploaddest() {
   sendcommand("reload ftpuploader") if $changed;
 
   $aref = $dbh->selectall_arrayref(q{
-	select id,name,protocol,host,user,pass,privatekey,localdir,remotedir,active from uploaddest order by name
+	select id,name,protocol,host,user,pass,localdir,remotedir,active from uploaddest order by name
   }, { Slice=>{} });
   print qq{
 	<form name=uploaddestform method=POST action="$ENV{'SCRIPT_NAME'}">
 	<input type=hidden name=cmd value=uploaddest>
-	<table border=1>\n<tr><td>Name<td>Protocol<td>Host<td>User<td>Pass<td>Privatekey<td>Localdir<td>Remotedir<td>Active</tr>
+	<table border=1>\n<tr><td>Name<td>Protocol<td>Host<td>User<td>Pass<td>Localdir<td>Remotedir<td>Active</tr>
   };
   my $i = 1;
   foreach my $r (@$aref) {
@@ -725,7 +725,6 @@ sub uploaddest() {
 	<td><input type=text name=host$i value="$r->{'host'}">
 	<td><input type=text name=user$i value="$r->{'user'}">
 	<td><input type=text name=pass$i value="$r->{'pass'}">
-	<td><input type=text name=privatekey$i value="$r->{'privatekey'}">
         <td><select name=localdir$i>}.gen_option_list($r->{'localdir'},\@uploadpaths).qq{</select>
 	<td><input type=text name=remotedir$i value="$r->{'remotedir'}">
 	<td><input type=checkbox name=active$i value=1}.($r->{'active'} ? " checked":"").qq{>
@@ -739,7 +738,6 @@ sub uploaddest() {
 	<td><input type=text name=host>
 	<td><input type=text name=user>
 	<td><input type=text name=pass>
-	<td><input type=text name=privatekey>
 	<td><select id=localdir name=localdir>}.gen_option_list("",\@uploadpaths).q{</select>
 	<td><input type=text name=remotedir>
 	<td><input type=checkbox name=active value=1>

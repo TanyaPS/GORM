@@ -1,4 +1,4 @@
--- Generation Time: Dec 25, 2019 at 02:42 PM
+-- Generation Time: Dec 29, 2019 at 05:49 PM
 -- Server version: 5.5.64-MariaDB
 -- PHP Version: 7.3.13
 
@@ -143,8 +143,7 @@ CREATE TABLE IF NOT EXISTS `uploaddest` (
   `protocol` enum('ftp','sftp') COLLATE utf8_unicode_ci NOT NULL DEFAULT 'ftp',
   `host` varchar(64) COLLATE utf8_unicode_ci NOT NULL,
   `user` varchar(32) COLLATE utf8_unicode_ci NOT NULL,
-  `pass` varchar(32) COLLATE utf8_unicode_ci DEFAULT NULL,
-  `privatekey` varchar(64) COLLATE utf8_unicode_ci DEFAULT NULL,
+  `pass` varchar(80) COLLATE utf8_unicode_ci DEFAULT NULL,
   `localdir` varchar(32) COLLATE utf8_unicode_ci NOT NULL,
   `remotedir` varchar(128) COLLATE utf8_unicode_ci NOT NULL,
   `active` tinyint(1) unsigned NOT NULL DEFAULT '1',

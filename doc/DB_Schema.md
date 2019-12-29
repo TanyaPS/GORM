@@ -159,9 +159,8 @@ Fully qualified DNS name of the host. Must be resolvable.
 ### user
 Username to login with.
 ### pass
-Password to use if using _ftp_.
-### privatekey
-Full pathname for the SSH private key to use if using _sftp_.
+Password to use if using _ftp_ OR full pathname of the SSH private key file
+if using _sftp_.
 ### localdir
 The name of the local directory (localdirs.name).
 ### remotedir

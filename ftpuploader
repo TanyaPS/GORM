@@ -27,8 +27,8 @@ my $Debug = 0;	# set with -v option
 #
 sub ftpuploader($) {
   my $conf = shift;
-  my ($name, $host, $protocol, $user, $pass, $privatekey, $localdir, $remotedir) =
-     map { defined $conf->{$_} ? $conf->{$_}:"" } qw(name host protocol user pass privatekey localdir remotedir);
+  my ($name, $host, $protocol, $user, $pass, $localdir, $remotedir) =
+     map { defined $conf->{$_} ? $conf->{$_}:"" } qw(name host protocol user pass localdir remotedir);
   undef $conf;
 
   chdir($localdir) || errdie("$0: chdir: $!\n");
@@ -115,8 +115,8 @@ sub ftpuploader($) {
           $ftp->binary();
         }
         elsif ($protocol eq 'sftp') {
-          loginfo("Login as $user using privatekey $privatekey") if $Debug;
-          $ftp = Net::SFTP::Foreign->new($host, user => $user, key_path => $privatekey);
+          loginfo("Login as $user using privatekey $pass") if $Debug;
+          $ftp = Net::SFTP::Foreign->new($host, user => $user, key_path => $pass);
           if ($ftp->error) {
             logerror("Cannot login at $host with user $user: ".$ftp->error);
             undef $ftp;
@@ -239,14 +239,13 @@ sub reload() {
       $conf->{'ts'} = 'none';				# timestamp not supported by gpsftp4
       if ($conf->{'name'} =~ /^sftp-/) {		# If rulename starts with sftp-, then protocol is sftp
         $conf->{'protocol'} = 'sftp';
-        $conf->{'privatekey'} = $Privatekey;		# gpsftp4 supports only one common key for all dests
       } else {
         $conf->{'protocol'} = 'ftp';
       }
     }
   } else {
     $confs = $DB->DBH->selectall_arrayref(q{
-	select	f.name, f.host, f.protocol, f.user, f.pass, f.privatekey, p.path localdir, f.remotedir, f.ts
+	select	f.name, f.host, f.protocol, f.user, f.pass, p.path localdir, f.remotedir, f.ts
 	from	uploaddest f, localdirs p
 	where	f.localdir = p.name
 	  and	f.active = 1
@@ -275,7 +274,7 @@ sub reload() {
   foreach my $conf (@$confs) {
     my $name = $conf->{'name'};
     next if exists $PIDS{$name} && kill(0, $PIDS{$name});
-    if ($conf->{'protocol'} eq 'ftp' && (!exists $conf->{'pass'} || $conf->{'pass'} eq "")) {
+    if (!exists $conf->{'pass'} || $conf->{'pass'} eq "") {
       logerror("$name: ftp user without password ignored");
     }
     else {
