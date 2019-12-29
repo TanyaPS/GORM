@@ -48,9 +48,9 @@ sub ftpuploader($) {
   my $first = 1;
 
   my $sig = '';
-  $SIG{'TERM'} = sub { $sig = 'SIGTERM' };
-  $SIG{'INT'}  = sub { $sig = 'SIGKILL' };
-  $SIG{'ALRM'} = 'IGNORE';
+  local $SIG{'TERM'} = sub { $sig = 'SIGTERM' };
+  local $SIG{'INT'}  = sub { $sig = 'SIGKILL' };
+  local $SIG{'ALRM'} = 'IGNORE';
 
   Inbound:
   while (!$sig) {
@@ -64,6 +64,7 @@ sub ftpuploader($) {
       my $v = '';
       vec($v, $inotify->fileno, 1) = 1;
       select($v, undef, undef, 300);			# wait 300s for inotify has something
+      last if $sig;
       if (vec($v, $inotify->fileno, 1)) {
         my @in_events = $inotify->read;			# Inotify has something. Read it all
         foreach my $e (@in_events) {			# and put it in %todo.
@@ -72,8 +73,6 @@ sub ftpuploader($) {
           next unless -f $fn;
           $todo{$fn} = 0 unless defined $todo{$fn};
         }
-      } else {
-        last if $sig;
       }
     }
 
@@ -288,10 +287,14 @@ my %opts = ();
 getopts('v:d:l:k:', \%opts);
 $Debug = $opts{'v'} if defined $opts{'v'};
 
-my $errlog = (defined $opts{'l'} ? $opts{'l'} : '/dev/null');
-daemonize($errlog) if defined $opts{'d'};
-my $pidfile = (defined $opts{'p'} ? $opts{'p'} : '/var/run/ftpuploader/ftpuploader.pid');
-create_pid_file($pidfile);
+# Backward compat
+my $pidfile;
+if ($PLATFORM eq 'gpsftp4') {
+  my $errlog = (defined $opts{'l'} ? $opts{'l'} : '/dev/null');
+  daemonize($errlog) if defined $opts{'d'};
+  $pidfile = (defined $opts{'p'} ? $opts{'p'} : '/var/run/ftpuploader.pid');
+  create_pid_file($pidfile);
+}
 
 $Privatekey = $opts{'k'} if defined $opts{'k'};
 
@@ -315,7 +318,7 @@ while (1) {
 
 kill(15, $_) foreach values %PIDS;	# Kill all childs
 wait;
+unlink($pidfile) if defined $pidfile;
 
 loginfo("ftpuploader [master] stopped");
-logclose();
 exit(0);
