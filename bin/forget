@@ -23,6 +23,7 @@ my ($site, $year, $doy) = (uc($ARGV[0]), $ARGV[1], $ARGV[2]);
 my $db = new GPSDB;
 
 if (length($site) == 4) {
+  # Translate shortname into sitename
   my $aref = $db->{'DBH'}->selectrow_arrayref(q{
 	select site from locations where shortname = ?
   }, undef, $site);

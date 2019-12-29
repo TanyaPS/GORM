@@ -25,6 +25,7 @@ my $db = new GPSDB;
 my $dbh = $db->{'DBH'};
 
 if (length($site) == 4) {
+  # Shortname -> sitename
   my $aref = $dbh->selectrow_arrayref(q{
 	select site from locations where shortname = ?
   }, undef, $site);

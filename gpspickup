@@ -199,7 +199,7 @@ sub pending_thread() {
 #############################################################################################
 #############################################################################################
 # Unpack thread(s)
-# The heavy lifting (decompressing) is done by multiple threads.
+# The heavy lifting (decompressing) is done in multiple threads.
 # If the file is part of a multi-file upload, send the file to pending_thread to be added
 # to its RinexSet.
 #
@@ -220,23 +220,20 @@ sub unzip($$$) {
     my $zmfn = $zm->fileName();
     my $ofn;
     unlink("$unpackdir/$zmfn");
-    $zm->extractToFileNamed("$unpackdir/$zmfn");
-    if ($zmfn =~ /\.\d\dd$/) {
+    $zm->extractToFileNamed("$unpackdir/$zmfn");	# extract
+    if ($zmfn =~ /\.(gz|Z)$/) {				# uncompress
+      system('/usr/bin/gunzip', "$unpackdir/$zmfn");
+      $zmfn =~ s/\.(gz|Z)$//;
+    }
+    if ($zmfn =~ /\.(\d\dd|crx)$/) {			# crx2rnx
       $ofn = $zmfn;
       $ofn =~ s/d$/o/;
-      system("$CRX2RNX $unpackdir/$zmfn - > $unpackdir/$ofn");
-      unlink("$unpackdir/$zmfn");
-      $zmfn = $ofn;
-    }
-    elsif ($zmfn =~ /\.crx$/) {
-      $ofn = $zmfn;
       $ofn =~ s/\.crx$/.rnx/;
-      system("$CRX2RNX $unpackdir/$zmfn - > $unpackdir/$ofn");
-      unlink("$unpackdir/$zmfn");
+      system($CRX2RNX, "$unpackdir/$zmfn", "$unpackdir/$ofn");
       $zmfn = $ofn;
     }
     my $ftyp;
-    if ($zmfn =~ /\.\d\d([onglfq])$/) {
+    if ($zmfn =~ /\.\d\d([onglfq])$/) {			# rename to v3 name
       $ftyp = $v3typemap{$1};
     } elsif ($zmfn =~ /_(MO|[A-Z]N)\.rnx$/) {
       $ftyp = $1;
@@ -288,7 +285,7 @@ sub unpack_file($) {
     $fn =~ s/\.gz$//;
     my $dst = "$unpackdir/$fn";
     loginfo("gunzip $fn.gz") if !$Debug;
-    sysrun("gzip -dc $ifn >$dst", { log => $Debug });
+    system("/usr/bin/gzip -dc $ifn >$dst");
     $PQ->enqueue({ ident => $ident, fn => $fn });
     return;
   }

@@ -105,9 +105,9 @@ $dbh->do(q{
 	delete from locations where site = ?
 }, undef, $s{'site'});
 $dbh->do(q{
-	insert into locations (site, freq, obsint, markernumber, markertype, position, observer, agency, ts, active)
-	values (?,'H',1,?,'GEODETIC',?,'SDFE','SDFE',current_timestamp(),1)
-}, undef, $s{'site'},$s{'markernumber'},$s{'position'});
+	insert into locations (site, shortname, freq, obsint, markernumber, markertype, position, observer, agency, ts, active)
+	values (?,?,'H',1,?,'GEODETIC',?,'SDFE','SDFE',current_timestamp(),1)
+}, undef, $s{'site'}, substr($s{'site'},0,4), $s{'markernumber'}, $s{'position'});
 
 $dbh->do(q{
 	delete from receivers where site = ?
