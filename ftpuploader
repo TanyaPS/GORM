@@ -162,21 +162,37 @@ sub ftpuploader($) {
 
       # Create remotedir if it does not exist
       # Assume remotedir exists if not dynamic
-      if (index($remotedir, '%') >= 0) {
-        if ($protocol eq 'ftp') {
-          $rc = $ftp->cwd($destpath);
-          $ftp->mkdir($destpath, 1) if !$rc;
+      if ($protocol eq 'ftp') {
+        $rc = $ftp->cwd($destpath);		# Try CWD. Should return new CWD.
+        if (!$rc) {
+          if (index($remotedir, '%') >= 0) {	# Did not succeed CWD. Create dir if dynamic.
+            $ftp->mkdir($destpath, 1);
+            $rc = $ftp->cwd($destpath);
+          }
+          $rc = $ftp->message if !$rc;		# Set $rc to error message if not succeeded.
+        } else {
+          $rc = 0;
         }
-        elsif ($protocol eq 'sftp') {
-          $rc = $ftp->setcwd($destpath);
-          $ftp->mkpath($destpath, undef, 0) if $ftp->error;
+      }
+      elsif ($protocol eq 'sftp') {
+        $rc = 0;
+        $ftp->setcwd($destpath);
+        if ($ftp->error && index($remotedir,'%') >= 0) {
+          $ftp->mkpath($destpath, undef, 0);
+          $ftp->setcwd($destpath);
+          $rc = $ftp->error;
         }
+      }
+      if ($rc) {
+        logerror("Cannot CWD to $destpath: ".$rc);
+        next;
       }
 
       # Try upload
+      $destpath = '/'.$destpath unless index($destpath,'/') == 0;
       $destpath .= '/' unless $destpath =~ /\/$/;
       loginfo("$localdir/$fn -> $protocol://$host$destpath$fn");
-      $rc = $ftp->put($fn, $destpath.$fn);
+      $rc = $ftp->put($fn);
       if ($protocol eq 'sftp' && $ftp->error) {
         logerror("Error SFTP uploading $fn: ".$ftp->error);
       } elsif ($protocol eq 'ftp' && !$rc) {
