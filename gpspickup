@@ -109,66 +109,71 @@ my %Pending;
 
 sub submit_pending() {
   my @pending = keys %Pending;
+
   foreach my $ident (@pending) {
     my $rs = $Pending{$ident};
+
+    # Check age. Next RinexSet if its too young and delete it if its stale.
     my $age = time() - $rs->{'_timestamp'};
+    next if $age < 20;
     if ($age > 3600) {
+      delete $Pending{$ident};	# Stale
+      next;
+    }
+
+    # We need the obs file and at least one nav file
+    if (scalar(grep(/^MO\./, keys %$rs)) == 0 ||
+	scalar(grep(/^[A-Z]N$/, keys %$rs)) == 0) {
+      $rs->{'_timestamp'} = time();		# Postpone another 20s
+      next;
+    }
+
+    # Check if something belonging to this RinexSet is being transferred right now
+    my $prefix = $rs->getFilenamePrefix();
+    if (scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0) {
+      $rs->{'_timestamp'} = time();
+      next;
+    }
+
+    my $workdir = $rs->getWorkdir();
+
+    # Check if dayjob has started already.
+    if ($rs->{'hour'} ne '0') {
+      if (readfile("$workdir/state.0") =~ /^(queued|running)/) {
+	logwarn("$ident: Cannot process. Dayjob already started. Ignoring. DOY reprocess needed.");
+	delete $Pending{$ident};
+	next;
+      }
+    }
+
+    # Everything checks out, then submit the job if not already queued/running.
+    my $job = new Job(rs => $rs);
+    my $state = $job->lockstate()->readstate();
+    if ($state =~ /^(none|processed)$/) {
+      loginfo("Submitting $ident");
       delete $Pending{$ident};
+      delete $rs->{'_timestamp'};
+      moveall("$workdir/unpack.".$rs->{'hour'}, $workdir);
+      $rs->store();
+      $job->writestate('queued');
+      $job->submitjob('ftp');
+    } else {
+      $rs->{'_timestamp'} = time();	# Job still active, postpone.
     }
-    elsif ($age > 19) {
-      # We need the obs file and at least one nav file
-      if (scalar(grep(/^MO\./, keys %$rs)) == 0 ||
-          scalar(grep(/^[A-Z]N$/, keys %$rs)) == 0) {
-        $rs->{'_timestamp'} = time();	# Postpone another 20s
-        next;
-      }
-
-      # check nothing is being transferred right now
-      my $prefix = $rs->getFilenamePrefix();
-      if (scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0) {
-        $rs->{'_timestamp'} = time();
-        next;
-      }
-
-      my $workdir = $rs->getWorkdir();
-
-      # Check if dayjob is active
-      if ($rs->{'hour'} ne '0') {
-        if (readfile("$workdir/state.0") =~ /^(queued|running)/) {
-          logwarn("$ident: Cannot process. Dayjob already started. Ignoring. DOY reprocess needed.");
-          delete $Pending{$ident};
-          next;
-        }
-      }
-
-      # Submit the job if not active
-      my $job = new Job(rs => $rs);
-      my $state = $job->lockstate()->readstate();
-      if ($state =~ /^(none|processed)$/) {
-        loginfo("Submitting $ident");
-        delete $Pending{$ident};
-        delete $rs->{'_timestamp'};
-        moveall("$workdir/unpack.".$rs->{'hour'}, $workdir);
-        $rs->store();
-        $job->writestate('queued');
-        $job->submitjob('ftp');
-      } else {
-        $rs->{'_timestamp'} = time();	# Job still active, postpone.
-      }
-      $job->unlockstate();
-    }
+    $job->unlockstate();
   }
 }
 
 #
 # Receive file belonging to a multi-file upload. The file is added to its RinexSet
 # and the timestamp is updated.
-# Loop ends when main threads sends the EXIT command.
+# 3sec loop ends when main threads sends the EXIT command.
 #
 sub pending_thread() {
   while (1) {
-    submit_pending();
-    my $parm = $PQ->dequeue_timed(5);
+    submit_pending();	# Submit all ready pending
+
+    my $parm = $PQ->dequeue_timed(3);
     next unless defined $parm && defined $parm->{'ident'};
     my $ident = $parm->{'ident'};
     last if $ident eq 'EXIT';
@@ -185,7 +190,7 @@ sub pending_thread() {
       }
     }
  
-    # Add this file
+    # Add this file to this RinexSet
     if ($fn =~ /_([0-9]{2})S_MO\.rnx$/) {
       my $interval = int($1);
       $rs->{'MO.'.$interval} = $fn;
