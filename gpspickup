@@ -116,12 +116,19 @@ sub submit_pending() {
       delete $Pending{$ident};
     }
     elsif ($age > 19) {
-      # Cannot submit if no obs file
-      next if scalar(grep(/^MO\./, keys %$rs)) == 0;
+      # We need the obs file and at least one nav file
+      if (scalar(grep(/^MO\./, keys %$rs)) == 0 ||
+          scalar(grep(/^[A-Z]N$/, keys %$rs)) == 0) {
+        $rs->{'_timestamp'} = time();	# Postpone another 20s
+        next;
+      }
 
       # check nothing is being transferred right now
       my $prefix = $rs->getFilenamePrefix();
-      next if scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0;
+      if (scalar(grep(/^$prefix/, dirlist($INCOMING))) > 0) {
+        $rs->{'_timestamp'} = time();
+        next;
+      }
 
       my $workdir = $rs->getWorkdir();
 
@@ -290,7 +297,7 @@ sub unpack_file($) {
     $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
-    chdir("$unpackdir");
+    chdir($unpackdir);
     sysrun([$SBF2RIN, '-f', $ifn, qw(-l -R3 -nOP -s -D -O), $countrycode], { stdout => "$workdir/sbf2rin.$hour.log", log => $Debug });
     chdir($INCOMING);
     $rs->checkfiles($unpackdir);

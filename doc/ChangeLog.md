@@ -6,6 +6,7 @@
 - Delay removal of job from $JOBQUEUE by 1s to allow clients to change attributes after close.
 - Do proper redirect of STDOUT and STDERR when commands are runned not using shell.
 - Use external uncompressers as perl Gzip/Zip packages are not thread safe.
+- Be more patient waiting for multi-file uploads to complete.
 
 ## 2019-12-26	sjm	Optimize hour locking. Handle inbound while active.
 - Unpack in subdirs and move in locked mode when done unpacking.

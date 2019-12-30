@@ -9,8 +9,6 @@ package GPSDB;
 use strict;
 use warnings;
 use DBI;
-use IO::Compress::Gzip qw(gzip :level);
-use Errno qw(EINTR);
 use BaseConfig;
 use Logger;
 
