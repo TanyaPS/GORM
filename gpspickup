@@ -285,7 +285,7 @@ sub unpack_file($) {
     $fn =~ s/\.gz$//;
     my $dst = "$unpackdir/$fn";
     loginfo("gunzip $fn.gz") if !$Debug;
-    sysrun([qw(/usr/bin/gzip -dc), $ifn], { stdout => $dst });
+    sysrun("/usr/bin/gzip -dc $ifn >$dst 2>/dev/null", { log => $Debug });
     $PQ->enqueue({ ident => $ident, fn => $fn });
     return;
   }
