@@ -775,7 +775,7 @@ sub process() {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile) {
           loginfo("Compressing $navfile");
-          sysrun([qw(gzip -9cq), $navfile], { stdout => $gzfile } );
+          sysrun("/usr/bin/gzip -9cq $navfile >$gzfile 2>/dev/null", { log => $Debug });
         }
         push(@copylist, $gzfile);
       }
