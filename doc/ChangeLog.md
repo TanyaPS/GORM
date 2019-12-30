@@ -1,5 +1,11 @@
 # Changelog for GPSFTP5 scripts
 
+## 2019-12-30	sjm	ftpuploader backport to gpsftp4. Delay move from incoming.
+- ftpuploader ported to gpsftp4 (CentOS 6). Do not try setting attributes of sftp upload.
+- Delay move from $INCOMING to saved by 1s to allow remote client to set attributes on uploaded file.
+- Delay removal of job from $JOBQUEUE by 1s to allow clients to change attributes after close
+- Do proper redirect of STDOUT and STDERR when commands are runned not using shell
+
 ## 2019-12-26	sjm	Optimize hour locking. Handle inbound while active.
 - Unpack in subdirs and move in locked mode when done unpacking.
 - Reject new files once dayjob has started.

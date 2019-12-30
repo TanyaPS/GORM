@@ -177,7 +177,7 @@ sub _decimate($$$$$) {
 	 qw(--key reqcSampling), $dst_interval);
     my @gfzcmd =
 	($GFZRNX, '-finp', $obsinfile, '-fout', $obsoutfile,
-		  '-smp', $dst_interval, '-f', '-kv', '-errlog', $logfile);
+		  '-smp', $dst_interval, qw(-f -q -kv -errlog), $logfile);
     loginfo("Decimate $obsinfile to $obsoutfile");
     sysrun(\@gfzcmd, { log => $Debug });
   }
@@ -194,7 +194,7 @@ sub _splice($$$) {
   my @infiles = ();
   push(@infiles, $_->{'MO.'.$interval}) foreach @$rslist;
   my $conv = 'GFZ';	# gfzrnx is memory hungry, but twice as fast
-  my @gfzcmd = ($GFZRNX, '-finp', @infiles, '-fout', $outfile, qw(-f -kv -splice_direct -errlog), $logfile);
+  my @gfzcmd = ($GFZRNX, '-finp', @infiles, '-fout', $outfile, qw(-f -q -kv -splice_direct -errlog), $logfile);
   my @bnccmd = ($BNC, qw(--nw --conf /dev/null --key reqcAction Edit/Concatenate),
 		qw(--key reqcRunBy SDFE --key reqcRnxVersion 3),
 		qw(--key reqcObsFile), join(',',@infiles),
@@ -532,7 +532,7 @@ sub gendayfiles() {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
     loginfo("Creating $navoutfile");
-    my @cmd = ($GFZRNX, '-finp', @$aref, '-fout', $navoutfile, qw(-f -kv -q -errlog /dev/null));
+    my @cmd = ($GFZRNX, '-finp', @$aref, '-fout', $navoutfile, qw(-f -kv -q));
     sysrun(\@cmd, { log => $Debug });
     $rsday->{$navtyp} = $navoutfile;
   }
@@ -786,7 +786,7 @@ sub process() {
         my $gzfile = "$navfile.gz";
         if (! -f $gzfile) {
           loginfo("Compressing $navfile");
-          system("gzip -9cq $navfile > $gzfile");
+          sysrun([qw(gzip -9cq), $navfile], { stdout => $gzfile } );
         }
         push(@copylist, $gzfile);
       }
@@ -826,7 +826,7 @@ sub process() {
   if ($hour eq '0' && !-f 'debug') {
     # This is a dayfile and is now processed. We are done and delete the workdir.
     chdir("..");
-    system("rm -rf ".$self->getWorkdir);
+    sysrun([qw(rm -rf), $self->getWorkdir()]);
   } else {
     $self->setstate('processed');
 

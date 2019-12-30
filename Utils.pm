@@ -45,27 +45,42 @@ INIT {
 # Execute command with args.
 # If $cmd is a string, a shell executes the command. If $cmd is an arrayref,
 # the command is executed directly without a shell (i.e. no IO redirects).
+#	sysrun($string, { log => 1 })
+#	sysrun([qw(ls -l), $file], { log => 1, stdout => 'ls.log' })
+# opts:
+#	log	Set true for syslog output
+#	stdout	Redirect STDOUT to this file (only if $cmd is an arrayref)
+#	stderr	Redirect STDERR to this file (only if $cmd is an arrayref)
 #
 sub sysrun($;$) {
   my ($cmd, $opts) = @_;
   $opts = {} unless defined $opts;
+  my $rc;
   if (ref($cmd) eq 'ARRAY') {
     loginfo(@$cmd) if $$opts{'log'};
-    system(@$cmd);
+    my $stdout = defined $$opts{'stdout'} ? $$opts{'stdout'} : '/dev/null';
+    my $stderr = defined $$opts{'stderr'} ? $$opts{'stderr'} : '/dev/null';
+    open(my $oldout, '>&STDOUT'); open(STDOUT,'>',$stdout);	# Redirect STDOUT & STDERR
+    open(my $olderr, '>&STDERR'); open(STDERR,'>',$stderr);
+    system(@$cmd);						# Run without shell
+    $rc = $?;
+    open(STDOUT, '>&', $oldout);				# Restore STDOUT and STDERR
+    open(STDERR, '>&', $olderr);
   } else {
     loginfo($cmd) if $$opts{'log'};
-    system($cmd);
+    system($cmd);						# Run using shell
+    $rc = $?;
   }
-  if ($? == -1) {
+  if ($rc == -1) {
     logerror("failed to execute: $!");
     return -1;
   }
-  if ($? & 127) {
+  if ($rc & 127) {
     logfmt("err", "child died with signal %d, %s coredump",
 			   ($? & 127), ($? & 128 ? "with":"without"));
     return -1;
   }
-  return $? >> 8;
+  return $rc >> 8;
 }
 
 

@@ -285,7 +285,7 @@ sub unpack_file($) {
     $fn =~ s/\.gz$//;
     my $dst = "$unpackdir/$fn";
     loginfo("gunzip $fn.gz") if !$Debug;
-    system("/usr/bin/gzip -dc $ifn >$dst");
+    sysrun([qw(/usr/bin/gzip -dc), $ifn], { stdout => $dst });
     $PQ->enqueue({ ident => $ident, fn => $fn });
     return;
   }
@@ -297,7 +297,8 @@ sub unpack_file($) {
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
     chdir("$unpackdir");
-    sysrun("$SBF2RIN -f $ifn -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
+    sysrun([$SBF2RIN, '-f', $ifn, qw(-l -R3 -nOP -s -D -O), $countrycode], { stdout => "$workdir/sbf2rin.$hour.log", log => $Debug });
+    #sysrun("$SBF2RIN -f $ifn -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
     chdir($INCOMING);
     $rs->checkfiles($unpackdir);
   }
@@ -505,18 +506,31 @@ local $SIG{INT} = sub { $signal_received = 'interrupted' };
 local $SIG{TERM} = sub { $signal_received = 'terminated' };
 local $SIG{HUP} = sub { $signal_received = 'SIGHUP' };
 
+# %inbound is used for delaying the processing of an inbound file by at least 1s.
+# This because uploaders may want to set attributes after file has been uploaded,
+# and if move straigt away, this will fail. It also ensures that inbound filenames
+# are unique (filter out multiple events for the same file).
+
+my %inbound;
+
 my $ntimeouts = 0;
 while (!$signal_received) {
+  my @q = sort { $inbound{$a} - $inbound{$b} } keys %inbound;
+  foreach (@q) {
+    if (time() - $inbound{$_} > 1) {
+      handle_inbound($_);
+      delete $inbound{$_};
+    }
+  }
+
   my $v = '';
   vec($v, $inotify->fileno, 1) = 1;
   select($v, undef, undef, 1);			# wait 1s for inotify has something
   if (vec($v, $inotify->fileno, 1)) {
     $ntimeouts = 0;
     my @events = $inotify->read;
-    foreach my $e (@events) {
-      handle_inbound($e->fullname);
-    }
-  } else {
+    $inbound{$_->fullname} = time() foreach @events;
+  } elsif (scalar(keys %inbound) == 0) {
     $ntimeouts++;
     if ($signal_received eq 'SIGHUP' || $ntimeouts % 600 == 0) {
       load_sites();

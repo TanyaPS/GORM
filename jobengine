@@ -226,38 +226,44 @@ $SIG{INT} = sub { $signal_received = 'interrupt' };
 $SIG{TERM} = sub { $signal_received = 'terminated' };
 $SIG{HUP} = 'IGNORE';
 
-my @RunQueue = ();
+my %RunQueue;
 
 # Enqueue jobs already in jobspool
 foreach (dirlist($JOBQUEUE)) {
   my $fn = "$JOBQUEUE/$_";
-  push(@RunQueue, { jobfile => $fn, content => readfile($fn) });
+  $RunQueue{$fn} = 0;
   unlink($fn);
 }
 
 my $ntimeouts = 0;
 my $need_restart = 0;
+
 while (!$signal_received) {
+  my @runq = sort { $RunQueue{$a} - $RunQueue{$b} } keys %RunQueue;
+  foreach (@runq) {
+    next if time() - $RunQueue{$_} < 2;		# Delay processing by at least 1s
+    my $content = readfile($_);
+    if (defined $content && length($content) > 0) {
+      $BW->add_work({ jobfile => $_, content => $content });
+    } else {
+      logerror("$_ does not exist or empty?!");
+    }
+    unlink($_);
+    delete $RunQueue{$_};
+  }
+
   my $v = '';
   vec($v, $inotify->fileno, 1) = 1;
   select($v, undef, undef, 1);			# wait 1s for inotify has something
   if (vec($v, $inotify->fileno, 1)) {
     $ntimeouts = 0;
     my @events = $inotify->read;		# Read all events available
-    foreach my $e (@events) {
-      my $content = readfile($e->fullname);
-      if (!defined $content || length($content) == 0) {
-        logerror($e->fullname.' does not exist or empty?!');
-      } else {
-        push(@RunQueue, { jobfile => $e->fullname, content => $content });
-      }
-      unlink($e->fullname);
+    foreach (@events) {
+      my $fn = $_->fullname;
+      $RunQueue{$fn} = time();
     }
-  } else {
+  } elsif (scalar(keys %RunQueue) == 0) {
     $ntimeouts++;
-    while (my $q = shift(@RunQueue)) {		# enqueue all jobs read by inotify
-      $BW->add_work($q);
-    }
     if ($BW->pending()) {			# Do we have outstanding results?
       my $res = $BW->get_result_nb();		# Try get a result
       next unless defined $res;			# Wait for next file if nothing yet...
@@ -271,7 +277,7 @@ while (!$signal_received) {
       foreach (dirlist($JOBQUEUE)) {
         my $fn = "$JOBQUEUE/$_";
         next if fileage($fn) < 900;		# Wait at least 15min before running a leftover
-        push(@RunQueue, { jobfile => $fn, content => readfile($fn) });
+        $RunQueue{$fn} = 0;
         unlink($fn);
       }
       scan_for_forced_incompletes();
