@@ -10,7 +10,6 @@ use strict;
 use warnings;
 use threads;
 use Thread::Queue;
-use Archive::Zip qw(:ERROR_CODES :CONSTANTS);
 use BaseConfig;
 use Logger;
 use Utils;
@@ -211,26 +210,21 @@ sub unzip($$$) {
   my ($rs, $zipfile, $unpackdir) = @_;
   my %v3typemap = ( 'o' => 'MO', 'n' => 'GN', 'g' => 'RN', 'l' => 'EN', 'f' => 'CN', 'q' => 'JN' );
 
-  my $zip = Archive::Zip->new;
-  if ($zip->read($zipfile) != AZ_OK) {
-    logwarn("unable to read zipfile $zipfile");
+  if (sysrun([qw(/usr/bin/unzip -o -j -qq), $zipfile, '-d', $unpackdir], { log => $Debug })) {
+    logwarn("unable to unzip zipfile $zipfile");
     return undef;
   }
-  foreach my $zm ($zip->members()) {
-    my $zmfn = $zm->fileName();
-    my $ofn;
-    unlink("$unpackdir/$zmfn");
-    $zm->extractToFileNamed("$unpackdir/$zmfn");	# extract
+  foreach my $zmfn (dirlist($unpackdir)) {
     if ($zmfn =~ /\.(gz|Z)$/) {				# uncompress
-      system('/usr/bin/gunzip', "$unpackdir/$zmfn");
+      sysrun(['/usr/bin/gunzip', "$unpackdir/$zmfn"]);
       $zmfn =~ s/\.(gz|Z)$//;
     }
     if ($zmfn =~ /\.(\d\dd|crx)$/) {			# crx2rnx
-      $ofn = $zmfn;
-      $ofn =~ s/d$/o/;
-      $ofn =~ s/\.crx$/.rnx/;
-      system($CRX2RNX, "$unpackdir/$zmfn", "$unpackdir/$ofn");
-      $zmfn = $ofn;
+      my $f = $zmfn;
+      $f =~ s/d$/o/;
+      $f =~ s/\.crx$/.rnx/;
+      sysrun([$CRX2RNX, "$unpackdir/$zmfn", "$unpackdir/$f"]);
+      $zmfn = $f;
     }
     my $ftyp;
     if ($zmfn =~ /\.\d\d([onglfq])$/) {			# rename to v3 name
@@ -243,7 +237,7 @@ sub unzip($$$) {
       next;
     }
     $ftyp .= '.'.$rs->{'interval'} if $ftyp eq 'MO';
-    $ofn = $rs->getRinexFilename($ftyp);
+    my $ofn = $rs->getRinexFilename($ftyp);
     if ($ofn ne $zmfn) {
       unlink("$unpackdir/$ofn");
       rename("$unpackdir/$zmfn", "$unpackdir/$ofn");
