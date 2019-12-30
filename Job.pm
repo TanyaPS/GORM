@@ -224,7 +224,7 @@ sub _mergezips($$) {
   my @infiles = ();
   push(@infiles, $_->{'zipfile'}) foreach @$rslist;
   return if scalar(@infiles) == 0;
-  sysrun("/usr/bin/zipmerge $outfile ".join(' ',@infiles), { log => $Debug });
+  sysrun(['/usr/bin/zipmerge', $outfile, @infiles], { log => $Debug });
   $rsday->{'zipfile'} = $outfile;
   return $rsday;
 }
@@ -532,8 +532,7 @@ sub gendayfiles() {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
     loginfo("Creating $navoutfile");
-    my @cmd = ($GFZRNX, '-finp', @$aref, '-fout', $navoutfile, qw(-f -kv -q));
-    sysrun(\@cmd, { log => $Debug });
+    sysrun([$GFZRNX, '-finp', @$aref, '-fout', $navoutfile, qw(-f -kv -q)], { log => $Debug });
     $rsday->{$navtyp} = $navoutfile;
   }
 
@@ -603,27 +602,17 @@ sub _QC($) {
   my $sumfile = $rs->getFilenamePrefix().'.sum';
   my $logfile = 'anubis.'.$rs->{'hour'}.'.log';
   # See http://epncb.oma.be/_documentation/guidelines/guidelines_analysis_centres.pdf
-  my $cmd = $ANUBIS.
-	" :inputs:rinexo ".$rs->{'MO.30'}.
-	" :inputs:rinexn \"".$rs->getNavlist()."\"".
-	" :qc:int_gap=360".
-	" :qc:ele_cut=0".
-	" :qc:pos_cut=0".
-	" :qc:sec_sum=2".
-	" :qc:sec_bnd=2".
-	" :qc:sec_gap=2".
-	" :qc:mpx_nep=20".
-	" :qc:mpx_lim=3.0".
-	" :outputs:verb=0".
-	" :outputs:xtr $sumfile".
-	" :outputs:log $logfile";
+  my @cmd = ($ANUBIS,
+	':inputs:rinexo', $rs->{'MO.30'},
+	':inputs:rinexn', $rs->getNavlist,
+	qw(:qc:int_gap=360 :qc:ele_cut=0 :qc:ele_pos=0 :qc:sec_sum=2 :qc:sec_bnd=2 :qc:sec_gap=2 :qc:mpx_nep=20 :qc:mpx_lim=3.0),
+	qw(:outputs:verb=0 :outputs:xtr), $sumfile, ':outputs:log', $logfile);
   if ($rs->{'hour'} eq '0') {
-    $cmd .= " :gen:sys GPS :gen:int 180 :qc:int_stp=3600";
+    push(@cmd, qw(:gen:sys GPS :gen:int 180 :qc:int_stp=3600));
   } else {
-    $cmd .= " :gen:int 30 :qc:int_stp=900";
+    push(@cmd, qw(:gen:int 30 :gc:int_stp=900));
   }
-  $cmd .= " :qc:int_stp=".($rs->{'hour'} eq '0' ? '3600':'900');
-  sysrun($cmd, { log => $Debug});
+  sysrun(\@cmd, { log => $Debug});
 
   # #TOTSUM First_Epoch________ Last_Epoch_________ Hours_ Sample MinEle #_Expt #_Have %Ratio o/slps woElev Exp>00 Hav>03 %Rt>03
   # =TOTSUM 2019-01-15 00:00:00 2019-01-15 23:59:30  24.00  30.00   0.00 144235 128435  89.05     35  50420 136654 128435  93.99

@@ -92,7 +92,7 @@ sub reprocess($$$) {
     if (!-d $savedir) {
       logwarn("Cannot reprocess $site-$year-$doy. Not in $SAVEDIR.");
     } else {
-      sysmv("$savedir/*", $INCOMING, { log => $Debug });
+      sysmv([<"$savedir/*">], $INCOMING, { log => $Debug });
     }
   }
 }
