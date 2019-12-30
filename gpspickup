@@ -298,7 +298,6 @@ sub unpack_file($) {
     my $countrycode = substr($site, 6, 3);
     chdir("$unpackdir");
     sysrun([$SBF2RIN, '-f', $ifn, qw(-l -R3 -nOP -s -D -O), $countrycode], { stdout => "$workdir/sbf2rin.$hour.log", log => $Debug });
-    #sysrun("$SBF2RIN -f $ifn -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
     chdir($INCOMING);
     $rs->checkfiles($unpackdir);
   }
@@ -427,7 +426,7 @@ sub handle_inbound($) {
   my $ff = parseFilename($fn);
   if (!defined $ff || !defined $ff->{'site4'}) {
     logwarn("$fn not recorgnized. Moved to stale.");
-    sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
+    sysmv([$ifn], $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
@@ -435,14 +434,14 @@ sub handle_inbound($) {
   my $sc = $SCS{$ff->{'site4'}};
   if (!defined $sc) {
     logwarn('No such site: '.$ff->{'site4'}.'. Moved to stale.');
-    sysmv($ifn, $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
+    sysmv([$ifn], $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
   # From hereon use the 9-ch site name.
   my ($site, $year, $doy) = ($sc->{'site'}, $ff->{'year'}, $ff->{'doy'});
   my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
-  sysmv($ifn, $savedir, { log => $Debug, mkdir => 1 });
+  sysmv([$ifn], $savedir, { log => $Debug, mkdir => 1 });
 
   my $job = new Job(site => $site, year => $year, doy => $doy, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
   my $workdir = $job->getWorkdir();
@@ -508,13 +507,15 @@ local $SIG{HUP} = sub { $signal_received = 'SIGHUP' };
 
 # %inbound is used for delaying the processing of an inbound file by at least 1s.
 # This because uploaders may want to set attributes after file has been uploaded,
-# and if move straigt away, this will fail. It also ensures that inbound filenames
+# and if moved straigt away, this will fail. It also ensures that inbound filenames
 # are unique (filter out multiple events for the same file).
 
 my %inbound;
 
 my $ntimeouts = 0;
 while (!$signal_received) {
+
+  # Handle inbound files. Try to handle in same order as they arrived.
   my @q = sort { $inbound{$a} - $inbound{$b} } keys %inbound;
   foreach (@q) {
     if (time() - $inbound{$_} > 1) {

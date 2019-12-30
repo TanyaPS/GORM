@@ -105,7 +105,7 @@ sub runcommand($) {
   my $cmd = shift;
 
   if ($cmd =~ /^reload ftpuploader/) {
-    sysrun("systemctl reload ftpuploader");
+    sysrun([qw(/usr/bin/systemctl reload ftpuploader)], { log => 1 });
   }
   elsif ($cmd =~ /^force complete (\w+) (\d+) (\d+)/) {
     force_completion($1, $2, $3);
@@ -209,9 +209,6 @@ my $Ninstances = (defined $opts{'i'} ? $opts{'i'} : $JOBINSTANCES);
 setprogram($0);
 $0 = basename($0)." ".join(' ',@ARGV);
 
-#select(STDERR); $| = 1;         # Unbuffered output
-#select(STDOUT); $| = 1;         # Unbuffered output
-
 my $BW = start_bw($Ninstances);
 loginfo("jobengine started with $Ninstances instances");
 
@@ -226,6 +223,8 @@ $SIG{INT} = sub { $signal_received = 'interrupt' };
 $SIG{TERM} = sub { $signal_received = 'terminated' };
 $SIG{HUP} = 'IGNORE';
 
+# Contains jobfiles ready to read.
+# Index is full name and value is time arrived
 my %RunQueue;
 
 # Enqueue jobs already in jobspool
@@ -257,11 +256,8 @@ while (!$signal_received) {
   select($v, undef, undef, 1);			# wait 1s for inotify has something
   if (vec($v, $inotify->fileno, 1)) {
     $ntimeouts = 0;
-    my @events = $inotify->read;		# Read all events available
-    foreach (@events) {
-      my $fn = $_->fullname;
-      $RunQueue{$fn} = time();
-    }
+    # Read all events available
+    $RunQueue{$_->fullname} = time() foreach $inotify->read;
   } elsif (scalar(keys %RunQueue) == 0) {
     $ntimeouts++;
     if ($BW->pending()) {			# Do we have outstanding results?

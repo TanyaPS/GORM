@@ -775,7 +775,7 @@ sub process() {
         loginfo("Compressing $filetosend");
         sysrun("$RNX2CRX $filetosend - | gzip -9q > $crxfile", { log => $Debug });
       }
-      syscp($crxfile, $destpath, { mkdir => 1, log => 1 } );
+      syscp([$crxfile], $destpath, { mkdir => 1, log => $Debug } );
     }
 
     ######
@@ -790,19 +790,19 @@ sub process() {
         }
         push(@copylist, $gzfile);
       }
-      syscp(\@copylist, $destpath, { mkdir => 1, log => 1 });
+      syscp(\@copylist, $destpath, { mkdir => 1, log => $Debug });
     }
 
     ######
     # Sum
     elsif ($r->{'filetype'} eq 'Sum') {
-      syscp($rs->{'sumfile'}, $destpath, { mkdir => 1, log => 1 });
+      syscp([$rs->{'sumfile'}], $destpath, { mkdir => 1, log => $Debug });
     }
 
     ######
     # Arc
     elsif ($r->{'filetype'} eq 'Arc') {
-      syscp($rs->{'zipfile'}, $destpath, { mkdir => 1, log => 1 });
+      syscp([$rs->{'zipfile'}], $destpath, { mkdir => 1, log => $Debug });
     }
 
   }

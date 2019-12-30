@@ -44,7 +44,7 @@ INIT {
 ##########################################################################
 # Execute command with args.
 # If $cmd is a string, a shell executes the command. If $cmd is an arrayref,
-# the command is executed directly without a shell (i.e. no IO redirects).
+# the command is executed directly without a shell.
 #	sysrun($string, { log => 1 })
 #	sysrun([qw(ls -l), $file], { log => 1, stdout => 'ls.log' })
 # opts:
@@ -64,7 +64,7 @@ sub sysrun($;$) {
     open(my $olderr, '>&STDERR'); open(STDERR,'>',$stderr);
     system(@$cmd);						# Run without shell
     $rc = $?;
-    open(STDOUT, '>&', $oldout);				# Restore STDOUT and STDERR
+    open(STDOUT, '>&', $oldout);				# Restore STDOUT & STDERR
     open(STDERR, '>&', $olderr);
   } else {
     loginfo($cmd) if $$opts{'log'};
@@ -92,13 +92,13 @@ sub sysrun($;$) {
 sub _eval_cp_args($$$$) {
   my ($cmd, $srclist, $dst, $opts) = @_;
 
-  $srclist = join(' ', @$srclist) if ref($srclist) eq "ARRAY";
-  loginfo("$cmd $srclist $dst") if $$opts{'log'};
   if ($$opts{'mkdir'} && ! -d $dst) {
     make_path($dst, { user=>'gpsuser', group=>'gnss' } );
     chmod(0775, $dst);
   }
-  return system("/bin/$cmd $srclist $dst");
+  my $logopt = $$opts{'log'} ? $$opts{'log'} : 0;
+  return sysrun(["/bin/$cmd", '-f', @$srclist, $dst], { log => $logopt }) if ref($srclist) eq 'ARRAY';
+  return sysrun("/bin/$cmd -f $srclist $dst", { log => $logopt });	  # Keep as string to do shell
 }
 
 sub syscp($$;$) {

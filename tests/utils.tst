@@ -32,8 +32,7 @@ sub test_syscp_array() {
   system("cp $0 $tmp1/cp1");
   system("cp $0 $tmp1/cp2");
   my $tmp2 = "/tmp/cp2.$$";
-  my @a = qq{ $tmp1/cp1 $tmp1/cp2 };
-  syscp(\@a, $tmp2, { mkdir => 1 });
+  syscp(["$tmp1/cp1","$tmp1/cp2"], $tmp2, { mkdir => 1, log => 1 });
   my $files1 = `ls $tmp1`;
   my $files2 = `ls $tmp2`;
   system("rm -r $tmp1 $tmp2");
@@ -54,9 +53,8 @@ sub test_sysmv_array() {
   mkdir $sdir;
   system("cp $0 $sdir/cp1");
   system("cp $0 $sdir/cp2");
-  my @a = qq{ $sdir/cp1 $sdir/cp2 };
   my $tdir = "/tmp/target.$$";
-  sysmv(\@a, $tdir, { mkdir => 1 });
+  sysmv(["$sdir/cp1","$sdir/cp2"], $tdir, { mkdir => 1, log => 1 });
   my $files = `ls $tdir`;
   system("rm -rf $sdir $tdir");
   return $files eq "cp1\ncp2\n";
