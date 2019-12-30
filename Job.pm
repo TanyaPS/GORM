@@ -604,7 +604,7 @@ sub _QC($) {
   # See http://epncb.oma.be/_documentation/guidelines/guidelines_analysis_centres.pdf
   my @cmd = ($ANUBIS,
 	':inputs:rinexo', $rs->{'MO.30'},
- 	':inputs:rinexn', $rs->{'hour'} eq '0' ? $rs->getRinexFilename('GN') : $rs->getNavlist,
+ 	':inputs:rinexn', scalar $rs->getNavlist,
 	qw(:qc:int_gap=360 :qc:ele_cut=0 :qc:ele_pos=0 :qc:sec_sum=2 :qc:sec_bnd=2 :qc:sec_gap=2 :qc:mpx_nep=20 :qc:mpx_lim=3.0),
 	qw(:outputs:verb=0 :outputs:xtr), $sumfile, ':outputs:log', $logfile);
   if ($rs->{'hour'} eq '0') {
