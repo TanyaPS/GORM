@@ -200,7 +200,7 @@ sub ftpuploader($) {
       loginfo("$localdir/$fn -> $protocol://$host$destpath$fn");
       $rc = 0;
       if ($protocol eq 'sftp') {
-        $ftp->put($fn, $fn, { copy_perms => 0, copy_time => 0, resume => 0, cleanup => 0 });
+        $ftp->put($fn, $fn, copy_perm => 0, copy_time => 0, resume => 0, cleanup => 0 );
         if ($ftp->error) {
           $rc = $ftp->error;
           logerror("Error SFTP uploading $fn: ".$rc);
