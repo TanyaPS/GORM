@@ -610,7 +610,7 @@ sub _QC($) {
   if ($rs->{'hour'} eq '0') {
     push(@cmd, qw(:gen:sys GPS :gen:int 180 :qc:int_stp=3600));
   } else {
-    push(@cmd, qw(:gen:int 30 :gc:int_stp=900));
+    push(@cmd, qw(:gen:int 30 :qc:int_stp=900));
   }
   sysrun(\@cmd, { log => $Debug});
 
