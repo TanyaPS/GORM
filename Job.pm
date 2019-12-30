@@ -604,7 +604,7 @@ sub _QC($) {
   # See http://epncb.oma.be/_documentation/guidelines/guidelines_analysis_centres.pdf
   my @cmd = ($ANUBIS,
 	':inputs:rinexo', $rs->{'MO.30'},
-	':inputs:rinexn', $rs->getNavlist,
+ 	':inputs:rinexn', $rs->{'hour'} eq '0' ? $rs->getRinexFilename('GN') : $rs->getNavlist,
 	qw(:qc:int_gap=360 :qc:ele_cut=0 :qc:ele_pos=0 :qc:sec_sum=2 :qc:sec_bnd=2 :qc:sec_gap=2 :qc:mpx_nep=20 :qc:mpx_lim=3.0),
 	qw(:outputs:verb=0 :outputs:xtr), $sumfile, ':outputs:log', $logfile);
   if ($rs->{'hour'} eq '0') {
@@ -612,7 +612,7 @@ sub _QC($) {
   } else {
     push(@cmd, qw(:gen:int 30 :qc:int_stp=900));
   }
-  sysrun(\@cmd, { log => $Debug});
+  sysrun(\@cmd, { log => $Debug });
 
   # #TOTSUM First_Epoch________ Last_Epoch_________ Hours_ Sample MinEle #_Expt #_Have %Ratio o/slps woElev Exp>00 Hav>03 %Rt>03
   # =TOTSUM 2019-01-15 00:00:00 2019-01-15 23:59:30  24.00  30.00   0.00 144235 128435  89.05     35  50420 136654 128435  93.99

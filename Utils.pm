@@ -64,6 +64,8 @@ sub sysrun($;$) {
     open(my $olderr, '>&STDERR'); open(STDERR,'>',$stderr);
     system(@$cmd);						# Run without shell
     $rc = $?;
+    STDOUT->flush() if $$opts{'stdout'};
+    STDERR->flush() if $$opts{'stderr'};
     open(STDOUT, '>&', $oldout);				# Restore STDOUT & STDERR
     open(STDERR, '>&', $olderr);
   } else {
