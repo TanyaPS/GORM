@@ -518,6 +518,7 @@ sub gendayfiles() {
 
   loginfo("Generating daily files for $site-$year-$doy");
   # Splice navigation files
+  # Order nav file lists by type
   my %navbytyp;
   foreach my $rs (@rslist) {
     foreach ($rs->getNavlist()) {
@@ -528,6 +529,7 @@ sub gendayfiles() {
       }
     }
   }
+  # Foreach nav type, splice the list into one daily nav file
   foreach my $navtyp (keys %navbytyp) {
     my $navoutfile = $rsday->getRinexFilename($navtyp);
     my $aref = $navbytyp{$navtyp};
@@ -537,7 +539,7 @@ sub gendayfiles() {
   }
 
 
-  # Do we need 1s dayfile?
+  # Do we need 1s dayfile? If not, dont create.
   my $interval = 30;
   my $aref = $dbh->selectrow_arrayref(q{
 	select count(*) from rinexdist
@@ -549,10 +551,10 @@ sub gendayfiles() {
   }
   $rsday->{'interval'} = $interval;
 
-  # create 30s dayfile as we know we need it for QC
+  # Always create 30s dayfile as we know we need it for QC
   _splice($rsday, \@rslist, 30);
 
-  # create daily zip if we need it
+  # Create daily zip if we need it
   $aref = $dbh->selectrow_arrayref(q{
 	select	count(*) from rinexdist
 	where	site = ? and freq = 'D' and filetype = 'Arc' and active = 1
@@ -648,7 +650,7 @@ sub save_originals($) {
   # Check if we need an Arc, either daily or hourly. If not, don't bother creating one.
   my $aref = $self->{'DB'}->{'DBH'}->selectrow_arrayref(q{
 	select	count(*) from rinexdist
-	where	site = ? and filetype = 'Arc'
+	where	site = ? and filetype = 'Arc' and active = 1
   }, undef, $rs->{'site'});
   return if $aref->[0] eq '0';
 

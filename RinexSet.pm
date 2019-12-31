@@ -89,7 +89,7 @@ sub getRinexFilename($) {
 }
 
 #################################
-# Returns array of nav files
+# Returns array or string of nav files 
 #
 sub getNavlist() {
   my $self = shift;
@@ -132,6 +132,7 @@ sub load(;$) {
 
 #################################
 # Store self into rs JSON file
+# Ignore attributes where name starts with '_'
 #
 sub store(;$) {
   my ($self, $file) = @_;

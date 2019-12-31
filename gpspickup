@@ -114,12 +114,14 @@ sub submit_pending() {
     my $rs = $Pending{$ident};
 
     # Check age. Next RinexSet if its too young and delete it if its stale.
-    my $age = time() - $rs->{'_timestamp'};
-    next if $age < 20;
-    if ($age > 3600) {
-      delete $Pending{$ident};	# Stale
+    my $mod_age = time() - $rs->{'_timestamp'};
+    my $cre_age = time() - $rs->{'_timecreated'};
+    if ($cre_age > 7200) {	# Stale?
+      logwarn("Removed stale pending job $ident");
+      delete $Pending{$ident};
       next;
     }
+    next if $mod_age < 20;	# Too young?
 
     # We need the obs file and at least one nav file
     if (scalar(grep(/^MO\./, keys %$rs)) == 0 ||
@@ -152,7 +154,6 @@ sub submit_pending() {
     if ($state =~ /^(none|processed)$/) {
       loginfo("Submitting $ident");
       delete $Pending{$ident};
-      delete $rs->{'_timestamp'};
       moveall("$workdir/unpack.".$rs->{'hour'}, $workdir);
       $rs->store();
       $job->writestate('queued');
@@ -200,7 +201,7 @@ sub pending_thread() {
       $rs->{$1} = $fn;
     }
 
-    $rs->{'_timestamp'} = time();
+    $rs->{'_timecreated'} = $rs->{'_timestamp'} = time();
     $Pending{$ident} = $rs;
   }
   threads->detach;

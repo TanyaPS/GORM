@@ -250,8 +250,15 @@ sub FTPclient($) {
 }
 
 ###################################################
-# Spawn new/created clients not already started
-# and kill deleted/deactived running clients
+# Spawn new/created clients not already started and kill deleted/deactived running clients.
+#
+# Load the rules from DB. Each destination has an entry in uploaddest/ftpupload:
+# name:		The name of the rule. Must start with 'sftp-' if the protocol is sftp (gpsftp4 only).
+# host:		Fully qualified host name of the receiver.
+# user:		FTP/SFTP username.
+# pass:		FTP password or SFTP ssh private key file name.
+# localdir:	Local path definition
+# remotedir:	Path on remote server to store files. Can contain variables.
 #
 my %PIDS;
 my %TS;
