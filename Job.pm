@@ -618,8 +618,9 @@ sub _QC($) {
 
   # #TOTSUM First_Epoch________ Last_Epoch_________ Hours_ Sample MinEle #_Expt #_Have %Ratio o/slps woElev Exp>00 Hav>03 %Rt>03
   # =TOTSUM 2019-01-15 00:00:00 2019-01-15 23:59:30  24.00  30.00   0.00 144235 128435  89.05     35  50420 136654 128435  93.99
-  my $qc = 0;
+
   open(my $fd, '<', $sumfile) || return 0;
+  my $qc = 0;
   while (<$fd>) {
     chomp;
     if (/^=TOTSUM /) {
@@ -630,6 +631,11 @@ sub _QC($) {
       last;
     }
   }
+  close($fd);
+
+  open($fd, '>>', $sumfile);
+  print $fd "\n======================\nLogfile:\n";
+  print $fd readfile($logfile)."\n";
   close($fd);
 
   sysrun(['/usr/bin/gzip', '-9fq', $sumfile], { log => $Debug });
