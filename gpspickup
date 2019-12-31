@@ -522,9 +522,7 @@ my %inbound;
 my $ntimeouts = 0;
 while (!$signal_received) {
 
-  # Handle inbound files. Try to handle in same order as they arrived.
-  my @q = sort { $inbound{$a} - $inbound{$b} } keys %inbound;
-  foreach (@q) {
+  foreach (sort keys %inbound) {
     if (time() - $inbound{$_} > 1) {
       handle_inbound($_);
       delete $inbound{$_};
