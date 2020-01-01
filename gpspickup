@@ -115,15 +115,15 @@ sub submit_pending() {
 
     # Check what we got so far. We need the obs file and at least one nav file.
     my @k = keys %$rs;
-    my $has_obs = scalar(grep(/^MO\./, @k));
-    my $has_nav = defined $rs->{'MN'} || scalar(grep(/^[A-Z]N$/, @k));
-    unless ($has_obs && $has_nav) {
+    my $have_obs = scalar(grep(/^MO\./, @k)) > 0;
+    my $have_nav = scalar(grep(/^[A-Z]N$/, @k)) > 0;
+    unless ($have_obs && $have_nav) {
       $rs->{'_timestamp'} = time();	# Not enough. Postpone another 20s.
       next;
     }
 
-    # Check age. Skip if its too young and delete it if its stale.
-    if (!defined $rs->{'MN'}) {		# We know its complete if it has Mixed Nav.
+    # Check age. Skip if it is too young. Delete if it is stale.
+    if (!defined $rs->{'MN'}) {		# We know the RinexSet is complete if it has Mixed Nav.
       my $mod_age = time() - $rs->{'_timestamp'};
       my $cre_age = time() - $rs->{'_timecreated'};
       if ($cre_age > 7200) {	# Stale?
@@ -153,7 +153,7 @@ sub submit_pending() {
     }
 
     # Everything checks out, then submit the job if not already queued/running.
-    my $job = new Job(rs => $rs);
+    my $job = Job->new(rs => $rs);
     my $state = $job->lockstate()->readstate();
     if ($state =~ /^(none|processed)$/) {
       loginfo("Submitting $ident");
@@ -188,7 +188,7 @@ sub pending_thread() {
     if (!defined $rs) {
       # Not in $Pending. Either new or late arrival.
       my ($site, $year, $doy, $hour) = split(/-/, $ident);
-      $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour);
+      $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour);
       if (-f $rs->getRsFile()) {
         logwarn("$ident: $fn arrived late.");
         $rs->load();
@@ -282,7 +282,7 @@ sub unpack_file($) {
 
   my ($year, $doy, $hour) = ($ff->{'year'}, $ff->{'doy'}, $ff->{'hour'});
 
-  my $job = new Job(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
+  my $job = Job->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
   my $ident = $job->getIdent();
   my $rs;
@@ -304,7 +304,7 @@ sub unpack_file($) {
   # Single file uploads. Unpack and submit job directly.
 
   if ($ff->{'ftyp'} eq 'septentrio-raw') {
-    $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
     chdir($unpackdir);
@@ -314,7 +314,7 @@ sub unpack_file($) {
   }
 
   elsif ($ff->{'ftyp'} eq 'trinzic-zip') {
-    $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
     unzip($rs, $ifn, $unpackdir);
   }
@@ -325,7 +325,7 @@ sub unpack_file($) {
       logwarn("Split hours not supported yet.");
       return;
     }
-    $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
     unzip($rs, $ifn, $unpackdir);
   }
@@ -454,7 +454,7 @@ sub handle_inbound($) {
   my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
   sysmv([$ifn], $savedir, { log => $Debug, mkdir => 1 });
 
-  my $job = new Job(site => $site, year => $year, doy => $doy, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
+  my $job = Job->new(site => $site, year => $year, doy => $doy, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
   my $workdir = $job->getWorkdir();
   if (! -d $workdir) {
     return if dailysum_exists($site, $year, $doy);
@@ -499,12 +499,12 @@ select(STDOUT); $| = 1;
 threads->create('unpack_thread') for (1..$Nthreads);
 threads->create('pending_thread');
 
-my $inotify = new Linux::Inotify2
+my $inotify = Linux::Inotify2->new()
 	|| errdie("$0: unable to create new inotify object: $!");
 $inotify->blocking(0);
 $inotify->watch($INCOMING, IN_MOVED_TO | IN_CLOSE_WRITE);
 
-$DB = new GPSDB;	# GPSDB must be instantiated after thread creations
+$DB = GPSDB->new;	# GPSDB must be instantiated after thread creations
 load_sites();
 
 loginfo("$0 started. threads=$Nthreads, Debug=$Debug");

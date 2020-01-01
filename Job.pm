@@ -500,10 +500,10 @@ sub gendayfiles() {
   my ($site, $year, $doy) = ($self->{'site'}, $self->{'year'}, $self->{'doy'});
   my @rslist = ();
 
-  my $rsday = new RinexSet(site => $site, year => $year, doy => $doy, hour => '0');
+  my $rsday = RinexSet->new(site => $site, year => $year, doy => $doy, hour => '0');
 
   foreach my $h ('a'..'x') {
-    my $rs = new RinexSet(site => $site, year => $year, doy => $doy, hour => $h);
+    my $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $h);
     if (-f $rs->getRsFile()) {
       $rs->load();
       next unless exists $rs->{'processed'};
@@ -685,7 +685,7 @@ sub process() {
 
   loginfo($self->getIdent()." starting");
 
-  $self->{'DB'} = new GPSDB;
+  $self->{'DB'} = GPSDB->new;
   my $dbh = $self->{'DB'}->{'DBH'};
 
   my $rs;
@@ -693,7 +693,7 @@ sub process() {
     $rs = $self->gendayfiles();
     return 'error' unless defined $rs;
   } else {
-    $rs = new RinexSet(rsfile => $self->{rsfile});
+    $rs = RinexSet->new(rsfile => $self->{rsfile});
   }
 
   # Patch RINEX header
@@ -829,7 +829,7 @@ sub process() {
 
     # Check if doy is complete, and if it is, submit a day job
     # Manipulate state.0 in exclusive mode since all processes tries to update this.
-    my $dayjob = new Job(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
+    my $dayjob = Job->new(site => $site, year => $year, doy => $doy, hour => '0', interval => $self->{'interval'});
     my $state = $dayjob->lockstate()->readstate();
     $state = 'incomplete' if $state eq 'none';
     if ($state eq 'incomplete') {

@@ -29,14 +29,14 @@ sub force_completion($$$) {
   my ($site, $year, $doy) = @_;
 
   loginfo("Force completion of $site-$year-$doy");
-  my $dayjob = new Job(site => $site, year => $year, doy => $doy);
+  my $dayjob = Job->new(site => $site, year => $year, doy => $doy);
   my $workdir = $dayjob->getWorkdir;
 
   # Find interval
   my $interval;
   foreach my $hour ('a'..'x') {
     next unless -f "$workdir/rs.$hour.json";
-    my $rs = new RinexSet(rsfile => "$workdir/rs.$hour.json");
+    my $rs = RinexSet->new(rsfile => "$workdir/rs.$hour.json");
     $interval = $rs->{'interval'};
     last if defined $interval;
   }
@@ -117,8 +117,8 @@ sub runcommand($) {
 
 
 #####################################
-# This sub is runned by the fork manager,
-# It calls Job->process and returns the result.
+# This sub is runned by the fork manager. Remember, this is another process than the main in this script.
+# This sub calls the main sub in Job.pm that does all the work.
 #
 sub runjob($) {
   my $jobfileref = shift;
@@ -132,7 +132,7 @@ sub runjob($) {
   }
 
   # otherwise assume it's a JSON file
-  my $job = new Job(json => $content);
+  my $job = Job->new(json => $content);
   my $ident = $job->getIdent();
   my $res = { ident => $ident, result => 'error' };
 
@@ -150,7 +150,7 @@ sub runjob($) {
   my $workdir = $job->getWorkdir;
   chdir($workdir);
 
-  # Make sure we are alone
+  # Set state to running
   my $state = $job->lockstate()->readstate();
   if ($state ne 'queued') {
     $job->unlockstate();
@@ -173,25 +173,22 @@ sub runjob($) {
   return $res;
 }
 
-#
-# Executed when the worker is forked
-#
-sub init_worker() {
-  setprogram("job");
-  $0 = 'job';
-}
 
+#
 # Initialize BossWorkerAsync
+# See 'man Parallel::Fork::BossWorkerAsync
+#
 sub start_bw($) {
   my $instances = shift;
   return Parallel::Fork::BossWorkerAsync->new(
 	work_handler => \&runjob,
-	init_handler => \&init_worker,
-	global_timeout => 0,		# Disable timeouts
+	init_handler => sub { setprogram('job'); $0 = 'job' },
+	global_timeout => 0,
 	worker_count => $instances,
 	read_size => 1024 * 2,
   );
 }
+
 
 ########################################################################################################
 # Main program
@@ -213,7 +210,7 @@ my $BW = start_bw($Ninstances);
 loginfo("jobengine started with $Ninstances instances");
 
 # Setup queue event handler
-my $inotify = new Linux::Inotify2;
+my $inotify = Linux::Inotify2->new();
 $inotify->blocking(0);
 my $watcher = $inotify->watch($JOBQUEUE, IN_MOVED_TO | IN_CLOSE_WRITE);
 

@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# Common subroutines for the GPS monitor scripts. This module cannot be instantiated.
+# Common subroutines for the GNSS GORM scripts. This module cannot be instantiated.
 #
 # Soren Juul Moller, August 2012.
 # Soren Juul Moller, Nov 2019
@@ -37,7 +37,7 @@ BEGIN {
 }
 
 INIT {
-  $DMB = new Date::Manip::Base;
+  $DMB = Date::Manip::Base->new;
 }
 
 
@@ -47,10 +47,14 @@ INIT {
 # the command is executed directly without a shell.
 #	sysrun($string, { log => 1 })
 #	sysrun([qw(ls -l), $file], { log => 1, stdout => 'ls.log' })
-# opts:
-#	log	Set true for syslog output
+#
+# opts:	log	Set true for syslog output
 #	stdout	Redirect STDOUT to this file (only if $cmd is an arrayref)
 #	stderr	Redirect STDERR to this file (only if $cmd is an arrayref)
+#
+# Note: Do NOT use stdout/stderr for heavy output. No need for external processes
+#       to channel data through perl that is going to a file anyway. Then its
+#       better to use sysrun("cmd >file") syntax insted.
 #
 sub sysrun($;$) {
   my ($cmd, $opts) = @_;

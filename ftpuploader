@@ -36,7 +36,7 @@ sub FTPclient($) {
   chdir($localdir) || errdie("$0: chdir: $!\n");
 
   # Arm directory monitor
-  my $inotify = new Linux::Inotify2;
+  my $inotify = Linux::Inotify2->new;
   my $watch = $inotify->watch($localdir, IN_CLOSE_WRITE | IN_MOVED_TO);
 
   loginfo("ftpuploader [$name] started");
@@ -272,7 +272,7 @@ my %TS;
 use GPSDB;
 
 sub reload() {
-  my $DB = new GPSDB;
+  my $DB = GPSDB->new;
   my $confs;
 
   if ($PLATFORM eq 'gpsftp4') {
