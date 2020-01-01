@@ -152,12 +152,13 @@ sub FTPclient($) {
           $site = $site4.($site4 eq 'ARGI' ? '00FRO':'00DNK');
         }
         # Do the variable substitutions
+        my ($doystr, $hhstr) = (sprintf("%03d", $doy), sprintf("%03d", $hh));
 	$destpath =~ s/%site/$site/g;
 	$destpath =~ s/%site4/$site4/g;
 	$destpath =~ s/%year/$year/g;
-	$destpath =~ s/%doy/$doy/g;
+	$destpath =~ s/%doy/$doystr/g;
 	$destpath =~ s/%hour/$hour/g;
-	$destpath =~ s/%hh24/$hh/g;
+	$destpath =~ s/%hh24/$hhstr/g;
         # Error out if any variables still in $destpath
         if ($destpath =~ /%/) {
           logerror("Invalid variable in $destpath");
