@@ -223,8 +223,8 @@ sub pending_thread() {
 #################################
 # Unzip $zipfile into $unpackdir using RINEXv3 filenames
 #
-sub unzip($$$) {
-  my ($rs, $zipfile, $unpackdir) = @_;
+sub unzip($$$$) {
+  my ($rs, $zipfile, $unpackdir, $fninfo) = @_;
   my %v3typemap = ( 'o' => 'MO', 'n' => 'GN', 'g' => 'RN', 'l' => 'EN', 'f' => 'CN', 'q' => 'JN' );
 
   if (sysrun([qw(/usr/bin/unzip -o -j -qq), $zipfile, '-d', $unpackdir], { log => $Debug })) {
@@ -254,7 +254,7 @@ sub unzip($$$) {
       next;
     }
     $ftyp .= '.'.$rs->{'interval'} if $ftyp eq 'MO';
-    my $ofn = $rs->getRinexFilename($ftyp);
+    my $ofn = $rs->getRinexFilename($ftyp, $fninfo->{'mi'});
     if ($ofn ne $zmfn) {
       unlink("$unpackdir/$ofn");
       rename("$unpackdir/$zmfn", "$unpackdir/$ofn");
@@ -266,6 +266,34 @@ sub unzip($$$) {
 }
 
 
+#
+# Splice splitted Rinex files into new hour Rinex file
+#
+sub spliceRinex($$$$) {
+  my ($rs, $workdir, $unpackdir, $mi) = @_;
+
+  return if $mi == 0;
+
+  # Load rs from $workdir
+  my $wdrs = RinexSet->new(rsfile => $rs->getRsFile);
+  return unless defined $wdrs;	# Not found, nothing to splice
+
+  foreach (grep(/^MO\.|^[A-Z]N$/, keys %$wdrs)) {
+    my $wdfn = $workdir.'/'.$wdrs->{$_};
+    my $upfn = $unpackdir.'/'.$rs->getRinexFilename($_, $mi);
+    my $newupfn = $unpackdir.'/'.$rs->getRinexFilename($_, 0);
+    loginfo("Splicing $wdfn and $upfn to $newupfn");
+    if (-f $upfn) {
+      unlink($newupfn);
+      sysrun([$GFZRNX, '-finp', $wdfn, $upfn, '-fout', $newupfn, qw(-kv -q -splice_direct)], { log => $Debug });
+    } else {
+      rename($wdfn, $newupfn);
+    }
+    unlink($upfn, $rs->getRsFile);
+  }
+}
+
+
 #################################
 # Unpack one file into its workdir.
 #
@@ -274,13 +302,13 @@ sub unpack_file($) {
   my ($ifn, $site, $obsint) = ($parm->{'ifn'}, $parm->{'site'}, $parm->{'obsint'});
   my $fn = basename($ifn);
 
-  my $ff = parseFilename($fn);
-  if (!defined $ff) {
+  my $fninfo = parseFilename($fn);
+  if (!defined $fninfo) {
     logwarn("Cannot recognize file $fn");
     return;
   }
 
-  my ($year, $doy, $hour) = ($ff->{'year'}, $ff->{'doy'}, $ff->{'hour'});
+  my ($year, $doy, $hour) = ($fninfo->{'year'}, $fninfo->{'doy'}, $fninfo->{'hour'});
 
   my $job = Job->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint);
   my $workdir = $job->getWorkdir;
@@ -292,18 +320,19 @@ sub unpack_file($) {
 
   # Multi file uploads go to the pending thread. State is handled there.
 
-  if ($ff->{'ftyp'} eq 'septentrio-rnx3') {
+  if ($fninfo->{'ftyp'} eq 'septentrio-rnx3') {
     $fn =~ s/\.gz$//;
     my $dst = "$unpackdir/$fn";
     loginfo("gunzip $fn.gz") if !$Debug;
     sysrun("/usr/bin/gzip -dc $ifn >$dst 2>/dev/null", { log => $Debug });
+    spliceRinex($rs, $workdir, $unpackdir, $fninfo->{'mi'}) if $fninfo->{'mi'} != 0;
     $PQ->enqueue({ ident => $ident, fn => $fn });
     return;
   }
 
   # Single file uploads. Unpack and submit job directly.
 
-  if ($ff->{'ftyp'} eq 'septentrio-raw') {
+  if ($fninfo->{'ftyp'} eq 'septentrio-raw') {
     $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
@@ -313,21 +342,17 @@ sub unpack_file($) {
     $rs->checkfiles($unpackdir);
   }
 
-  elsif ($ff->{'ftyp'} eq 'trinzic-zip') {
+  elsif ($fninfo->{'ftyp'} eq 'trinzic-zip') {
     $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
-    unzip($rs, $ifn, $unpackdir);
+    unzip($rs, $ifn, $unpackdir, $fninfo);
   }
 
-  elsif ($ff->{'ftyp'} eq 'leica-zip') {
-    if ($ff->{'mi'} != 0) {
-      # TODO: merge split hour into exiting hour
-      logwarn("Split hours not supported yet.");
-      return;
-    }
+  elsif ($fninfo->{'ftyp'} eq 'leica-zip') {
     $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
-    unzip($rs, $ifn, $unpackdir);
+    unzip($rs, $ifn, $unpackdir, $fninfo);
+    spliceRinex($rs, $workdir, $unpackdir, $fninfo->{'mi'}) if $fninfo->{'mi'} != 0;
   }
 
   if (defined $rs) {
@@ -352,7 +377,7 @@ sub unpack_file($) {
     }
   } else {
     $job->writestate('none');
-    logerror("Unknown filetype: $ff->{'ftyp'}");
+    logerror("Unknown filetype: $fninfo->{'ftyp'}");
   }
   $job->unlockstate();
 }
@@ -434,27 +459,27 @@ sub handle_inbound($) {
   my $ifn = shift;
 
   my $fn = basename($ifn);
-  my $ff = parseFilename($fn);
-  if (!defined $ff || !defined $ff->{'site4'}) {
+  my $fninfo = parseFilename($fn);
+  if (!defined $fninfo || !defined $fninfo->{'site4'}) {
     logwarn("$fn not recorgnized. Moved to stale.");
     sysmv([$ifn], $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
   # Make sure we know the site
-  my $sc = $SCS{$ff->{'site4'}};
+  my $sc = $SCS{$fninfo->{'site4'}};
   if (!defined $sc) {
-    logwarn('No such site: '.$ff->{'site4'}.'. Moved to stale.');
+    logwarn('No such site: '.$fninfo->{'site4'}.'. Moved to stale.');
     sysmv([$ifn], $SAVEDIR.'/stale', { log => $Debug, mkdir => 1 });
     return;
   }
 
   # From hereon use the 9-ch site name.
-  my ($site, $year, $doy) = ($sc->{'site'}, $ff->{'year'}, $ff->{'doy'});
+  my ($site, $year, $doy) = ($sc->{'site'}, $fninfo->{'year'}, $fninfo->{'doy'});
   my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
   sysmv([$ifn], $savedir, { log => $Debug, mkdir => 1 });
 
-  my $job = Job->new(site => $site, year => $year, doy => $doy, hour => $ff->{'hour'}, interval => $sc->{'obsint'});
+  my $job = Job->new(site => $site, year => $year, doy => $doy, hour => $fninfo->{'hour'}, interval => $sc->{'obsint'});
   my $workdir = $job->getWorkdir();
   if (! -d $workdir) {
     return if dailysum_exists($site, $year, $doy);

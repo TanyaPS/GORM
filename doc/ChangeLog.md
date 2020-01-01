@@ -1,5 +1,9 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-01-01	sjm	Implement splicing of sub-hour Rinex files
+- Sub-hour (split hour) handling.
+- Conform to Perl recommendation for calling contructors.
+
 ## 2019-12-30	sjm	ftpuploader backport to gpsftp4. Delay move from incoming.
 - ftpuploader ported to gpsftp4 (CentOS 6). Do not try setting attributes of sftp upload.
 - Delay move from $INCOMING to saved by 1s to allow remote client to set attributes on uploaded file.

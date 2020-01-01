@@ -69,23 +69,25 @@ sub getRsFile() {
 #################################
 # Get common filename prefix
 #
-sub getFilenamePrefix() {
-  my $self = shift;
-  return sprintf "%s_R_%d%03d%02d00_01%s",
-	$self->{site}, $self->{year}, $self->{doy}, letter2hour($self->{hour}), $self->{hour} eq '0' ? 'D':'H';
+sub getFilenamePrefix(;$) {
+  my ($self, $mi) = @_;
+  $mi = 0 unless defined $mi;
+  return sprintf "%s_R_%d%03d%02d%02d_01%s",
+	$self->{site}, $self->{year}, $self->{doy}, letter2hour($self->{hour}), $mi, $self->{hour} eq '0' ? 'D':'H';
 }
 
 #################################
 # Get RINEXv3 filename of specified type
 # Type: MO.# or aN
 #
-sub getRinexFilename($) {
-  my ($self, $ftyp) = @_;
+sub getRinexFilename($;$) {
+  my ($self, $ftyp, $mi) = @_;
+  $mi = 0 unless defined $mi;
   if ($ftyp =~ /^MO\.(\d+)/) {
     my $interval = $1;
-    return sprintf("%s_%02dS_MO.rnx", $self->getFilenamePrefix, $interval);
+    return sprintf("%s_%02dS_MO.rnx", $self->getFilenamePrefix($mi), $interval);
   }
-  return $self->getFilenamePrefix."_".$ftyp.".rnx";
+  return $self->getFilenamePrefix($mi)."_".$ftyp.".rnx";
 }
 
 #################################
