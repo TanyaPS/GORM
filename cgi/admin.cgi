@@ -662,14 +662,22 @@ sub uploaddest() {
 
   my $changed = 0;
   if (defined $cgi->param('submit')) {
-    sub checkpath($) {	# Check if path exists. Disable rule if not.
+    sub checkpath($$) {
+      my ($name, $path) = @_;
+      if (index($path, '/') != 0) {
+        print "<b style=\"color:red\">Path ".$path." ($name) must start with an '/'. Deactivating rule.</b><p>\n";
+        return 0;
+      }
+      return 1;
+    }
+    sub checklocaldir($) {	# Check if path exists. Disable rule if not.
       my $localdir = shift;
       my $href = $dbh->selectrow_hashref(q{ select path from localdirs where name = ? }, undef, $localdir);
       unless (defined $href && -d $href->{'path'}) {
         print "<b style=\"color:red\">Localdir ".$href->{'path'}." ($localdir) does not exist. Deactivating rule.</b><p>\n";
         return 0;
       }
-      return 1;
+      return checkpath($localdir, $href->{'path'});
     }
     my $msg = "";
     $sql = $dbh->prepare(q{
@@ -680,14 +688,16 @@ sub uploaddest() {
     for (my $i = 1; defined $v{"id$i"}; $i++) {
       my @vals = ();
       $v{"active$i"} = 0 unless defined $v{"active$i"};
-      $v{"active$i"} = checkpath($v{"localdir$i"}) if $v{"active$i"};
+      $v{"active$i"} = checklocaldir($v{"localdir$i"}) if $v{"active$i"};
+      $v{"active$i"} = checkpath('remotedir', $v{"remotedir$i"}) if $v{"active$i"};
       push(@vals, $v{"$_$i"}) foreach @collist;
       $sql->execute(@vals, $v{"id$i"});
     }
     $sql->finish();
     if (defined $v{'name'} && $v{'name'} !~ /^\s*$/) {
       $v{'active'} = 0 unless defined $v{'active'};
-      $v{'active'} = checkpath($v{'localdir'}) if $v{'active'};
+      $v{'active'} = checklocaldir($v{'localdir'}) if $v{'active'};
+      $v{'active'} = checkpath('remotedir', $v{"remotedir"}) if $v{'active'};
       my @vals = ();
       push(@vals, $v{$_}) foreach @collist;
       $dbh->do("insert into uploaddest (".join(',',@collist).") values (?,?,?,?,?,?,?,?)", undef, @vals);
