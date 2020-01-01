@@ -1,7 +1,7 @@
 # Changelog for GPSFTP5 scripts
 
 ## 2020-01-01	sjm	Implement splicing of sub-hour Rinex files
-- Sub-hour (split hour) handling.
+- Sub-hour files are ignored for now. Requires extensive change in code to implement.
 - Conform to Perl recommendation for calling contructors.
 
 ## 2019-12-30	sjm	ftpuploader backport to gpsftp4. Delay move from incoming.

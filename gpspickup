@@ -142,6 +142,7 @@ sub submit_pending() {
     }
 
     my $workdir = $rs->getWorkdir();
+    my $unpackdir = "$workdir/unpack.".$rs->{'hour'};
 
     # Check if dayjob has started already.
     if ($rs->{'hour'} ne '0') {
@@ -266,34 +267,6 @@ sub unzip($$$$) {
 }
 
 
-#
-# Splice splitted Rinex files into new hour Rinex file
-#
-sub spliceRinex($$$$) {
-  my ($rs, $workdir, $unpackdir, $mi) = @_;
-
-  return if $mi == 0;
-
-  # Load rs from $workdir
-  my $wdrs = RinexSet->new(rsfile => $rs->getRsFile);
-  return unless defined $wdrs;	# Not found, nothing to splice
-
-  foreach (grep(/^MO\.|^[A-Z]N$/, keys %$wdrs)) {
-    my $wdfn = $workdir.'/'.$wdrs->{$_};
-    my $upfn = $unpackdir.'/'.$rs->getRinexFilename($_, $mi);
-    my $newupfn = $unpackdir.'/'.$rs->getRinexFilename($_, 0);
-    loginfo("Splicing $wdfn and $upfn to $newupfn");
-    if (-f $upfn) {
-      unlink($newupfn);
-      sysrun([$GFZRNX, '-finp', $wdfn, $upfn, '-fout', $newupfn, qw(-kv -q -splice_direct)], { log => $Debug });
-    } else {
-      rename($wdfn, $newupfn);
-    }
-    unlink($upfn, $rs->getRsFile);
-  }
-}
-
-
 #################################
 # Unpack one file into its workdir.
 #
@@ -305,6 +278,10 @@ sub unpack_file($) {
   my $fninfo = parseFilename($fn);
   if (!defined $fninfo) {
     logwarn("Cannot recognize file $fn");
+    return;
+  }
+  if ($fninfo->{'mi'} != 0) {
+    logwarn("$fn: Cannot handle sub-hour files. Manual splice needed.");
     return;
   }
 
@@ -325,7 +302,6 @@ sub unpack_file($) {
     my $dst = "$unpackdir/$fn";
     loginfo("gunzip $fn.gz") if !$Debug;
     sysrun("/usr/bin/gzip -dc $ifn >$dst 2>/dev/null", { log => $Debug });
-    spliceRinex($rs, $workdir, $unpackdir, $fninfo->{'mi'}) if $fninfo->{'mi'} != 0;
     $PQ->enqueue({ ident => $ident, fn => $fn });
     return;
   }
@@ -342,17 +318,11 @@ sub unpack_file($) {
     $rs->checkfiles($unpackdir);
   }
 
-  elsif ($fninfo->{'ftyp'} eq 'trinzic-zip') {
+  elsif ($fninfo->{'ftyp'} eq 'trinzic-zip' ||
+         $fninfo->{'ftyp'} eq 'leica-zip') {
     $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
     loginfo("Unzipping $fn to $workdir");
     unzip($rs, $ifn, $unpackdir, $fninfo);
-  }
-
-  elsif ($fninfo->{'ftyp'} eq 'leica-zip') {
-    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
-    loginfo("Unzipping $fn to $workdir");
-    unzip($rs, $ifn, $unpackdir, $fninfo);
-    spliceRinex($rs, $workdir, $unpackdir, $fninfo->{'mi'}) if $fninfo->{'mi'} != 0;
   }
 
   if (defined $rs) {

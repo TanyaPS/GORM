@@ -702,6 +702,9 @@ sub process() {
     $self->rewriteheaders($rs->{'MO.'.$self->{'interval'}});
   }
 
+  # TODO: Splice split hours here. When and how to detect a split hour is to be considered.
+  #       For now, a manual splice of the hour and a re-process of the entire day is needed.
+
   # Produce wanted intervals.
   $self->createWantedIntervals($rs);
 
