@@ -33,7 +33,8 @@ sub parseFilename($) {
   # Septentrio: sssssssss_R_yyyydddhhmi_##H_##S_MO.rnx
   #             sssssssss_R_yyyydddhhmi_##H_xN.rnx
   if ($fn =~ /^([A-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})([0-9]{2})_[0-9]{2}(H|D)/i) {
-    ($site, $year, $yy, $doy, $hh, $hour, $mi, $period) = (uc($1), int($2), year2sy($2), int($3), int($4), hour2letter($4), int($5), $6);
+    ($site, $year, $yy, $doy, $hh, $hour, $mi, $period) =
+		(uc($1), int($2), year2sy($2), int($3), int($4), hour2letter($4), int($5), $6);
     $hour = '0' if $period eq 'D';
     $ftyp = 'septentrio-rnx3';
     ($year, $mm, $dd) = Doy_to_Date($year, $doy);
@@ -41,7 +42,8 @@ sub parseFilename($) {
 
   # Septentrio raw: ssssdddh.yy_
   elsif ($fn =~ /^([A-Z0-9]{4})([0-9]{3})([a-z])\.([0-9]{2})_/i) {
-    ($site4, $doy, $hour, $hh, $yy, $year, $mi) = (uc($1), int($2), $3, letter2hour($3), int($4), sy2year($4), 0);
+    ($site4, $doy, $hour, $hh, $yy, $year, $mi) =
+		(uc($1), int($2), $3, letter2hour($3), int($4), sy2year($4), 0);
     $ftyp = 'septentrio-raw';
     ($year, $mm, $dd) = Doy_to_Date($year, $doy);
   }
@@ -57,7 +59,8 @@ sub parseFilename($) {
 
   # Leica:   ssssdddh*.yyo.zip
   elsif ($fn =~ /^([a-zA-Z0-9]{4})([0-9]{3})([a-xA-X0])([0-9]+)?\.([0-9]{2})[a-z]\.zip$/i) {
-    ($site4, $doy, $hour, $hh, $yy, $year) = (uc($1), int($2), $3, letter2hour($3), int($5), sy2year($5));
+    ($site4, $doy, $hour, $hh, $yy, $year) =
+		(uc($1), int($2), $3, letter2hour($3), int($5), sy2year($5));
     $mi = (defined $4) ? int($4) : 0;
     $ftyp = 'leica-zip';
     ($year, $mm, $dd) = Doy_to_Date($year, $doy);
@@ -311,18 +314,21 @@ sub unpack_file($) {
   # Single file uploads. Unpack and submit job directly.
 
   if ($fninfo->{'ftyp'} eq 'septentrio-raw') {
-    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, origs => [$ifn]);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour,
+			interval => $obsint, origs => [$ifn]);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
     chdir($unpackdir);
-    sysrun([$SBF2RIN, '-f', $ifn, qw(-l -R3 -nOP -s -D -O), $countrycode], { stdout => "$workdir/sbf2rin.$hour.log", log => $Debug });
+    sysrun([$SBF2RIN, '-f', $ifn, qw(-l -R3 -nOP -s -D -O), $countrycode],
+		      { stdout => "$workdir/sbf2rin.$hour.log", log => $Debug });
     chdir($INCOMING);
     $rs->checkfiles($unpackdir);
   }
 
   elsif ($fninfo->{'ftyp'} eq 'trinzic-zip' ||
          $fninfo->{'ftyp'} eq 'leica-zip') {
-    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn, origs => [$ifn]);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour,
+			interval => $obsint, zipfile => $ifn, origs => [$ifn]);
     loginfo("Unzipping $fn to $workdir");
     unzip($rs, $ifn, $unpackdir, $fninfo);
   }
