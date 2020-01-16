@@ -205,10 +205,12 @@ sub pending_thread() {
     elsif ($fn =~ /_([A-X]N)\.rnx$/) {
       $rs->{$1} = $fn;
     }
+    push(@{$rs->{'origs'}}, $parm->{'ifn'});
 
     $rs->{'_timecreated'} = $rs->{'_timestamp'} = time();
     $Pending{$ident} = $rs;
   }
+
   threads->detach;
 }
 
@@ -302,14 +304,14 @@ sub unpack_file($) {
     my $dst = "$unpackdir/$fn";
     loginfo("gunzip $fn.gz") if !$Debug;
     sysrun("/usr/bin/gzip -dc $ifn >$dst 2>/dev/null", { log => $Debug });
-    $PQ->enqueue({ ident => $ident, fn => $fn });
+    $PQ->enqueue({ ident => $ident, fn => $fn, ifn => $ifn });
     return;
   }
 
   # Single file uploads. Unpack and submit job directly.
 
   if ($fninfo->{'ftyp'} eq 'septentrio-raw') {
-    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, rawfile => $ifn);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, origs => [$ifn]);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
     chdir($unpackdir);
@@ -320,30 +322,28 @@ sub unpack_file($) {
 
   elsif ($fninfo->{'ftyp'} eq 'trinzic-zip' ||
          $fninfo->{'ftyp'} eq 'leica-zip') {
-    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn);
+    $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour, interval => $obsint, zipfile => $ifn, origs => [$ifn]);
     loginfo("Unzipping $fn to $workdir");
     unzip($rs, $ifn, $unpackdir, $fninfo);
   }
 
+  my $state = $job->lockstate()->readstate();
   if (defined $rs) {
     # Check if dayjob has started
-    if ($rs->{'hour'} ne '0') {
-      if (readfile("$workdir/state.0") =~ /^(queued|running)/) {
-        logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
-        return;
-      }
+    if ($rs->{'hour'} ne '0' && readfile("$workdir/state.0") =~ /^(queued|running)/) {
+      logwarn("$ident: Cannot process. Dayjob already started. Ignoring.");
     }
-
-    # Move files un unpack.$h to $workdir. If job is active, send files to pending thread.
-    my $state = $job->lockstate()->readstate();
-    if ($state =~ /^(none|processed)$/) {
-      moveall($unpackdir, $workdir);
-      $job->writestate('queued');
-      $rs->store();
-      $job->{'rsfile'} = $rs->getRsFile;
-      $job->submitjob('ftp');
-    } else {
-      $PQ->enqueue({ ident => $ident, fn => $_ }) foreach grep(/^(MO\.[0-9]+|[A-X]N)$/, keys %$rs);
+    else {
+      # Move files un unpack.$h to $workdir.
+      if ($state =~ /^(none|processed)$/) {
+        moveall($unpackdir, $workdir);
+        $job->writestate('queued');
+        $rs->store();
+        $job->{'rsfile'} = $rs->getRsFile;
+        $job->submitjob('ftp');
+      } else {
+        logwarn("$ident: Cannot process. Hour already being processed. Ignoring.");
+      }
     }
   } else {
     $job->writestate('none');

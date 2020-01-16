@@ -139,6 +139,7 @@ The file type is applies to. Can be one of the following:
 - Nav: Navigation files.
 - Sum: The sum file from the QC.
 - Arc: The original unmodified files in a zip file.
+- Raw: The original unmodified files.
 ### obsint
 The observation interval this applies to. Must be either the same as the original observation interval
 or 30. 30s is always available.

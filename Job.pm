@@ -651,6 +651,7 @@ sub _QC($) {
 sub save_originals($) {
   my ($self, $rs) = @_;
 
+  # Nothing to do if original is a zipfile already.
   return if exists $rs->{'zipfile'};
 
   # Check if we need an Arc, either daily or hourly. If not, don't bother creating one.
@@ -660,18 +661,11 @@ sub save_originals($) {
   }, undef, $rs->{'site'});
   return if $aref->[0] eq '0';
 
-  my @files = ();
-  if (exists $rs->{'rawfile'}) {
-    push(@files, $rs->{'rawfile'});
-  } else {
-    push(@files, $rs->{$_}) foreach grep(/^(MO\.\d+|[A-Z]N)$/, keys %$rs);
-  }
-  if (scalar(@files) > 0) {
-    my $fn = $rs->getFilenamePrefix;
-    loginfo("Creating $fn.zip");
-    sysrun(['zip','-9jq',"$fn.zip",@files], { log => $Debug });
-    $rs->{'zipfile'} = "$fn.zip";
-  }
+  # Save files from $SAVEDIR into $prefix.zip
+  my $fn = $rs->getFilenamePrefix;
+  loginfo("Creating $fn.zip");
+  sysrun(['zip', '-9jq', "$fn.zip", @{$rs->{'origs'}}], { log => $Debug });
+  $rs->{'zipfile'} = "$fn.zip";
 }
 
 ###################################################################################
@@ -805,6 +799,11 @@ sub process() {
       syscp([$rs->{'zipfile'}], $destpath, { mkdir => 1, log => $Debug });
     }
 
+    ######
+    # Raw
+    elsif ($r->{'filetype'} eq 'Raw') {
+      syscp($rs->{'origs'}, $destpath, { mkdir => 1, log => $Debug }) if scalar(@{$rs->{'origs'}}) > 0;
+    }
   }
 
   delete $self->{'DB'};

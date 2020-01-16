@@ -26,6 +26,7 @@ sub new {
   } else {
     $self->{$_} = $args{$_} foreach keys %args;
   }
+  $self->{'origs'} = [] unless defined $self->{'origs'};
   bless $self, $class;
 }
 

@@ -461,7 +461,7 @@ sub editsite() {
 sub editrinexdests() {
   my $site = $cgi->param('site');
   my %v = map { $_ => $cgi->param($_) } $cgi->param;
-  my @filetypes = qw(Obs Nav Arc Sum);
+  my @filetypes = qw(Obs Nav Raw Arc Sum);
   my $sql;
 
   showheader("RINEX distribution for $site");
@@ -560,7 +560,8 @@ sub editrinexdests() {
 	  <b>Filetype</b> is one of:<br>
 	  &nbsp;&nbsp;<i>Obs</i>: Observation file in Hatanaka packed compressed format.<br>
 	  &nbsp;&nbsp;<i>Nav</i>: Navigation files in compressed format.<br>
-	  &nbsp;&nbsp;<i>Arc</i>: ZIP file containing original unmodified files.<br>
+	  &nbsp;&nbsp;<i>Raw</i>: Unmodified original file(s).<br>
+	  &nbsp;&nbsp;<i>Arc</i>: ZIP file containing original unmodified file(s).<br>
 	  &nbsp;&nbsp;<i>Sum</i>: Sum file in gzipped format<br>
           <b>Obsint</b>: Destination internval. If source is 1 sec interval, destination RINEX file
 		  will be decimated to this interval. Only relevant for observation file rules.<br>
