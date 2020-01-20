@@ -899,16 +899,21 @@ sub reprocess() {
       $site = uc($site);
       $year = sy2year($year) if $year < 100;
       $todoy = $fromdoy unless defined $todoy && $todoy ne "";
-      print "Submitting reprocess request for $site/$year/$fromdoy-$todoy.<p>\n";
+      $fromdoy = $todoy if $fromdoy > $todoy;
+      $todoy = $fromdoy if $todoy < $fromdoy;
+      my $ok = 1;
       for (my $doy = $fromdoy; $doy <= $todoy; $doy++) {
         my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $doy);
-        if (-d $savedir) {
-          $dbh->do(q{ delete from gpssums where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
-          $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
-          sendcommand("reprocess $site $year $doy");	# Web service do not have permissions to move files from savedir
-        } else {
+        if (! -d $savedir) {
           print "<b style=\"color:red\">$site-$year-$doy not in SAVEDIR.</b> You need to manually forget and re-upload files.<br>";
+          $ok = 0;
         }
+      }
+      if ($ok) {
+        print "Submitting reprocess request for $site/$year/$fromdoy-$todoy.<p>\n";
+        $dbh->do(q{ delete from gpssums where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+        $dbh->do(q{ delete from datagaps where site=? and year=? and doy>=? and doy<=? }, undef, $site, $year, $fromdoy, $todoy);
+        sendcommand("reprocess $site $year $fromdoy-$todoy");
       }
     } else {
       print "<b style=\"color:red\">Please specify all values</b><p>\n";

@@ -86,6 +86,7 @@ sub reprocess($$$) {
   my ($fromdoy, $todoy) = split(/-/, $doy);
   $todoy = $fromdoy unless defined $todoy;
   $todoy = $fromdoy if $todoy < $fromdoy;
+  $fromdoy = $todoy if $fromdoy > $todoy;
 
   for (my $i = $fromdoy; $i <= $todoy; $i++) {
     my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $i);

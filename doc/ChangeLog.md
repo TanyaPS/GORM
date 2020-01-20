@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-01-16	sjm	Reprocess bugfix
+- Fixed a bug in admin.cgi regarding reprocessing several doy's for a site.
+
 ## 2020-01-16	sjm	Distribution type Raw inplemented.
 - Distribution type 'Raw' distributes the unmodified files arrived in $INCOMING.
 
