@@ -86,7 +86,6 @@ sub reprocess($$$) {
   my ($fromdoy, $todoy) = split(/-/, $doy);
   $todoy = $fromdoy unless defined $todoy;
   $todoy = $fromdoy if $todoy < $fromdoy;
-  $fromdoy = $todoy if $fromdoy > $todoy;
 
   for (my $i = $fromdoy; $i <= $todoy; $i++) {
     my $savedir = sprintf("%s/%s/%4d/%03d", $SAVEDIR, $site, $year, $i);
@@ -108,10 +107,10 @@ sub runcommand($) {
   if ($cmd =~ /^reload ftpuploader/) {
     sysrun([qw(/usr/bin/systemctl reload ftpuploader)], { log => 1 });
   }
-  elsif ($cmd =~ /^force complete (\w+) (\d+) (\d+)/) {
+  elsif ($cmd =~ /^force complete (\w+) ([0-9]+) ([0-9]+)/) {
     force_completion($1, $2, $3);
   }
-  elsif ($cmd =~ /^reprocess (\w+) (\d+) ([0-9\-]+)/) {
+  elsif ($cmd =~ /^reprocess (\w+) ([0-9]+) ([0-9\-]+)/) {
     reprocess($1, $2, $3);
   }
 }
