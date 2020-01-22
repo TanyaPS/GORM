@@ -104,19 +104,20 @@ sub getNavlist() {
 }
 
 #################################
-# Search all files in $dir with this filename prefix
+# Find all obs and nav files in $dir with this filename prefix
 # and sets MO.# and xN in $self
 #
-sub checkfiles($) {
+sub findfiles($) {
   my ($self, $dir) = @_;
   my $prefix = $self->getFilenamePrefix;
-  foreach (<"${dir}/${prefix}*.rnx">) {
+  foreach (dirlist($dir)) {
+    next if substr($_, 0, length($prefix)) ne $prefix;
     if (/_([0-9]{2})S_MO\.rnx$/) {
       # observation file
-      $self->{'MO.'.int($1)} = basename($_);
+      $self->{'MO.'.int($1)} = $_;
     } elsif (/_([A-X]N)\.rnx$/) {
       # navigation file
-      $self->{$1} = basename($_);
+      $self->{$1} = $_;
     }
   }
   return $self;

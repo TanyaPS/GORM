@@ -319,12 +319,8 @@ sub unpack_file($) {
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
     chdir($unpackdir);
-    for (my $try = 0; $try < 3; $try++) {
-      sysrun("$SBF2RIN -f $ifn -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
-      $rs->checkfiles($unpackdir);
-      last if scalar(grep(/^MO\./, keys %$rs)) > 0;
-      logerror("sbf2rin $ifn did not produce an observation file.", ($try < 3) ? " Retry.":"");
-    }
+    sysrun("$SBF2RIN -f $ifn -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
+    $rs->findfiles($unpackdir);
     chdir($INCOMING);
   }
 

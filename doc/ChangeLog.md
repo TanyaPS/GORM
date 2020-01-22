@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-01-22	sjm	sbf2rin file pickup
+- Fixed a bug finding files extracted by sbf2rin.
+
 ## 2020-01-20	sjm	Reprocess bugfix
 - Fixed a bug in admin.cgi regarding reprocessing several doy's for a site.
 
