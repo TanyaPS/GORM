@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-01-22	sjm	Gzipped SBF files
+- Handle inbound gzipped SBF files
+
 ## 2020-01-22	sjm	sbf2rin file pickup
 - Fixed a bug finding files extracted by sbf2rin.
 
