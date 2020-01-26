@@ -554,7 +554,23 @@ sub showsite_24h($$$) {
 my $cgi = new CGI;
 print $cgi->header;
 
-my $dbh = DBI->connect("DBI:mysql:gps","gpsuser","gpsuser");
+my ($DBDSN, $DBUSER, $DBPASS) = qw(DBI:mysql:gps gpsuser gpsuser);
+if (defined $ENV{'GORMCONF'} && -f $ENV{'GORMCONF'}) {
+  if (open(my $fd, '<', $ENV{'GORMCONF'})) {
+    while (<$fd>) {
+      chomp;
+      if (/^\s*dbdsn\s*=\s*([^\s]+)/) {
+        $DBDSN = $1;
+      } elsif (/^\s*dbuser\s*=\s*([^\s]+)/) {
+        $DBUSER = $1;
+      } elsif (/^\s*dbpass\s*=\s*([^\s]+)/) {
+        $DBPASS = $1;
+      }
+    }
+    close($fd);
+  }
+}
+my $dbh = DBI->connect($DBDSN, $DBUSER, $DBPASS);
 if (!defined $dbh) {
   print qq{
     <html><body>

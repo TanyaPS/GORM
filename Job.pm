@@ -234,39 +234,50 @@ sub _mergezips($$) {
 #
 sub getStationInfo() {
   my ($self) = @_;
+  my $site = $self->{site};
   my $dbh = $self->{'DB'}->{'DBH'};
 
   my @ymd = Doy_to_Date($self->{'year'}, $self->{'doy'});
-  my $startdate = sprintf("%4d-%02d-%02d %02d:00:00", @ymd, letter2hour($self->{'hour'}));
+  my $startdate = sprintf("%4d%02d%02d", @ymd);
 
   my $loc = $dbh->selectrow_hashref(q{
-	select	markernumber, markertype, position, observer, agency
+	select	markernumber, markertype, observer, agency
 	from	locations
 	where	site = ?
-  }, undef, $self->{'site'});
+  }, undef, $site);
+
+  my $pos = $dbh->selectrow_hashref(q{
+	select	position
+	from	positions
+	where	site = ?
+	  and	date_format(startdate,'%Y%m%d') <= ?
+	order by startdate desc
+	limit 1
+  }, undef, $site, $startdate);
 
   my $rec = $dbh->selectrow_hashref(q{
 	select	recsn, rectype, firmware
 	from	receivers
 	where	site = ?
-	  and	startdate < str_to_date(?, '%Y-%m-%d %T')
+	  and	date_format(startdate,'%Y%m%d') <= ?
 	order	by startdate desc
 	limit	1
-  }, undef, $self->{'site'}, $startdate);
+  }, undef, $site, $startdate);
 
   my $ant = $dbh->selectrow_hashref(q{
 	select	antsn, anttype, antdelta
 	from	antennas
 	where	site = ?
-	  and	startdate < str_to_date(?, '%Y-%m-%d %T')
+	  and	date_format(startdate,'%Y%m%d') <= ?
 	order	by startdate desc
 	limit	1
-  }, undef, $self->{'site'}, $startdate);
+  }, undef, $site, $startdate);
 
   $ant->{'anttype'} = sprintf("%-16s%4s", $1, $2) if defined $ant->{'anttype'} && $ant->{'anttype'} =~ /^(.+),(.+)$/;
 
-  my $sta = { site => $self->{'site'} };
+  my $sta = { site => $site };
   $sta->{$_} = $loc->{$_} foreach keys %$loc;
+  $sta->{$_} = $pos->{$_} foreach keys %$pos;
   $sta->{$_} = $rec->{$_} foreach keys %$rec;
   $sta->{$_} = $ant->{$_} foreach keys %$ant;
   return $sta;
@@ -320,7 +331,7 @@ sub rewriteheaders($) {
     }
     elsif (/APPROX POSITION XYZ\s*$/) {
       # if specified in DB, use that value
-      if (defined $sta->{'position'} && $sta->{'position'} =~ /(\d+),(\d+),(\d+)/) {
+      if (defined $sta->{'position'} && $sta->{'position'} =~ /([0-9\-\.]+),([0-9\-\.]+),([0-9\-\.]+)/) {
         push(@hdr, sprintf "%14.4f%14.4f%14.4f%18sAPPROX POSITION XYZ\n",$1,$2,$3,' ');
       } else {
         push(@hdr, $_);		# else use original from file

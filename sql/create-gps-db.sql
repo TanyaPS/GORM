@@ -1,6 +1,6 @@
--- Generation Time: Dec 29, 2019 at 05:49 PM
+-- Generation Time: Jan 25, 2020 at 01:10 PM
 -- Server version: 5.5.64-MariaDB
--- PHP Version: 7.3.13
+-- PHP Version: 7.3.14
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 SET time_zone = "+00:00";
@@ -92,11 +92,24 @@ CREATE TABLE IF NOT EXISTS `locations` (
   `obsint` tinyint(3) unsigned NOT NULL DEFAULT '1',
   `markernumber` varchar(60) COLLATE utf8_unicode_ci DEFAULT NULL,
   `markertype` enum('GEODETIC','NON_GEODETIC','NON_PHYSICAL','SPACEBORNE','GROUND_CRAFT','WATER_CRAFT','AIRBORNE','FIXED_BUOY','FLOATING_BUOY','FLOATING_ICE','GLACIER','BALLISTIC','ANIMAL','HUMAN') COLLATE utf8_unicode_ci DEFAULT 'GEODETIC',
-  `position` varchar(40) COLLATE utf8_unicode_ci DEFAULT NULL,
   `observer` varchar(20) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
   `agency` varchar(24) COLLATE utf8_unicode_ci NOT NULL DEFAULT 'SDFE',
   `ts` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `active` tinyint(1) unsigned NOT NULL DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `positions`
+--
+
+CREATE TABLE IF NOT EXISTS `positions` (
+  `id` int(10) unsigned NOT NULL,
+  `site` char(9) COLLATE utf8_unicode_ci NOT NULL,
+  `position` varchar(60) COLLATE utf8_unicode_ci NOT NULL,
+  `startdate` datetime NOT NULL,
+  `enddate` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 
 -- --------------------------------------------------------
@@ -191,6 +204,12 @@ ALTER TABLE `locations`
   ADD UNIQUE KEY `shortname` (`shortname`);
 
 --
+-- Indexes for table `positions`
+--
+ALTER TABLE `positions`
+  ADD PRIMARY KEY (`id`,`site`);
+
+--
 -- Indexes for table `receivers`
 --
 ALTER TABLE `receivers`
@@ -228,6 +247,11 @@ ALTER TABLE `datagaps`
 -- AUTO_INCREMENT for table `gpssums`
 --
 ALTER TABLE `gpssums`
+  MODIFY `id` int(10) unsigned NOT NULL AUTO_INCREMENT;
+--
+-- AUTO_INCREMENT for table `positions`
+--
+ALTER TABLE `positions`
   MODIFY `id` int(10) unsigned NOT NULL AUTO_INCREMENT;
 --
 -- AUTO_INCREMENT for table `receivers`

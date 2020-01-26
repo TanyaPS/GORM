@@ -17,11 +17,7 @@ our $DBUSER   = 'gpsuser';
 our $DBPASS   = 'gpsuser';
 
 my $DATAROOT  = '/data';
-our $INCOMING = "$DATAROOT/ftp";
-our $WORKDIR  = "$DATAROOT/work";
-our $SAVEDIR  = "$DATAROOT/saved";
-our $STALEDIR = "$SAVEDIR/stale";
-our $JOBQUEUE = "$DATAROOT/queue";
+our ($INCOMING, $WORKDIR, $SAVEDIR, $STALEDIR, $JOBQUEUE);
 
 our $JOBINSTANCES = 4;		# Number of parallel job instances
 
@@ -37,17 +33,14 @@ our $SYSLOG_FACILITY = 'local1';
 sub init($) {
   my $conf = shift;
 
+  $DATAROOT = $ENV{'DATAROOT'} if defined $ENV{'DATAROOT'};
+
   if (-f $conf) {
     my %vars = (
 	dbdsn => \$DBDSN,
 	dbuser => \$DBUSER,
 	dbpass => \$DBPASS,
 	dataroot => \$DATAROOT,
-	incoming => \$INCOMING,
-	workdir => \$WORKDIR,
-	savedir => \$SAVEDIR,
-	staledir => \$STALEDIR,
-	jobqueue => \$JOBQUEUE,
 	jobinstances => \$JOBINSTANCES,
 	anubis => \$ANUBIS,
 	bnc => \$BNC,
@@ -70,6 +63,12 @@ sub init($) {
     }
     close($fd);
   }
+
+  $INCOMING = "$DATAROOT/ftp";
+  $WORKDIR  = "$DATAROOT/work";
+  $SAVEDIR  = "$DATAROOT/saved";
+  $STALEDIR = "$DATAROOT/stale";
+  $JOBQUEUE = "$DATAROOT/queue";
 }
 
 # Executed just before main program starts.

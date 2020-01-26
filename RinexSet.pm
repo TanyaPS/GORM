@@ -18,11 +18,12 @@ sub new {
   my $self = {};
 
   if (exists $args{rsfile}) {
-    $self = loadJSON($args{rsfile});
-    if (!defined $self) {
+    my $json = loadJSON($args{rsfile});
+    if (!defined $json) {
       carp("load error $args{rsfile}");
       $self = {};
     }
+    $self->{$_} = $json->{$_} foreach keys %$json;
   } else {
     $self->{$_} = $args{$_} foreach keys %args;
   }
