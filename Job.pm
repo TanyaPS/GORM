@@ -699,7 +699,7 @@ sub process() {
   #merge nav files to one mixed nav file
   my @navlist = $rs->getNavlist();
   if scalar(@navlist) > 1 {
-    my $mnavoutfile = $rs->getRinexFilename(MN);
+    my $mnavoutfile = $rs->getRinexFilename('MN');
     sysrun([$GFZRNX ’-finp’, @Navlist, ’-fout’, $navoutfile, qw(-f –kv -q)], { log => $Debug });
     $rs->{$navtyp}=$mnavoutfile;
     foreach my $ntyp (grep(/^[A-Z]N$/, keys %$rs)){
