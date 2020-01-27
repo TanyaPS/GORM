@@ -109,6 +109,20 @@ Date and time of last received data from that site.
 ### active
 0 for inactive, 1 for active. If set to 0, it will be regarded as non-existing.
 
+## positions
+Current and previous X,Y,Z position of station
+### id, site
+See recurrent fields
+### position
+X,Y,Z position (meters). Format is X, Y and Z coordinate as comma spearated list
+with no whitespeces. Decinal notation is period. Ex: 123.45,234.56,345.67
+### startdate
+The date and time of start of usage. Should be identical to previous enddate.
+Format YYYY-MM-DD HH:MI:SS
+### enddate
+The date and time that this position ended or NULL of still in use.
+Format YYYY-MM-DD HH:MI:SS
+
 ## receivers
 Current and previous receivers.
 Overlapping start- and enddates will cause errors.
