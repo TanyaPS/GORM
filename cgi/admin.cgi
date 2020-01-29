@@ -77,7 +77,6 @@ sub newsite() {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     my $site = $v{'site'};
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
-    $v{'position'} = undef unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
@@ -96,10 +95,10 @@ sub newsite() {
       } else {
         $dbh->do(q{
 	  insert into locations
-	  (site, shortname, freq, obsint, markernumber, markertype, position, observer, agency, active)
+	  (site, shortname, freq, obsint, markernumber, markertype, observer, agency, active)
 	  values (?,?,?,?,?,?,?,?,?,?)
         }, undef, $site, $v{'shortname'}, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
-           $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'});
+           $v{'observer'}, $v{'agency'}, $v{'active'});
         print "<B style=\"color:red\">Site $site created</B><P>\n";
       }
     }
@@ -113,7 +112,6 @@ sub newsite() {
 	<tr><td>Sitename (4ch)</td><td><input type=text name=shortname size=4 maxlength=4></td></tr>
 	<tr><td>Markernumber</td><td><input type=text name=markernumber size=20 maxlength=20></td></tr>
 	<tr><td>Markertype</td><td><select name=markertype>}.gen_option_list("",\@GPSTYPES).qq{</select></td></tr>
-	<tr><td>Position (X,Y,Z)</td><td><input type=text name=position size=40 maxlength=40></td></tr>
 	<tr><td>Observer</td><td><input type=text name=observer size=20 maxlength=20></td></tr>
 	<tr><td>Agency</td><td><input type=text name=agency size=20 maxlength=20></td></tr>
 	<tr><td>Freq</td><td><select name=freq>}.gen_option_list("Hourly",['Hourly','Daily']).qq{</select></td></tr>
