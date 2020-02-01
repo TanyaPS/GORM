@@ -698,16 +698,15 @@ sub process() {
 
   #merge nav files to one mixed nav file
   my @navlist = $rs->getNavlist();
-  if scalar(@navlist) > 1 {
+  if (scalar(@navlist) > 1) {
     my $mnavoutfile = $rs->getRinexFilename('MN');
-    sysrun([$GFZRNX ’-finp’, @Navlist, ’-fout’, $navoutfile, qw(-f –kv -q)], { log => $Debug });
-    $rs->{$navtyp}=$mnavoutfile;
+    sysrun([$GFZRNX, '-finp', @navlist, '-fout', $mnavoutfile, qw(-f –kv -q)], { log => $Debug });
     foreach my $ntyp (grep(/^[A-Z]N$/, keys %$rs)){
-      delete $rs->{$ntyp} unless $ntyp eq 'MN';
+      unlink($rs->{$ntyp});
+      delete $rs->{$ntyp};
     }
+    $rs->{'MN'} = $mnavoutfile;
   }
-
-
 
   # TODO: Splice split hours here. When and how to detect a split hour is to be considered.
   #       For now, a manual splice of the hour and a re-process of the entire day is needed.
