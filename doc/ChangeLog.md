@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-01-25	sjm	Dated position, parallel installations.
+- Position is now dated like antennas and receivers. Entry from positions, antennas and receivers is mached on date only, not time.
+
 ## 2020-01-22	sjm	Gzipped SBF files
 - Handle inbound gzipped SBF files
 

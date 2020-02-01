@@ -15,6 +15,11 @@ my @GPSTYPES = qw(GEODETIC NON_GEODETIC NON_PHYSICAL SPACEBORNE GROUND_CRAFT WAT
 my $cgi = new CGI;
 print $cgi->header;
 
+# Initialize global variables if $GORMCONF specified
+if (defined $ENV{'GORMCONF'}) {
+  BaseConfig::init($ENV{'GORMCONF'});
+}
+
 my $DB = new GPSDB;
 my $dbh = $DB->DBH;
 if (!defined $dbh) {
@@ -72,7 +77,6 @@ sub newsite() {
     my %v = map { $_ => $cgi->param($_) } $cgi->param;
     my $site = $v{'site'};
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
-    $v{'position'} = undef unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
@@ -91,10 +95,10 @@ sub newsite() {
       } else {
         $dbh->do(q{
 	  insert into locations
-	  (site, shortname, freq, obsint, markernumber, markertype, position, observer, agency, active)
+	  (site, shortname, freq, obsint, markernumber, markertype, observer, agency, active)
 	  values (?,?,?,?,?,?,?,?,?,?)
         }, undef, $site, $v{'shortname'}, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
-           $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'});
+           $v{'observer'}, $v{'agency'}, $v{'active'});
         print "<B style=\"color:red\">Site $site created</B><P>\n";
       }
     }
@@ -108,7 +112,6 @@ sub newsite() {
 	<tr><td>Sitename (4ch)</td><td><input type=text name=shortname size=4 maxlength=4></td></tr>
 	<tr><td>Markernumber</td><td><input type=text name=markernumber size=20 maxlength=20></td></tr>
 	<tr><td>Markertype</td><td><select name=markertype>}.gen_option_list("",\@GPSTYPES).qq{</select></td></tr>
-	<tr><td>Position (X,Y,Z)</td><td><input type=text name=position size=40 maxlength=40></td></tr>
 	<tr><td>Observer</td><td><input type=text name=observer size=20 maxlength=20></td></tr>
 	<tr><td>Agency</td><td><input type=text name=agency size=20 maxlength=20></td></tr>
 	<tr><td>Freq</td><td><select name=freq>}.gen_option_list("Hourly",['Hourly','Daily']).qq{</select></td></tr>
@@ -358,6 +361,89 @@ sub editreceivers() {
   };
 }
 
+
+##########################################################################
+# Edit positions for site
+#
+sub editpositions() {
+  my %v = map { $_ => $cgi->param($_) } $cgi->param;
+  showheader("Edit ".$v{site}." positions");
+
+  if (defined $v{submit}) {
+    # Save button pressed
+    my $updsql = $dbh->prepare(q{
+	update positions set position=?, startdate=?, enddate=? where id=?
+    });
+    my $inssql = $dbh->prepare(q{
+	insert into positions (site, position, startdate, enddate) values (?,?,?,?)
+    });
+    for (my $i = 0; defined $v{"id$i"}; $i++) {
+      $v{"enddate$i"} = undef unless $v{"enddate$i"} =~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}/;
+      if (defined $v{"id$i"} && $v{"id$i"} =~ /[0-9]+/) {
+        $updsql->execute($v{"position$i"}, $v{"startdate$i"}, $v{"enddate$i"}, $v{"id$i"});
+      } else {
+        if ($v{"position$i"} =~ /[0-9\-\.]+,[0-9\-\.]+,[0-9\-\.]+/ && $v{"startdate$i"} =~ /[0-9]{4}-[0-9]{2}-[0-9]{2}/) {
+          $inssql->execute($v{site}, $v{"position$i"}, $v{"startdate$i"}, $v{"enddate$i"});
+          # Check previous enddate. Set to startdate if not set.
+          my $j = $i - 1;
+          if ($j >= 0 && $v{"enddate$j"} != ~ /\d+-\d+-\d+/) {
+            $v{"enddate$j"} = $v{"startdate$i"};
+            $updsql->execute($v{"position$j"}, $v{"startdate$j"}, $v{"enddate$j"}, $v{"id$j"});
+          }
+        }
+      }
+    }
+  }
+  else {
+    # Check if any of the Delete buttons where pressed
+    for (my $i = 0; defined $v{"id$i"}; $i++) {
+      next unless defined $v{"del$i"};
+      $dbh->do(q{ delete from positions where id=? }, undef, $v{"id$i"});
+      last;
+    }
+  }
+
+  # Show the form
+  my $aref = $dbh->selectall_arrayref(q{
+	select id, position, startdate, enddate
+	from positions
+	where site = ?
+	order by startdate
+  }, { Slice => {} }, $v{site});
+
+  print qq{
+	<form name=editpositions method=POST action=$ENV{SCRIPT_NAME}>
+	<input name=cmd type=hidden value=editpositions>
+	<input name=site type=hidden value=$v{site}>
+	<table border=1>
+	<tr><th align=left>Position (X,Y,Z)</th><th>Startdate</th><th>Enddate</th><th>Action</th></tr>
+  };
+  # Step one longer than number of rows. Last will be an empty row.
+  for (my $i = 0; $i <= $#$aref + 1; $i++) {
+    my %values;
+    my $r = $aref->[$i];
+    $values{$_} = (defined $r->{$_} ? $r->{$_} : "") foreach qw(id position startdate enddate);
+    print qq{
+	<tr>
+	<td><input type=hidden name=id$i value="$values{id}">
+	    <input type=text name=position$i size=60 value="$values{position}"></td>
+	<td><input type=text name=startdate$i size=18 value="$values{startdate}"></td>
+	<td><input type=text name=enddate$i size=18 value="$values{enddate}"></td>
+    };
+    print "<td><input type=submit name=del$i value=Delete></td>\n" if defined $r->{id};
+    print "</tr>\n";
+  }
+  print qq{
+	</table>
+	<input type=submit name=submit value=Save>
+	&nbsp;&nbsp;&nbsp;<a href="?cmd=menu">Main menu</a>
+	&nbsp;&nbsp;&nbsp;<a href="?cmd=editsite&site=$v{site}">Edit $v{site}</a>
+	</form>
+  };
+  showbottom();
+}
+
+
 ##########################################################################
 # Edit site parameters.
 #
@@ -372,7 +458,6 @@ sub editsite() {
     $v{'shortname'} = uc($v{'shortname'});
     $v{'active'} = 0 unless defined $v{'active'};
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
-    $v{'position'} = undef unless defined $v{'position'} && scalar(split(/,/,$v{'position'})) == 3;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
     $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
@@ -381,16 +466,16 @@ sub editsite() {
     } else {
       $dbh->do(q{
 	update	locations
-	set	shortname=?, freq=?, obsint=?, markernumber=?, markertype=?, position=?, observer=?, agency=?, active=?
+	set	shortname=?, freq=?, obsint=?, markernumber=?, markertype=?, observer=?, agency=?, active=?
 	where	site = ?
       }, undef, $v{'shortname'}, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
-                $v{'position'}, $v{'observer'}, $v{'agency'}, $v{'active'}, $site);
+                $v{'observer'}, $v{'agency'}, $v{'active'}, $site);
       print "<b>Values saved!</b><br>\n";
     }
   }
 
   my $r = $dbh->selectrow_hashref(q{
-	select	shortname, freq, obsint, markernumber, markertype, position, observer, agency, active
+	select	shortname, freq, obsint, markernumber, markertype, observer, agency, active
 	from	locations
 	where	site = ?
   }, undef, $site);
@@ -427,8 +512,6 @@ sub editsite() {
   print "    <td><input name=obsint type=number value=$r->{'obsint'}></td></tr>\n";
 
   print qq{
-    <tr><td title="Position (X,Y,Z)">Position (X,Y,Z)</td>
-        <td><input name=position type=text size=40 maxlength=40 value="$r->{position}"></td></tr>
     <tr><td title="Observer">Observer</td>
         <td><input name=observer type=text size=20 maxlength=20 value="$r->{observer}"></td></tr>
     <tr><td title="Agency">Agency</td>
@@ -442,6 +525,7 @@ sub editsite() {
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editrinexdests&site=$site">Edit destinations</a>
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editantennas&site=$site">Edit antennas</a>
     &nbsp;&nbsp;&nbsp;<a href="?cmd=editreceivers&site=$site">Edit receivers</a>
+    &nbsp;&nbsp;&nbsp;<a href="?cmd=editpositions&site=$site">Edit positions</a>
     </form>
     <p>
     Site 4ch must match first 4 letters on incoming files.<br>
@@ -996,6 +1080,8 @@ if (!defined $cmd || $cmd eq "menu") {
   editantennas();
 } elsif ($cmd eq "editreceivers") {
   editreceivers();
+} elsif ($cmd eq "editpositions") {
+  editpositions();
 } elsif ($cmd eq "reprocess") {
   reprocess();
 }
