@@ -313,6 +313,14 @@ sub unpack_file($) {
 
   # Single file uploads. Unpack and submit job directly.
 
+  # Lock hour while unpacking
+  my $state = $job->lockstate()->readstate();
+  if ($state =~ /queued|running/) {
+    logerror("$ident: hour already unpacked. Ignoring.");
+    $job->unlockstate();
+    return;
+  }
+
   if ($fninfo->{'ftyp'} eq 'septentrio-raw') {
     $rs = RinexSet->new(site => $site, year => $year, doy => $doy, hour => $hour,
 			interval => $obsint, origs => [$ifn]);
@@ -339,7 +347,6 @@ sub unpack_file($) {
     unzip($rs, $ifn, $unpackdir, $fninfo);
   }
 
-  my $state = $job->lockstate()->readstate();
   if (defined $rs) {
     # Check if dayjob has started
     if ($rs->{'hour'} ne '0' && readfile("$workdir/state.0") =~ /^(queued|running)/) {
