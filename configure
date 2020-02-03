@@ -89,6 +89,10 @@ if [ -f "/etc/systemd/system/gpspickup-$NAME.service" ]; then
   errexit "Instance name $NAME already exists"
 fi
 
+if { ! -f $INSTROOT/etc/gorm.conf ]; then
+  cp $INSTROOT/etc/gorm.conf.default $INSTROOT/etc/gorm.conf
+fi
+
 echo "Installing services for instance name $NAME"
 for i in gpspickup jobengine ftpuploader; do
   sed -e "s:%NAME%:$NAME:g;s:%INSTROOT%:$INSTROOT:g" < setup/$i.service > /etc/systemd/system/$i-$NAME.service
