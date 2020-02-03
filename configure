@@ -6,6 +6,7 @@ function errexit() {
 }
 
 remove=0
+pakcages=0
 while getopts "pr" OPTIONS; do
   case $OPTIONS in
     p) packages=1; shift ;;
@@ -89,7 +90,7 @@ if [ -f "/etc/systemd/system/gpspickup-$NAME.service" ]; then
   errexit "Instance name $NAME already exists"
 fi
 
-if { ! -f $INSTROOT/etc/gorm.conf ]; then
+if [ ! -f $INSTROOT/etc/gorm.conf ]; then
   cp $INSTROOT/etc/gorm.conf.default $INSTROOT/etc/gorm.conf
 fi
 
