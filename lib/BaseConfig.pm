@@ -12,6 +12,8 @@ package BaseConfig;
 use strict;
 use warnings;
 
+use FindBin;
+
 our $DBDSN    = "DBI:mysql:gps";
 our $DBUSER   = 'gpsuser';
 our $DBPASS   = 'gpsuser';
@@ -73,7 +75,9 @@ sub init($) {
 
 # Executed just before main program starts.
 INIT {
-  init('/usr/local/etc/gorm.conf');
+  my $conf = "$FindBin::Bin/../etc/gorm.conf";
+  $conf = '/usr/local/etc/gorm.conf' unless -f $conf;
+  init($conf);
 }
 
 # Executed at compile time.

@@ -1,14 +1,25 @@
 Installation of GORM and utilities needed for processing.
 =========================================================
 
+This is a first-time installation instruction.
+If everything below is done already, then it should be
+enough wringting:
+	./configure instanse-name
+where instanse-name is the name of your installation. Use a short name like 'prod'
+or 'dev1' since it appears in the URL's and service names.
+You can remove the instanse using
+	./configure -r instanse-name
+
+FIRST TIME INSTALLATION:
+========================
+
 Install CentOS 7, minimal installation
 - Disable SELinux in /etc/sysconfig/selinux
 - Reboot
 
 
 Install all required packages. Run
-	sudo setup/install.sh
-
+	./configure -p
 
 BNC:
 	Download latest released BNC source code from https://igs.bkg.bund.de/ntrip/bnc
@@ -39,13 +50,13 @@ rnx2crx/crx2rnx:
 sbf2rin:
 	Download lastest version of Septentrio RxTools from:
 		https://www.septentrio.com/en/support/software/rxtools
-	Download rxtools_19_0_0_installer_x64.bin
+	Download rxtools_19_x_x_installer_x64.bin
 	Upload the file to an RHEL with X11 interface.
 	Login using the X11 interface login.
 	Using a terminal shell session, do:
 		chmod 755 rxtools_*
 		mkdir -m 700 xdg
-		XDG_RUNTIME=`pwd`/xdg ./rxtools_19_0_0_installer_x64.bin
+		XDG_RUNTIME=`pwd`/xdg ./rxtools_19_x_x_installer_x64.bin
 			(follow the install instructions. install everything).
 	The sbf2rin can now be found in $HOME/RxTools/bin
 	Transfer sbf2bin to the host you are installing and install using
@@ -69,12 +80,15 @@ Parallel-Fork-BossWorkerAsync:
 		perl Makefile.PL
 		sudo make install
 
-Configure:
+OS Configure:
 
 Postfix:
 	myhostname
 	mydomain
 	relayhost
+
+If you want another data root, configure it in etc/gorm.conf.
+Every below assumes the default value /data.
 
 Mount datastore:
 	mkdir /data
@@ -107,6 +121,7 @@ mariadb:
 	systemctl enable mariadb
 	systemctl start mariadb
 	Run "mysql_secure_installation"
+	# If you are adding another schema, replace 'gps' with the your schema name.
 	Create gpsuser
 		mysql -u root -p mysql
 		create database gps;
@@ -130,16 +145,15 @@ mariadb:
 
 firewall:
 	If this host is exposed to the internet, then it should have a firewall install.
-	/usr/local/bin/fw is a tool to maintain iptables as firewall.
-
+	bin/fw is a tool to maintain iptables as firewall.
+	A better option is to use the standard tool firewalld.
 
 Override default configation settings:
 	If you need to override the default location of someting, you can do so in
-	/usr/local/etc/gorm.conf. The values commented out are the defaults
-	from the installation.
+	etc/gorm.conf. The values commented out are the defaults from the installation.
 
 	If you, for example, want the scripts to use a database on another server
-	you could set 'dbdsn' in /usr/local/etc/gorm.conf like this:
+	you could set 'dbdsn' in etc/gorm.conf like this:
 		dbdsn = DBI:mysql:database=gps;host=gpsftp5.prod.sitad.dk
 	You will then need to create an user in the database to allow this:
 		mysql -u root -p gps

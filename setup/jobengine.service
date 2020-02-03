@@ -1,15 +1,15 @@
 [Unit]
-Description=GNSS jobengine service
+Description=GNSS jobengine service (%NAME%)
 After=network.target
 After=mariadb.service
 
 [Service]
 Type=simple
 Restart=on-failure
-ExecStart=/usr/local/sbin/jobengine
+ExecStart=%INSTROOT%/sbin/jobengine
 ExecStop=/bin/kill -TERM $MAINPID
 TimeoutStopSec=30
-Environment="PERL5LIB=/usr/local/lib/gnss"
+Environment="PERL5LIB=%INSTROOT%/lib"
 
 [Install]
 WantedBy=multi-user.target

@@ -1033,7 +1033,7 @@ sub reprocess() {
 # Main menu
 #
 sub menu() {
-  showheader("GPSFTP5 Administration");
+  showheader("GORM Administration");
   print q{
     <a href="?cmd=newsite">New site</a><br>
     <a href="?cmd=sitelist">Edit sites</a><br>

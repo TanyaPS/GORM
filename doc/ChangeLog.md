@@ -1,5 +1,9 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-02-02	sjm	Parallel instanses.
+- Now runs directly from clone directory.
+- Able to run along side another instanse of the scripts (named instanses).
+
 ## 2020-01-25	sjm	Dated position, parallel installations.
 - Position is now dated like antennas and receivers. Entry from positions, antennas and receivers is mached on date only, not time.
 

@@ -1,0 +1,113 @@
+#!/bin/sh
+
+function errexit() {
+  echo "$0: $1" >&2
+  exit 2
+}
+
+remove=0
+while getopts "pr" OPTIONS; do
+  case $OPTIONS in
+    p) packages=1; shift ;;
+    r) remove=1; shift ;;
+    *) errexit "Unknown option: $OPTION" ;;
+  esac
+done
+
+INSTROOT=`dirname $0`
+cd $INSTROOT
+INSTROOT=`pwd`
+
+test `id -u` = 0 || errexit "You must be root to run this. Try 'sudo $0'."
+
+if [ "$1" = "" ]; then
+  errexit "Usage: $0 [-r] instanse-name"
+fi
+NAME=$1
+
+if [ $remove = 1 ]; then
+  echo "Removing instanse $NAME"
+  for i in gpspickup jobengine ftpuploader; do
+    systemctl stop $i-$NAME
+    systemctl disable $i-$NAME
+    rm -f /etc/systemd/system/$i-$NAME.service
+  done
+  systemctl daemon-reload
+  systemctl reset-failed
+  rm -f /etc/httpd/conf.d/gorm-$NAME.conf
+  rm -f $INSTROOT/gnss-admin.psw
+  systemctl restart httpd
+  exit 0
+fi
+
+if [ $packages = 1 ]; then
+  if ! rpm -q epel-release >/dev/null; then
+    yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+    yum -y update
+  fi
+  while read rpm; do
+    rpm -q $rpm >/dev/null || yum -y install $rpm
+  done <<%EOD
+perl-ExtUtils-MakeMaker
+perl-Sys-Syslog
+perl-Net-SFTP-Foreign
+perl-Linux-Inotify2
+perl-Time-Local
+perl-JSON
+perl-JSON-XS
+perl-DBI
+perl-DBD-MySQL
+perl-Date-Manip
+perl-File-Path
+httpd
+vsftpd
+zip
+unzip
+mariadb
+mariadb-server
+automake
+gcc
+gcc-c++
+qt
+qt-devel
+%EOD
+  rc=0
+  if [ ! -f /usr/local/share/perl5/Parallel/Fork/BossWorkerAsync.pm ]; then
+    echo "You need to install Parallel-Fork-BossWorkerAsync. See doc/INSTALL" >&2
+    rc=2
+  fi
+  for i in anubis bnc crx2rnx gfzrnx rnx2crx sbf2rin; do
+    if [ ! -f /usr/local/bin/$i ]; then
+      echo "You need to install $i. See doc/INSTALL" >&2
+      rc=2
+    fi
+  done
+  exit $rc
+fi
+
+if [ -f "/etc/systemd/system/gpspickup-$NAME.service" ]; then
+  errexit "Instance name $NAME already exists"
+fi
+
+echo "Installing services for instance name $NAME"
+for i in gpspickup jobengine ftpuploader; do
+  sed -e "s:%NAME%:$NAME:g;s:%INSTROOT%:$INSTROOT:g" < setup/$i.service > /etc/systemd/system/$i-$NAME.service
+done
+systemctl daemon-reload
+
+if [ ! -f $INSTROOT/etc/gnss-admin.psw ]; then
+  echo "Set password for admin.cgi user admin:"
+  htpasswd -c $INSTROOT/etc/gnss-admin.psw admin
+  chown apache:apache $INSTROOT/etc/gnss-admin.psw
+  chmod 644 $INSTROOT/etc/gnss-admin.psw
+fi
+
+echo "Installing Apache config /etc/httpd/conf.d/gorm-$NAME.conf"
+sed -e "s:%NAME%:$NAME:g;s:%INSTROOT%:$INSTROOT:g" < setup/gorm-apache.conf > /etc/httpd/conf.d/gorm-$NAME.conf
+systemctl restart httpd
+
+echo "Configure instance in $INSTROOT/etc/gorm.conf"
+
+echo "Remember to enable and start services:"
+echo "systemctl enable gpspickup-$NAME jobengine-$NAME ftpuploader-$NAME"
+echo "systemctl start gpspickup-$NAME jobengine-$NAME ftpuploader-$NAME"

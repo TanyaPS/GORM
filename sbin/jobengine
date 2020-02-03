@@ -12,6 +12,9 @@ use Getopt::Std;
 use Carp qw(longmess);
 use Parallel::Fork::BossWorkerAsync ();
 use Linux::Inotify2;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
 use BaseConfig;
 use Utils;
 use Logger;

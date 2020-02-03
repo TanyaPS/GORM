@@ -185,7 +185,7 @@ EOD
 	</script>
 	</FONT></TD>
 	<TD><FONT SIZE="2">
-	  <B><script language="javascript" src="/liveclock.js"></script></B>
+	  <B><script language="javascript" src="liveclock.js"></script></B>
 	</FONT></TD>
 	<TD><FONT SIZE="2">
 	  <B>Page reloads every $reloadspeed min.</B>

@@ -1,16 +1,16 @@
 [Unit]
-Description=GNSS gpspickup service
+Description=GNSS gpspickup service (%NAME%)
 After=network.target
 After=mariadb.service
 
 [Service]
 Type=simple
 Restart=on-failure
-ExecStart=/usr/local/sbin/gpspickup
+ExecStart=%INSTROOT%/sbin/gpspickup
 ExecStop=/bin/kill -TERM $MAINPID
 ExecReload=/bin/kill -HUP $MAINPID
 TimeoutStopSec=30
-Environment="PERL5LIB=/usr/local/lib/gnss"
+Environment="PERL5LIB=%INSTROOT%/lib"
 
 [Install]
 WantedBy=multi-user.target
