@@ -1,5 +1,8 @@
 # Changelog for GPSFTP5 scripts
 
+## 2020-02-03	sjm	sbf2rin unpack bugfix (issue #19)
+- Copy rawfile to unpackdir before unpacking using sbf2rin
+
 ## 2020-02-02	sjm	Parallel instanses.
 - Now runs directly from clone directory.
 - Able to run along side another instanse of the scripts (named instanses).

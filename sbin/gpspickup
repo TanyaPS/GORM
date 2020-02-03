@@ -329,17 +329,23 @@ sub unpack_file($) {
 			interval => $obsint, origs => [$ifn]);
     loginfo("Unpack Septentrio raw file $fn into $workdir");
     my $countrycode = substr($site, 6, 3);
-    my $sbf = $ifn;
+    my $sbf;
     if ($ifn =~ /\.gz$/) {
       $fn =~ s/\.gz$//;
       $sbf = "$unpackdir/$fn";
       sysrun("gzip -dc $ifn >$sbf", { log => $Debug });
+    } else {
+      syscp([$ifn], $unpackdir);
+      $sbf = $fn;
     }
-    chdir($unpackdir);
-    sysrun("$SBF2RIN -f $sbf -l -R3 -nOP -s -D -O $countrycode >$workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
-    unlink($sbf) unless $sbf eq $ifn;
-    $rs->findfiles($unpackdir);
-    chdir($INCOMING);
+    my $rc = sysrun("cd $unpackdir && $SBF2RIN -f $sbf -l -R3 -nOP -s -D -O $countrycode > $workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
+    unlink($sbf);
+    if ($rc) {
+      logerror("sbf2rin failed with error code: $rc");
+      undef $rs;
+    } else {
+      $rs->findfiles($unpackdir);
+    }
   }
 
   elsif ($fninfo->{'ftyp'} eq 'trinzic-zip' ||

@@ -1,7 +1,9 @@
 #!/bin/sh
 
+USAGE="Usage: $0 [-r] instanse-name  (install or remove)\nor: $0 -p  (check required packages)"
+
 function errexit() {
-  echo "$0: $1" >&2
+  echo -e "$0: $1" >&2
   exit 2
 }
 
@@ -11,7 +13,7 @@ while getopts "pr" OPTIONS; do
   case $OPTIONS in
     p) packages=1; shift ;;
     r) remove=1; shift ;;
-    *) errexit "Unknown option: $OPTION" ;;
+    *) errexit "$USAGE" ;;
   esac
 done
 
@@ -21,27 +23,7 @@ INSTROOT=`pwd`
 
 test `id -u` = 0 || errexit "You must be root to run this. Try 'sudo $0'."
 
-if [ "$1" = "" ]; then
-  errexit "Usage: $0 [-r] instanse-name"
-fi
-NAME=$1
-
-if [ $remove = 1 ]; then
-  echo "Removing instanse $NAME"
-  for i in gpspickup jobengine ftpuploader; do
-    systemctl stop $i-$NAME
-    systemctl disable $i-$NAME
-    rm -f /etc/systemd/system/$i-$NAME.service
-  done
-  systemctl daemon-reload
-  systemctl reset-failed
-  rm -f /etc/httpd/conf.d/gorm-$NAME.conf
-  rm -f $INSTROOT/gnss-admin.psw
-  systemctl restart httpd
-  exit 0
-fi
-
-if [ $packages = 1 ]; then
+if [ "$packages" = "1" ]; then
   if ! rpm -q epel-release >/dev/null; then
     yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
     yum -y update
@@ -84,6 +66,26 @@ qt-devel
     fi
   done
   exit $rc
+fi
+
+if [ "$1" = "" ]; then
+  errexit "$USAGE"
+fi
+NAME=$1
+
+if [ "$remove" = "1" ]; then
+  echo "Removing instanse $NAME"
+  for i in gpspickup jobengine ftpuploader; do
+    systemctl stop $i-$NAME
+    systemctl disable $i-$NAME
+    rm -f /etc/systemd/system/$i-$NAME.service
+  done
+  systemctl daemon-reload
+  systemctl reset-failed
+  rm -f /etc/httpd/conf.d/gorm-$NAME.conf
+  rm -f $INSTROOT/gnss-admin.psw
+  systemctl restart httpd
+  exit 0
 fi
 
 if [ -f "/etc/systemd/system/gpspickup-$NAME.service" ]; then
