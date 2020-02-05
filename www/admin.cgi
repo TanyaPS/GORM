@@ -170,7 +170,7 @@ sub editantennas() {
       my $msg = "";
       if (index($$r{"anttype$x"},',') < 0) {
         $msg .= "Antenna type format: product,type<br>";
-      } elsif ($$r{"antdelta$x"} !~ /\d+,\d+,\d+/) {
+      } elsif ($$r{"antdelta$x"} !~ /[0-9\-\.]+,[0-9\-\.]+,[0-9\-\.]+/) {
         $msg .= "Delta format: X,Y,Z<br>";
       } elsif ($$r{"startdate$x"} !~ /[0-9]{4}-[0-9]{2}-[0-9]{2}\s+[0-9]{2}:[0-9]{2}:[0-9]{2}/) {
         $msg .= "Date format: YYYY-MM-DD HH:MI:SS";
