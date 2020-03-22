@@ -79,7 +79,8 @@ sub newsite() {
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
-    $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
+    $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]/;
+    $v{'freq'} = substr($v{'freq'}, 0, 1);
     $v{'active'} = 0 unless defined $v{'active'};
     if (!defined $site || length($site) != 9) {
       print "<B style=\"color:red\">Site must be specified and must be 9 characters long (SSSS00DNK)</b><p>\n";
@@ -96,7 +97,7 @@ sub newsite() {
         $dbh->do(q{
 	  insert into locations
 	  (site, shortname, freq, obsint, markernumber, markertype, observer, agency, active)
-	  values (?,?,?,?,?,?,?,?,?,?)
+	  values (?,?,?,?,?,?,?,?,?)
         }, undef, $site, $v{'shortname'}, $v{'freq'}, $v{'obsint'}, $v{'markernumber'}, $v{'markertype'},
            $v{'observer'}, $v{'agency'}, $v{'active'});
         print "<B style=\"color:red\">Site $site created</B><P>\n";
@@ -460,7 +461,8 @@ sub editsite() {
     $v{'markernumber'} = undef if defined $v{'markernumber'} && $v{'markernumber'} =~ /^\s*$/;
     $v{'observer'} = 'SDFE' unless defined $v{'observer'} && $v{'observer'} !~ /^\s*$/;
     $v{'agency'} = 'SDFE' unless defined $v{'agency'} && $v{'agency'} !~ /^\s*$/;
-    $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]$/;
+    $v{'freq'} = 'D' unless defined $v{'freq'} && $v{'freq'} =~ /^[DH]/;
+    $v{'freq'} = substr($v{'freq'}, 0, 1);
     if (!defined $v{'obsint'} || $v{'obsint'} <= 0) {
       print "<b>ERROR: Observation internval must be specified</b><p>\n";
     } else {
