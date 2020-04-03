@@ -42,6 +42,8 @@ perl-DBI
 perl-DBD-MySQL
 perl-Date-Manip
 perl-File-Path
+perl-Data-Dumper
+m4
 httpd
 vsftpd
 zip
