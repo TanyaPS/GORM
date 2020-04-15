@@ -13,9 +13,15 @@ You can remove the instanse using
 FIRST TIME INSTALLATION:
 ========================
 
-Install CentOS 7, minimal installation
+Install CentOS 7 (or RHEL 7.x), minimal installation
 - Disable SELinux in /etc/sysconfig/selinux
+	-check status
+		sestatus
+	-change SELINUX=enforcing to SELINUX=disabled in /etc/selinux/config
+
 - Reboot
+	sudo reboot
+
 
 
 Install all required packages. Run
@@ -23,6 +29,7 @@ Install all required packages. Run
 
 BNC:
 	Download latest released BNC source code from https://igs.bkg.bund.de/ntrip/bnc
+		wget https://igs.bkg.bund.de/root_ftp/NTRIP/software/bnc-2.x.x-source.zip
 	Compile BNC:
 		unzip bnc-x.x.x-source.zip
 		cd bnc-x.x.x-source
@@ -33,6 +40,7 @@ BNC:
 gfzrnx:
 	Download latest gfzrnx Linux x64 binary from
 		http://semisys.gfz-potsdam.de/semisys/scripts/download/index.php
+		wget http://semisys.gfz-potsdam.de/semisys/software/gfzrnx/x/gfzrnx_lx
 	(GFZ Software tab)
 	Install using
 		sudo install -o root -g bin -m 755 gfzrnx_lx /usr/local/bin/gfzrnx
@@ -40,6 +48,7 @@ gfzrnx:
 rnx2crx/crx2rnx:
 	Download latest Hatanaka compression software (RNXCMP) from:
 		https://terras.gsi.go.jp/ja/crx2rnx.html
+		wget https://terras.gsi.go.jp/ja/crx2rnx/RNXCMP_4.0.8_src.tar.gz
 	Unpack, compile and install with
 		tar xzf RNXCMP_4.0.8_src.tar.gz
 		cd RNXCMP_4.0.8_src/source
@@ -76,6 +85,8 @@ Parallel-Fork-BossWorkerAsync:
 	Download lastest version of Parallel-Fork-BossWorkerAsync
 		https://cpan.metacpan.org/authors/id/J/JV/JVANNUCCI/Parallel-Fork-BossWorkerAsync-0.09.tar.gz
 	Extract and goto Parallel-Fork-BossWorker-x.xx
+		tar  xzf Parallel-Fork-BossWorkerAsync-0.09.tar.gz
+		cd Parallel-Fork-BossWorker-x.xx
 	Compile and install
 		perl Makefile.PL
 		sudo make install
@@ -93,6 +104,8 @@ Every below assumes the default value /data.
 Mount datastore:
 	mkdir /data
 	Mount data disk on /data
+		to check already mounted 
+			df -h
 	mkdir /data/{ftp,upload,saved,queue,work}
 
 GNSS users:
@@ -118,20 +131,34 @@ mariadb:
 		chown mysql:mysql /data/mysql
 	Modify /etc/my.cnf.d/server.cnf
 		Add "datadir = /data/mysql" in [server] section
+	Modify /etc/my.cnf
+		Add "skip-innodb" in [mysqld] section
 	systemctl enable mariadb
 	systemctl start mariadb
+
+				if error "Could not open mysql.plugin table"
+					systemctl stop mariadb
+					rm -R /data/mysql/*
+					mysql_install_db --user=mysql --basedir=/usr --datadir=/data/mysql
+					systemctl start mariadb
+					
+
 	Run "mysql_secure_installation"
 	# If you are adding another schema, replace 'gps' with the your schema name.
-	Create gpsuser
+	login to mysql server as root
 		mysql -u root -p mysql
+	In mysql server create gpsuser
 		create database gps;
 		create user gpsuser@localhost identified by 'gpsuser';
 		grant all privileges on gps.* to gpsuser@localhost;
-	Check local access with:
+	Check local access with (in shell):
 		# mysql -ugpsuser -pgpsuser gps     (should be able to login)
-	Run SQL script
+	Run SQL script (in shell)
 		cd sql
 		\. create-gps-db.sql
+	To fill in location table with stations in location-data.sql
+		\. location-data.sql
+	in mysql server
 		show tables;
 	Should display:
 		+---------------+
@@ -142,6 +169,8 @@ mariadb:
 		  .....
 		| uploaddest    |
 		+---------------+
+
+Configure (go to the top)
 
 firewall:
 	If this host is exposed to the internet, then it should have a firewall install.
