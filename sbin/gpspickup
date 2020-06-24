@@ -35,7 +35,7 @@ sub parseFilename($) {
 
   # Septentrio: sssssssss_R_yyyydddhhmi_##H_##S_MO.rnx
   #             sssssssss_R_yyyydddhhmi_##H_xN.rnx
-  if ($fn =~ /^([A-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})([0-9]{2})_[0-9]{2}(H|D)/i) {
+  if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})([0-9]{2})_[0-9]{2}(H|D)/i) {
     ($site, $year, $yy, $doy, $hh, $hour, $mi, $period) =
 		(uc($1), int($2), year2sy($2), int($3), int($4), hour2letter($4), int($5), $6);
     $hour = '0' if $period eq 'D';
@@ -44,7 +44,7 @@ sub parseFilename($) {
   }
 
   # Septentrio raw: ssssdddh.yy_
-  elsif ($fn =~ /^([A-Z0-9]{4})([0-9]{3})([a-z])\.([0-9]{2})_/i) {
+  elsif ($fn =~ /^([a-zA-Z0-9]{4})([0-9]{3})([a-z])\.([0-9]{2})_/i) {
     ($site4, $doy, $hour, $hh, $yy, $year, $mi) =
 		(uc($1), int($2), $3, letter2hour($3), int($4), sy2year($4), 0);
     $ftyp = 'septentrio-raw';
@@ -340,11 +340,28 @@ sub unpack_file($) {
     }
     my $rc = sysrun("cd $unpackdir && $SBF2RIN -f $sbf -l -R3 -nOP -s -D -O $countrycode > $workdir/sbf2rin.$hour.log 2>&1", { log => $Debug });
     unlink($sbf);
+    #make sure the rinex files have upper case site names in their file names
+    opendir(my $fndir, $unpackdir) or die "failed to open directory";
+    my @oldfn = readdir($fndir);
+    closedir $fndir;
+    my @rinfiles = grep(/.rnx$/, @oldfn);
+    foreach ( @rinfiles) {
+      if ($_ =~ /^[a-z]{2}/) {
+          my $nf = uc(substr($_, 0, 4)) . substr($_, 4);
+          my $s = "$unpackdir/$_";
+          my $d = "$unpackdir/$nf";
+          unlink($d);
+          rename($s, $d)
+          
+      }
+      }
+
     if ($rc) {
       logerror("sbf2rin failed with error code: $rc");
       undef $rs;
     } else {
       $rs->findfiles($unpackdir);
+
     }
   }
 
