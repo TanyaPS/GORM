@@ -77,7 +77,9 @@ filelist = ftp.nlst()
 
 
 def GetMove(filename, path_to_files):
-    # gets file from ftp server and place in folder
+    """
+    gets file from ftp server and place in folder
+    """
     fhandle = open(filename, "wb")
     ftp.retrbinary("RETR " + filename, fhandle.write)
     fhandle.close()
