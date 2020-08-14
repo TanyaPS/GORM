@@ -24,7 +24,6 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
 from pathlib import Path
-
 import configparser
 
 
