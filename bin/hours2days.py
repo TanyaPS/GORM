@@ -65,7 +65,6 @@ newlog = False
 ftp = FTP(host)
 ftp.login(user, password)
 
-# ftp.retrlines("LIST")
 
 ftp.cwd(remote_path)
 
