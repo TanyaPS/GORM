@@ -68,7 +68,6 @@ ftp.login(user, password)
 
 ftp.cwd(remote_path)
 
-# ftp.retrlines("LIST")
 
 
 current_year = str(dt.datetime.now().year)
