@@ -92,7 +92,7 @@ def GetMove(filename, path_to_files):
     os.system("gunzip %s/%s" % (path_to_files, filename))
 
 
-def MergeUpload(filename, path_to_files):
+def merge_upload(filename, path_to_files):
     station_doy = filename[0:-8]
     yr = filename[-6:-4]
     file_type = filename[11]
