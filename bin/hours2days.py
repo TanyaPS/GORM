@@ -73,7 +73,6 @@ ftp.cwd(remote_path)
 current_year = str(dt.datetime.now().year)
 doy = dt.datetime.today().timetuple().tm_yday
 ftp.cwd(current_year)  # current year directory
-# ftp.cwd("temp")
 filelist = ftp.nlst()
 
 
