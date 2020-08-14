@@ -1,6 +1,8 @@
-"""This script imports 1hr rinex files and merges them to 24hr files. 
+"""This script imports 1hr rinex files from remote server and merges them to 24hr files. 
 The 1hr files are deleted remotely and stored locally in the saved folder. 
-Unfinished days saved in the unfinished folder.
+24hr files are uploaded to the remote location.
+Unfinished days are saved in the unfinished folder in a local dir (hours2days/unfinished) given in the gorm.ini file.
+Info on the remote host is given in the gorm.ini file
 - Creates logfile (located as specified in logfile_path) and notes days where one or more hour files are missing
 - Sends email to adress given in email_to
 - Change host, password, user, remote path to cahnge source
@@ -12,6 +14,7 @@ Create folder structure:
         unfinished (1hr files for unfinished days are stored here in XXXX folders)
             XXXX (4 letter station name)
 
+The script is run by a cronjob
 """
 
 from ftplib import FTP
