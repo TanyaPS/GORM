@@ -26,14 +26,22 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
-from pathlib import Path
+try:
+    from pathlib import Path
+except ImportError:
+    from pathlib2 import Path
 import socket
+import glob
+try:
+    import configparser
+except ImportError:
+    import ConfigParser as configparser
 
-import configparser
+
 
 
 parser = configparser.ConfigParser()
-parser.read(Path(__file__).resolve().parent / "../etc/gorm.ini")
+parser.read(str(Path(__file__).resolve().parent / "../etc/gorm.ini"))
 
 
 port = parser.get("Leica connection", "port")
@@ -73,10 +81,7 @@ newlog = False
 ftp = FTP(host)
 ftp.login(user, password)
 
-
 ftp.cwd(remote_path)
-
-
 
 current_year = str(dt.datetime.now().year)
 doy = dt.datetime.today().timetuple().tm_yday
@@ -135,10 +140,8 @@ def merge_upload(filename, path_to_files):
         global newlog
         newlog = True
         os.system(r"mkdir -m777 -p %s/saveddays" % (path_to_files))
-        os.system(
-            r"mv %s/%s0.%s%s.gz %s/saveddays"
-            % (path_to_files, station_doy, yr, file_type, path_to_files,)
-        )
+        os.rename(r"%s/%s0.%s%s.gz %s/saveddays" % (path_to_files, station_doy, yr, file_type, path_to_files,))
+
     f.close
 
 
@@ -151,8 +154,7 @@ def unfinished_days(last_filename, path_to_files):
     global newlog
     newlog = True
     os.system(r"mkdir -m777 -p %s/unfinished/%s" % (path_to_files, last_stationname))
-    os.system(
-        r"mv %s/%s[a-xA-X]\.%s%s %s/unfinished/%s"
+    os.rename(r"%s/%s[a-xA-X]\.%s%s %s/unfinished/%s"
         % (
             path_to_files,
             last_station_doy,
@@ -189,10 +191,8 @@ def list_merge(list_of_files, path_to_files, doy):
                 # merge files
                 merge_upload(filename, path_to_files)
                 # delete files locally
-                os.system(
-                    r"find  %s/%s[a-z]%s -maxdepth 1 -type f -delete"
-                    % (path_to_files, filename[0:7], filename[8:12])
-                )
+                for f in glob.glob(r"%s/%s[a-z]%s" % (path_to_files, filename[0:7], filename[8:12])):
+                    os.remove(f)
         else:  # start new station/doy
             # detect and move unfinished days if not today
             if (
@@ -201,10 +201,8 @@ def list_merge(list_of_files, path_to_files, doy):
                 and last_filename[4:7] != str(doy)
             ):
                 unfinished_days(last_filename, path_to_files)
-                os.system(
-                    r"find  %s/%s[a-z]%s -maxdepth 1 -type f -delete"
-                    % (path_to_files, last_filename[0:7], last_filename[8:12])
-                )
+                for f in glob.glob(r"%s/%s[a-z]%s" % (path_to_files, last_filename[0:7], last_filename[8:12])):
+                    os.remove(f)
             # delete last station and/or doy files from remote (if it is not this doy and unfinished)
             if not (len(doy_list) < 24 and last_filename[4:7] == str(doy)):
                 for item in doy_list:
@@ -245,27 +243,10 @@ def main():
 
     # Delete files locally (possibly large number of files)
     # if still too many files, divide into further groups
-    
-    os.system(r"find  %s/[a-l]*[0-9][o] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[m-z]*[0-9][o] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[a-l]*[0-9][d] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[m-z]*[0-9][d] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[a-l]*[0-9][n] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[m-z]*[0-9][n] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[a-l]*[0-9][g] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(r"find  %s/[m-z]*[0-9][g] -maxdepth 1 -type f -delete" % (path_to_files))
-    os.system(
-        r"find  %s/[a-f]*[0-9][odgnP]\.gz -maxdepth 1 -type f -delete" % (path_to_files)
-    )
-    os.system(
-        r"find  %s/[g-m]*[0-9][odgnP]\.gz -maxdepth 1 -type f -delete" % (path_to_files)
-    )
-    os.system(
-        r"find  %s/[n-q]*[0-9][odgnP]\.gz -maxdepth 1 -type f -delete" % (path_to_files)
-    )
-    os.system(
-        r"find  %s/[r-z]*[0-9][odgnP]\.gz -maxdepth 1 -type f -delete" % (path_to_files)
-    )
+    for f in glob.glob(r"%s/[a-z]*[0-9][odng]" % (path_to_files)):
+        os.remove(f)
+    for f in glob.glob(r"%s/[a-z]*[0-9][odngP]\.gz" % (path_to_files)):
+        os.remove(f)
 
     ftp.quit()
 
@@ -290,5 +271,4 @@ def main():
         )
 
 if __name__ == "__main__":
-    # køres kun når scriptet kaldes fra kommandolinjen
     main()
