@@ -73,22 +73,21 @@ newlog = False
 ftp = FTP(host)
 ftp.login(user, password)
 
-# ftp.retrlines("LIST")
 
 ftp.cwd(remote_path)
 
-# ftp.retrlines("LIST")
 
 
 current_year = str(dt.datetime.now().year)
 doy = dt.datetime.today().timetuple().tm_yday
 ftp.cwd(current_year)  # current year directory
-# ftp.cwd("temp")
 filelist = ftp.nlst()
 
 
 def get_move(filename, path_to_files):
-    # gets file from ftp server and place in folder
+    """
+    gets file from ftp server and place in folder
+    """
     fhandle = open(filename, "wb")
     ftp.retrbinary("RETR " + filename, fhandle.write)
     fhandle.close()
@@ -225,7 +224,7 @@ def main():
         if re.match(r".*[a-xA-X]{1}\.[0-9]{2}[gno]\.gz$", filename):
             file_type = filename[11]
             # get file
-            # GetMove(filename, path_to_files)
+            # get_move(filename, path_to_files)
             if file_type == "o":
                 obs_list.append(filename)
 
