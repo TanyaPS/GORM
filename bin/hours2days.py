@@ -26,18 +26,18 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
+
 try:
     from pathlib import Path
 except ImportError:
     from pathlib2 import Path
 import socket
 import glob
+
 try:
     import configparser
 except ImportError:
     import ConfigParser as configparser
-
-
 
 
 parser = configparser.ConfigParser()
@@ -140,7 +140,10 @@ def merge_upload(filename, path_to_files):
         global newlog
         newlog = True
         os.system(r"mkdir -m777 -p %s/saveddays" % (path_to_files))
-        os.rename(r"%s/%s0.%s%s.gz %s/saveddays" % (path_to_files, station_doy, yr, file_type, path_to_files,))
+        os.rename(
+            r"%s/%s0.%s%s.gz %s/saveddays"
+            % (path_to_files, station_doy, yr, file_type, path_to_files,)
+        )
 
     f.close
 
@@ -154,7 +157,8 @@ def unfinished_days(last_filename, path_to_files):
     global newlog
     newlog = True
     os.system(r"mkdir -m777 -p %s/unfinished/%s" % (path_to_files, last_stationname))
-    os.rename(r"%s/%s[a-xA-X]\.%s%s %s/unfinished/%s"
+    os.rename(
+        r"%s/%s[a-xA-X]\.%s%s %s/unfinished/%s"
         % (
             path_to_files,
             last_station_doy,
@@ -173,7 +177,9 @@ def unfinished_days(last_filename, path_to_files):
 
 
 def list_merge(list_of_files, path_to_files, doy):
-    list_of_files.append("listender.000.gz") #add extra name to list, so last station/doy is included
+    list_of_files.append(
+        "listender.000.gz"
+    )  # add extra name to list, so last station/doy is included
     last_filename = ""
     doy_list = []
     for filename in list_of_files:
@@ -191,7 +197,9 @@ def list_merge(list_of_files, path_to_files, doy):
                 # merge files
                 merge_upload(filename, path_to_files)
                 # delete files locally
-                for f in glob.glob(r"%s/%s[a-z]%s" % (path_to_files, filename[0:7], filename[8:12])):
+                for f in glob.glob(
+                    r"%s/%s[a-z]%s" % (path_to_files, filename[0:7], filename[8:12])
+                ):
                     os.remove(f)
         else:  # start new station/doy
             # detect and move unfinished days if not today
@@ -201,7 +209,10 @@ def list_merge(list_of_files, path_to_files, doy):
                 and last_filename[4:7] != str(doy)
             ):
                 unfinished_days(last_filename, path_to_files)
-                for f in glob.glob(r"%s/%s[a-z]%s" % (path_to_files, last_filename[0:7], last_filename[8:12])):
+                for f in glob.glob(
+                    r"%s/%s[a-z]%s"
+                    % (path_to_files, last_filename[0:7], last_filename[8:12])
+                ):
                     os.remove(f)
             # delete last station and/or doy files from remote (if it is not this doy and unfinished)
             if not (len(doy_list) < 24 and last_filename[4:7] == str(doy)):
@@ -212,6 +223,7 @@ def list_merge(list_of_files, path_to_files, doy):
             doy_list = [filename]
 
         last_filename = filename
+
 
 def main():
 
@@ -260,15 +272,23 @@ def main():
         logger.warning(local_name + " disk usage " + disk_usage)
         os.system(
             r"echo \"%s: disk usage on %s is %s\" | mail -s \"%s_disk_usage_warning\" -r %s@%s %s"
-            % (__file__, local_name, local_name, local_user, local_host, disk_usage, email_to)
+            % (
+                __file__,
+                local_name,
+                local_name,
+                local_user,
+                local_host,
+                disk_usage,
+                email_to,
+            )
         )
-
 
     if newlog:
         os.system(
             r"mail  -s \"%s_warning\" -r %s@%s %s < %s"
             % (__file__, local_user, local_host, email_to, logfile_path)
         )
+
 
 if __name__ == "__main__":
     main()
