@@ -99,7 +99,7 @@ if [ ! -f $INSTROOT/etc/gorm.conf ]; then
 fi
 
 if [ ! -f $INSTROOT/etc/gorm.ini ]; then
-  cp $INSTROOT/etc/gorm.conf.default $INSTROOT/etc/gorm.conf
+  cp $INSTROOT/etc/gorm.conf.default $INSTROOT/etc/gorm.ini
 fi
 
 echo "Installing services for instance name $NAME"

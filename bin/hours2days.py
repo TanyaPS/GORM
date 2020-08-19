@@ -26,6 +26,7 @@ import os
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from datetime import datetime
+import shutil
 
 try:
     from pathlib import Path
@@ -100,8 +101,9 @@ def get_move(filename, path_to_files):
     # move hour files to saved folder
     stationname = filename[0:4]
     os.system(r"mkdir -m777 -p %s/saved/%s" % (path_to_files, stationname))
-    os.system(
-        r"cp %s/%s %s/saved/%s" % (path_to_files, filename, path_to_files, stationname)
+    shutil.copy(
+        r"%s/%s" % (path_to_files, filename),
+        r"%s/saved/%s/" % (path_to_files, stationname),
     )
     os.system("gunzip %s/%s" % (path_to_files, filename))
 
