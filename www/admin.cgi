@@ -225,7 +225,7 @@ sub editantennas() {
 	<input name=cmd type=hidden value=editantennas>
 	<input name=site type=hidden value=$v{site}>
 	<table border=1>
-	<tr><th align=left>Antenna type</th><th>Antenna S/N</th><th>Delta</th><th>Startdate</th><th>Enddate</th><th>Action</th></tr>
+	<tr><th align=left>Antenna type</th><th>Antenna S/N</th><th>Delta (HEN)</th><th>Startdate</th><th>Enddate</th><th>Action</th></tr>
   };
   sub printantrow(;$$) {
     my ($r, $i) = @_;
