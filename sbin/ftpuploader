@@ -166,7 +166,7 @@ sub FTPclient($) {
         }
         # Do the variable substitutions
   $doy = sprintf("%03d", $doy);
-  $hh24 = sprintf("%02d", $hh24);
+  $hh = sprintf("%02d", $hh);
 	$destpath =~ s/%site/$site/g;
 	$destpath =~ s/%site4/$site4/g;
 	$destpath =~ s/%year/$year/g;
