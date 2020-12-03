@@ -144,7 +144,7 @@ sub FTPclient($) {
       my $is_dynamic_dir = index($remotedir, '%') >= 0;
       my $destpath = $remotedir;
       if ($is_dynamic_dir) {
-        my ($site, $site4, $year, $doy, $hour, $hh);
+        my ($site, $site4, $year, $doy, $hour, $hh, $hh24);
         # Parse filename
         # Ex: TEJH00DNK_R_20171890000_01D_30S_MO.rnx
         if ($fn =~ /^([a-zA-Z0-9]{9})_R_([0-9]{4})([0-9]{3})([0-9]{2})/) {
